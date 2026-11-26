@@ -1,0 +1,15 @@
+[project]
+name = "nostr-relay-deploy"
+version = "0.1.0"
+description = "Turn-key deployment templates and hydration tool for a private, invite-gated Nostr + Blossom relay (Kubernetes, Docker Compose, Cloudflare Workers, GitHub Pages)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 108
+target-version = "py312"

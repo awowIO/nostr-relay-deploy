@@ -1,0 +1,14 @@
+# The relay accepts connections from Traefik only, and opens none of its own: it needs
+# no DNS, no upstream and no egress at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: {{ statefulset_name }}-isolation, namespace: {{ namespace }} }
+spec:
+  podSelector: { matchLabels: { app: {{ app_label }} } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ traefik_namespace }} } }
+          {{ traefik_from_pod_selector_block }}
+      ports: [{ protocol: TCP, port: 5500 }]
+  egress: []

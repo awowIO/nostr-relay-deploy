@@ -1,0 +1,50 @@
+# Copy this file to `relay.local.toml` (gitignored), fill in your domain and target settings,
+# and hydrate into `.build/`:
+#
+#   cp relay.toml.example relay.local.toml
+#   python3 scripts/hydrate.py --target all
+#   python3 scripts/hydrate.py --target kubernetes --apply
+#   python3 scripts/hydrate.py --check-clean          # before every commit
+#
+# Every key is required: hydrate.py refuses unknown and missing keys rather than guessing.
+
+relay_host = "relay.example.com"       # public DNS name; clients sign wss://<relay_host> in NIP-42
+relay_name = "Private campaign relay"  # NIP-11 name
+events_per_minute = 60                 # per key, with a burst of the same size
+max_blob_bytes = 104857600             # 100 MiB per Blossom blob, the pinned ncli release's default
+max_uploads_per_signer = 2             # Blossom uploads one key may have in flight (ncli default)
+
+[kubernetes]
+namespace = "nostr-relay"
+storage_size = "128Gi"                 # immutable once the StatefulSet exists
+storage_class = ""                     # e.g. "gp3", "standard-rwo", or leave empty for cluster default (immutable)
+priority_class = ""                    # optional PriorityClassName
+cpu_request = "2"
+memory_request = "4Gi"
+memory_limit = "4Gi"
+cert_resolver = "le"                   # Traefik certificate resolver
+ingress_priority = 1500                # Traefik router priority of the three relay routes
+avoid_control_plane = true             # prefer nodes without node-role.kubernetes.io/control-plane
+traefik_namespace = "traefik"          # namespace of the Traefik pods that reach the relay
+traefik_pod_selector = "app.kubernetes.io/name=traefik"  # their labels; "" admits any pod there
+traefik_egress_network_policy = false  # set true if namespace `traefik` enforces default-deny egress
+kubeconfig = ""                        # optional local path to kubeconfig for `--apply` / `--verify`
+context = ""                           # optional kubeconfig context for `--apply` / `--verify`
+
+[compose]
+cpus = "2"                             # relay container CPU limit
+memory_limit = "4G"                    # relay container memory limit
+
+[cloudflare]
+worker_name = "nostr-campaign-relay"
+r2_bucket = "nostr-campaign-blobs"
+compatibility_date = "2026-11-01"      # Workers runtime behaviour date; bump deliberately
+
+[github_pages]
+title = "Campaign Relay Directory"
+campaign = "my-campaign"
+domain = ""                            # optional custom domain, written to CNAME (NIP-05 needs the domain root)
+nip05 = {}                             # optional { "alice" = "npub1..." } for /.well-known/nostr.json
+
+[hygiene]
+forbidden_tokens = []                  # extra case-insensitive strings --check-clean must never find

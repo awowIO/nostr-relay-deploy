@@ -1,0 +1,19 @@
+# Local operator configuration and hydrated output (never commit cluster/domain traces)
+relay.local.toml
+*.local.toml
+.build/
+.env
+*.invite
+*.nsec
+*.key
+kubeconfig*
+
+# Python / Node / Tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+node_modules/
+dist/
+.wrangler/

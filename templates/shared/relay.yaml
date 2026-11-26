@@ -1,0 +1,60 @@
+# ncli relay configuration: a private, invite-gated Nostr + Blossom relay for nostr-mailbox.
+#
+# Hydrated by scripts/hydrate.py into both .build/kubernetes/ (as the ConfigMap that
+# kustomize generates) and .build/compose/ (mounted read-only). One file, so the three
+# gates (auth_required, membership_required, inviteMaxUses) are written down once.
+#
+# Pinned release: {{ ncli_image }}
+port: 5500
+store: ./data/db/relay.db
+logdir: ./data/logs
+
+nip11:
+  name: {{ relay_name_yaml }}
+  url: ""         # set by NCLI_NIP11_URL: the exact wss:// URL clients sign in NIP-42
+  privkey: ""     # set by NCLI_NIP11_PRIVKEY: the relay's own signing key, never in Git
+  limitation:
+    # Gate 1: no socket reads or writes anything before it answers the NIP-42 challenge.
+    auth_required: true
+    # Gate 2: an authenticated key that is not enrolled still reads and writes nothing.
+    membership_required: true
+
+membership:
+  enabled: true
+  # An unredeemed invite dies after seven days. Membership itself does not expire.
+  inviteTTL: 168h
+  # Gate 3: an invite is for one key, once. This is the default for an invite created
+  # without a count. It is NOT a ceiling: the relay's admin route issues whatever count
+  # it is asked for. `nostr-mailbox relay invite` always asks for exactly one use and
+  # refuses to hand out an invite the relay reports otherwise.
+  inviteMaxUses: 1
+  memberClaims: false
+  publishAddRemoveEvents: false
+
+groups:
+  roles:
+    admin: [9000, 9001, 9002, 9005, 9008, 9009, 9010]
+
+limits:
+  events:
+    # Per key: events_per_minute from relay.local.toml, with a burst of the same size.
+    # It caps one runaway or hostile key; it is not sized to hold the whole fleet back.
+    perPubkey: {events: {{ events_per_minute }}, per: 1m, burst: {{ events_per_minute }}}
+
+# Blossom on the relay's own origin: blobs for fixtures, patches, wave artifacts and seal
+# manifests, so a campaign needs no second server. Downloads are members-only too,
+# because a campaign's fixtures are as private as its messages. A blob authorization
+# must name this relay's public host (from NCLI_NIP11_URL) in a `server` tag.
+blossom:
+  enabled: true
+  # PUT here; GET or HEAD a blob at /<sha256>[.ext] or /media/<sha256>[.ext]. The
+  # Caddyfile and the IngressRoute route exactly these and nothing else.
+  uploadPaths: [/upload, /media/upload]
+  blobPrefix: /media
+  # max_blob_bytes from relay.local.toml. There is no total quota: blobs share the data
+  # volume with the event store, and nothing here stops them filling it. Watch the
+  # volume, or move blobs out with `storage.kind: s3`.
+  maxBlobBytes: {{ max_blob_bytes }}
+  maxUploadsPerSigner: {{ max_uploads_per_signer }}   # uploads one key may have in flight
+  membersOnly: {upload: true, download: true}
+  storage: {kind: dir}        # files beside the event store, under the data mount

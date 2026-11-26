@@ -1,0 +1,68 @@
+# A private, invite-gated Nostr + Blossom relay on one host: the pinned ncli relay, and
+# Caddy in front of it for TLS (it obtains and renews the certificate by itself).
+#
+# On a host with Docker Engine, Compose v2 and OpenSSL, with DNS for RELAY_HOST pointing
+# at it and inbound TCP 80 and 443 open (members need only outbound 443):
+#
+#   umask 077
+#   sudo install -d -o 65532 -g 65532 data     # the relay runs as 65532, not as root
+#   ( set -C; { grep '^RELAY_HOST=' .env.example; printf 'RELAY_SIGNING_KEY='
+#               openssl rand -hex 32; } > .env )
+#   docker compose config --quiet && docker compose up -d
+#   curl -fsS -H 'Accept: application/nostr+json' "https://{{ relay_host }}/"
+#
+# `set -C` refuses to overwrite an existing .env: that file holds the relay's signing key.
+# Keep it in the host's secret backup and out of Git. `data/` holds the event store and
+# the blobs: back it up, and keep it out of Git too.
+#
+# Then enrol your own key and invite a member (nostr-mailbox reaches ncli through
+# `docker compose exec`):
+#
+#   nostr-mailbox setup --relay wss://{{ relay_host }} --campaign <campaign> --compose compose.yaml
+#   nostr-mailbox invite --compose compose.yaml          # one key, one use, seven days
+services:
+  edge:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      RELAY_HOST: ${RELAY_HOST:?Set RELAY_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [relay]
+
+  relay:
+    # Pinned by digest: the release nostr-mailbox is tested against.
+    image: {{ ncli_image }}
+    command: ["relay", "--config", "/app/ncli/relay.yaml"]
+    restart: unless-stopped
+    # Not root: the image declares no user and would run as UID 0. The relay writes its
+    # store, logs and blobs under ./data (created for 65532 above), stages uploads in
+    # /tmp, and nothing else, so the rest of its filesystem is read-only.
+    user: "65532:65532"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      # The exact URL every client signs in its NIP-42 proof, and the host a blob
+      # authorization must name.
+      NCLI_NIP11_URL: wss://${RELAY_HOST:?Set RELAY_HOST}
+      NCLI_NIP11_PRIVKEY: ${RELAY_SIGNING_KEY:?Set RELAY_SIGNING_KEY}
+      HOME: /app/ncli/data            # where `ncli relay invites create` keeps its logs
+    volumes:
+      - ./relay.yaml:/app/ncli/relay.yaml:ro
+      - ./data:/app/ncli/data
+    # No `ports:` here on purpose. The relay is reachable only through the edge, and its
+    # admin CLI only through `docker compose exec`.
+    deploy:
+      resources:
+        limits:
+          cpus: "{{ compose_cpus }}"         # [compose] cpus in relay.local.toml
+          memory: {{ compose_memory_limit }}            # [compose] memory_limit in relay.local.toml
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

@@ -1,0 +1,18 @@
+# kubectl apply -k .build/kubernetes
+#
+# Builds the relay's ConfigMap from relay.yaml, the same file the compose target mounts.
+# kustomize names the ConfigMap after its contents and rewrites the StatefulSet's
+# reference to match, so a changed relay.yaml is a changed pod template (rolled out on
+# the next delete of the pod, see statefulset.yaml).
+#
+# No top-level `namespace:` on purpose: it would move the Traefik egress policy out of
+# the Traefik namespace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  {{ resources_block }}
+configMapGenerator:
+  - name: {{ configmap_name }}
+    namespace: {{ namespace }}
+    files:
+      - relay.yaml

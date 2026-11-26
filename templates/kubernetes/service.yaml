@@ -1,0 +1,7 @@
+# Cluster-internal address of the relay. Only Traefik reaches it (networkpolicy.yaml).
+apiVersion: v1
+kind: Service
+metadata: { name: {{ statefulset_name }}, namespace: {{ namespace }} }
+spec:
+  selector: { app: {{ app_label }} }
+  ports: [{ name: ws, port: 5500, targetPort: ws }]

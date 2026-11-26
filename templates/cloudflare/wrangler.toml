@@ -1,0 +1,40 @@
+# A private, invite-gated Nostr + Blossom relay for nostr-mailbox on Cloudflare: one
+# Worker (the edge filter), one SQLite-backed Durable Object (sockets, events, members)
+# and one R2 bucket (Blossom blobs). Hydrated by scripts/hydrate.py; deploy from here:
+#
+#   npx wrangler r2 bucket create {{ r2_bucket }}
+#   openssl rand -hex 32 | tee /dev/stderr | npx wrangler secret put ADMIN_TOKEN   # keep it in your password manager
+#   npx wrangler deploy
+#   curl -fsS -H 'Accept: application/nostr+json' https://{{ relay_host }}/
+#
+# The zone of {{ relay_host }} must be on this Cloudflare account: the route below makes the
+# Worker that host's custom domain. workers.dev and preview URLs stay off, because every
+# client signs wss://{{ relay_host }} in its NIP-42 proof and no other name would work.
+name = "{{ worker_name }}"
+main = "src/worker.ts"
+compatibility_date = "{{ compatibility_date }}"
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "{{ relay_host }}", custom_domain = true }]
+
+[vars]
+RELAY_HOST = "{{ relay_host }}"
+RELAY_NAME = {{ relay_name_toml }}
+EVENTS_PER_MINUTE = "{{ events_per_minute }}"
+MAX_BLOB_BYTES = "{{ max_blob_bytes }}"
+MAX_UPLOADS_PER_SIGNER = "{{ max_uploads_per_signer }}"
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDurableObject"]
+
+[[r2_buckets]]
+binding = "BLOSSOM_BUCKET"
+bucket_name = "{{ r2_bucket }}"
+
+[observability]
+enabled = true

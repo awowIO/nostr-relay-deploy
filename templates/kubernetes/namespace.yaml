@@ -1,0 +1,8 @@
+# The relay's own namespace. `--apply` applies this file first, so the signing Secret
+# can be created before the StatefulSet that reads it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ namespace }}
+  labels:
+    kubernetes.io/metadata.name: {{ namespace }}

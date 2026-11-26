@@ -1,0 +1,54 @@
+# TLS edge for the relay. Caddy obtains and renews the certificate for RELAY_HOST by
+# itself, which is why ports 80 and 443 must reach this host.
+#
+# This table is the whole public surface. The Traefik IngressRoute of the kubernetes
+# target and the Cloudflare Worker's edge filter carry the same one, and a test holds the
+# three together.
+#
+#   GET  /                                  WebSocket upgrade      the relay
+#   GET  /                                  NIP-11 document        Accept: application/nostr+json
+#   PUT  /upload  /media/upload             blob upload            signed, members only
+#   GET  /<sha256>[.ext]                    blob download          signed, members only
+#   HEAD /media/<sha256>[.ext]              (both addresses, both methods)
+#
+# Everything else answers 404 here and never reaches the relay: its admin listener, its
+# query and metrics surfaces, DELETE on a blob, any other method or path.
+{$RELAY_HOST} {
+	@wire {
+		path /
+		method GET
+		header Upgrade websocket
+	}
+	handle @wire {
+		reverse_proxy relay:5500
+	}
+
+	@info {
+		path /
+		method GET
+		header Accept application/nostr+json
+	}
+	handle @info {
+		reverse_proxy relay:5500
+	}
+
+	@upload {
+		method PUT
+		path /upload /media/upload
+	}
+	handle @upload {
+		reverse_proxy relay:5500
+	}
+
+	@blob {
+		method GET HEAD
+		path_regexp ^/(media/)?[0-9a-f]{64}([.][a-z0-9]{1,8})?$
+	}
+	handle @blob {
+		reverse_proxy relay:5500
+	}
+
+	handle {
+		respond 404
+	}
+}

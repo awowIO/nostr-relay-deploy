@@ -1,0 +1,88 @@
+# The relay: one pod, one writer, one ReadWriteOnce volume.
+#
+# Immutable once created: serviceName, selector, podManagementPolicy and the whole of
+# volumeClaimTemplates (storage_size, storage_class). Against an existing StatefulSet
+# these must equal the live values, or the API server refuses the apply; `--apply` runs
+# a server-side dry run first so nothing is half-applied.
+#
+# updateStrategy OnDelete: a restart drops every member's socket at once, so it happens
+# when an operator decides, not whenever the template changes. After an apply that
+# changes the template (a new image, or relay.yaml, which renames the generated
+# ConfigMap), the OLD pod keeps serving the OLD configuration until someone deletes
+# {{ statefulset_name }}-0. A successful apply is not a rollout; `--verify` reports it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: {{ statefulset_name }}, namespace: {{ namespace }} }
+spec:
+  serviceName: {{ statefulset_name }}
+  # One. The relay keeps an embedded single-writer store on a ReadWriteOnce volume; a
+  # second replica would be a second, empty relay with its own member list.
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  updateStrategy: { type: OnDelete }
+  selector: { matchLabels: { app: {{ app_label }} } }
+  template:
+    metadata: { labels: { app: {{ app_label }} } }
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      {{ priority_class_block }}
+      {{ affinity_block }}
+      # Not root. The pinned image declares no user, so it would run as UID 0. The relay
+      # writes only its store, logs and blobs (all under the data mount), stages uploads
+      # in /tmp, and its admin CLI wants a home for its log directory: hence HOME on the
+      # data volume, /tmp as an emptyDir, fsGroup so a fresh volume is writable, and a
+      # read-only root filesystem.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: relay
+          # Pinned by digest: the release nostr-mailbox is tested against.
+          image: {{ ncli_image }}
+          args: ["relay", "--config", "/app/ncli/relay.yaml"]
+          env:
+            # The exact URL every client signs in its NIP-42 proof, and the host a blob
+            # authorization must name.
+            - { name: NCLI_NIP11_URL, value: "wss://{{ relay_host }}" }
+            - name: NCLI_NIP11_PRIVKEY
+              valueFrom:
+                secretKeyRef: { name: {{ signing_secret }}, key: RELAY_SIGNING_KEY }
+            # where `kubectl exec ... ncli relay invites create` keeps its own logs
+            - { name: HOME, value: /app/ncli/data }
+          ports: [{ name: ws, containerPort: 5500 }]
+          # Ready means the relay answers as a relay: its NIP-11 document, not merely an
+          # open port. It does not prove the gates; `nostr-mailbox relay check` does.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: ws
+              httpHeaders: [{ name: Accept, value: application/nostr+json }]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: "{{ cpu_request }}", memory: {{ memory_request }} }
+            limits: { memory: {{ memory_limit }} }
+          volumeMounts:
+            - { name: config, mountPath: /app/ncli/relay.yaml, subPath: relay.yaml, readOnly: true }
+            - { name: data, mountPath: /app/ncli/data }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap: { name: {{ configmap_name }} }
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{ storage_class_block }}
+        resources:
+          requests:
+            storage: {{ storage_size }}
