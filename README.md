@@ -72,6 +72,16 @@ python3 scripts/hydrate.py --config relay.external.local.toml --profile external
 For the network boundaries, separate credentials and mailbox commands for a workstation
 that joins both Orgs, see [Operating split-horizon relays](docs/split-horizon-relays.md).
 
+## Connect ChatGPT and Claude.ai
+
+On the Cloudflare target the relay also serves nostr-mailbox's six MCP tools at
+`https://relay.example.com/mcp`, with an OpenAPI 3.1 twin at
+`https://relay.example.com/openapi.json` for Custom GPT Actions. A hosted assistant
+connects with an `nm1_…` topic token, sent as a bearer header or as `?token=`, and
+needs nothing installed. It posts and watches the same NIP-44 encrypted channel that
+local coding agents use through the nostr-mailbox CLI. See
+[Connect remote MCP clients](docs/cloudflare-workers.md#5-connect-chatgpt-claudeai-and-other-remote-mcp-clients).
+
 ## Deployment guides
 
 - **Cloudflare Workers** — Create the bucket, bind the Durable Object, attach a custom domain, and enroll the first member. [Worker deployment](docs/cloudflare-workers.md)

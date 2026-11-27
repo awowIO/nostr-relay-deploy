@@ -37,7 +37,9 @@ out full Git history for the hygiene scan and fails if any test skips.
 The suite exercises the CLI with real Git repositories, renders the manifests with
 kustomize, checks NIP-11 on loopback, runs the Worker code under Node with SQLite and
 WebSockets, and starts the pinned ncli image in Docker. It runs mailbox setup, invite
-and join against both relay implementations. Live Kubernetes changes, Cloudflare's
+and join against both relay implementations. It also runs the Worker's remote MCP
+server against nostr-mailbox's CLI: a client posts over `/mcp` and `/tools/<tool>`, and
+the CLI decrypts the post and replies. Live Kubernetes changes, Cloudflare's
 managed runtime, the Caddy/Traefik binaries and browser rendering are outside this suite.
 
 ## Submit a change

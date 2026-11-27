@@ -9,12 +9,17 @@
 | PUT | `/upload` or `/media/upload` | Signed Blossom upload |
 | GET or HEAD | `/<sha256>` or `/media/<sha256>` | Signed Blossom download, optionally with a file extension |
 | GET or HEAD | `/join` or `/join/` | Cloudflare invite console |
+| POST, GET or DELETE | `/mcp` | Cloudflare remote MCP server, with an `nm1_…` token |
+| GET | `/openapi.json` | Cloudflare OpenAPI 3.1 document of the MCP tools, with a token |
+| POST | `/tools/<tool>` | Cloudflare tool call as plain JSON, with a token |
 | Bearer-authenticated admin requests | `/_admin/` | Cloudflare membership and invite administration |
 
 Caddy and Traefik filter public requests before they reach ncli. Other routes return
-404. The Worker applies the same relay and Blossom filters, and also serves its join
-console and admin API. Send the NIP-11 media type on its own. Both relay implementations
-return 400 for an Accept list that mixes it with other media types.
+404. The Worker applies the same relay and Blossom filters. It also serves its join
+console, its admin API and the remote MCP server described in
+[Connect ChatGPT, Claude.ai and other remote MCP clients](cloudflare-workers.md#5-connect-chatgpt-claudeai-and-other-remote-mcp-clients).
+Send the NIP-11 media type on its own. Both relay implementations return 400 for an
+Accept list that mixes it with other media types.
 
 ## What a member can do
 
@@ -26,7 +31,11 @@ return 400 for an Accept list that mixes it with other media types.
 - **Run a private group.** Kind 9007 creates a NIP-29 group with its creator as admin.
   New groups are private and closed. Members can read the group's messages, signed
   state (39000–39003) and accepted moderation log. Admins can review pending joins
-  (9021), admit a member (9000), remove one (9001), and edit metadata (9002).
+  (9021), admit a member (9000), remove one (9001), and edit metadata (9002). An admin
+  can also register a group invite code (9009). A join request that carries the code is
+  admitted at once, and the code then admits no one else. Only the group's admins can
+  read the 9009, and the request that spent the code is not kept. nostr-mailbox's
+  `topic invite` and `join` rely on this.
   Querying a private group without membership gives the same restricted response as
   querying an unknown group.
 - **Exchange envelopes and receipts.** Only keys in the event's `p` tags receive
@@ -42,8 +51,7 @@ The Worker checks BIP-340 signatures and event IDs. It handles regular, replacea
 addressable and ephemeral events, NIP-40 expiry, NIP-70 protected events and group
 leave requests (9022). Its group moderation supports private, restricted, closed
 and hidden groups and preserves the last admin. Unsupported moderation kinds are
-rejected, including 9005 (delete event), 9008 (delete group), 9009 (create invite)
-and 9010 (pins). NIP-09 deletion, COUNT and search are also unsupported.
+rejected, including 9005 (delete event), 9008 (delete group) and 9010 (pins). NIP-09 deletion, COUNT and search are also unsupported.
 
 On ncli, filtering recipient-only events happens after applying a query's limit. A
 newer event a reader cannot see can therefore empty a limit-one answer. The Worker
@@ -65,7 +73,8 @@ a NIP-07 browser extension to sign. Members can redeem and mint invites, manage
 groups and see envelopes addressed to them. The console reads invite fragments in the
 forms `#nm1_…`, `#join=nm1_…` and `#invite=<code>`, then clears the fragment. It fills
 a relay invite for its own host and waits for the member to redeem it. Topic invites
-need the CLI to retain the channel keys. Invites naming a different relay stay unused.
+need the CLI, or the Worker's remote MCP server, to hold the channel keys. Invites
+naming a different relay stay unused.
 
 On Compose and Kubernetes, the pinned ncli release serves homepage HTML at the root.
 Its script and stylesheet paths under `/_home/assets/` fall outside the edge filters.

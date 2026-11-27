@@ -700,8 +700,9 @@ def test_cloudflare_hydrates_wrangler_and_copies_the_worker(build):
     assert wrangler["migrations"] == [{"tag": "v1", "new_sqlite_classes": ["RelayDurableObject"]}]
     assert wrangler["r2_buckets"] == [{"binding": "BLOSSOM_BUCKET", "bucket_name": "nostr-campaign-blobs"}]
     assert "ADMIN_TOKEN" not in wrangler["vars"], "the admin token is a secret, never a var"
-    assert {p.name for p in (cf / "src").iterdir()} == {"worker.ts", "nostr.ts", "console.ts"}
-    for name in ("worker.ts", "nostr.ts", "console.ts"):
+    modules = {"worker.ts", "nostr.ts", "console.ts", "nip44.ts", "mailbox.ts", "mcp.ts"}
+    assert {p.name for p in (cf / "src").iterdir()} == modules
+    for name in modules:
         assert (cf / "src" / name).read_bytes() == (REPO / "templates" / "cloudflare" / "src" / name).read_bytes()
     assert "secret put RELAY_SIGNING_KEY" in (cf / "wrangler.toml").read_text()
     assert "RELAY_SIGNING_KEY" not in wrangler["vars"], "the relay's key is a secret, never a var"
@@ -794,10 +795,13 @@ SHA = "ab" * 32
 OTHER_HOST = "evil.example.org"
 # `GET` and `HEAD /` are one route on every edge, whatever the headers: the relay behind it
 # tells a WebSocket, a NIP-11 client and a browser apart. Every other path stays shut, but
-# one: `/join` and `/join/`, where nostr-mailbox's invite links point, are WORKER_ONLY. The
-# Worker is its own relay and serves its console there; the pinned ncli has no page there
-# (test_only_the_worker_has_a_page_where_invite_links_point holds that against the image),
-# so the Caddyfile and the IngressRoute keep it shut rather than forward to a 404.
+# two kinds are WORKER_ONLY. `/join` and `/join/`, where nostr-mailbox's invite links point:
+# the Worker is its own relay and serves its console there; the pinned ncli has no page
+# there (test_only_the_worker_has_a_page_where_invite_links_point holds that against the
+# image), so the Caddyfile and the IngressRoute keep it shut rather than forward to a 404.
+# And the remote MCP server (/mcp, /openapi.json, /tools/<tool>), which the Worker runs
+# beside its relay and the pinned ncli has no counterpart of. Unauthenticated, as probed
+# here, those answer 401 (GET /mcp 405), never the page and never the wire.
 WORKER_ONLY = "worker only"
 JOIN_PATHS = ("/join", "/join/")
 PROBES = [
@@ -849,7 +853,22 @@ PROBES = [
     ("a path that starts like join", "GET", "/joined", {}, None, False),
     ("the invite link page in capitals", "GET", "/JOIN/", {}, None, False),
     ("the invite link page on another host", "GET", "/join/", {"Accept": "text/html"}, OTHER_HOST, False),
+    ("MCP Streamable HTTP", "POST", "/mcp", {"Content-Type": "application/json"}, None, WORKER_ONLY),
+    ("MCP stream", "GET", "/mcp", {"Accept": "text/event-stream"}, None, WORKER_ONLY),
+    ("MCP session end", "DELETE", "/mcp", {}, None, WORKER_ONLY),
+    ("OpenAPI document", "GET", "/openapi.json", {}, None, WORKER_ONLY),
+    ("OpenAPI action", "POST", "/tools/mailbox_post", {"Content-Type": "application/json"}, None, WORKER_ONLY),
+    ("an upgrade at the MCP endpoint", "GET", "/mcp", {"Upgrade": "websocket", "Connection": "Upgrade"}, None,
+     WORKER_ONLY),
+    ("PUT to the MCP endpoint", "PUT", "/mcp", {}, None, False),
+    ("under the MCP endpoint", "POST", "/mcp/", {}, None, False),
+    ("HEAD the OpenAPI document", "HEAD", "/openapi.json", {}, None, False),
+    ("GET an OpenAPI action", "GET", "/tools/mailbox_post", {}, None, False),
+    ("an OpenAPI action in capitals", "POST", "/tools/Mailbox_post", {}, None, False),
+    ("under an OpenAPI action", "POST", "/tools/mailbox_post/x", {}, None, False),
+    ("the MCP endpoint on another host", "POST", "/mcp", {}, OTHER_HOST, False),
 ]
+MCP_ROUTES = ("/mcp", "/openapi.json", "/tools/mailbox_post")
 
 
 def _header(headers: dict[str, str], name: str) -> str | None:
@@ -984,8 +1003,11 @@ def test_caddy_traefik_and_the_worker_admit_the_same_routes(build, worker, name,
     assert (caddy, traefik, answer["status"] != 404) == expected, answer
     if admitted and path == "/" and "Upgrade" in headers:
         assert answer["upgrade"] is True
-    if admitted == WORKER_ONLY:
+    if admitted == WORKER_ONLY and path in JOIN_PATHS:
         assert (answer["status"], answer["upgrade"]) == (200, False), "/join is the page, never the wire"
+    if admitted == WORKER_ONLY and path in MCP_ROUTES:
+        assert answer["upgrade"] is False, "the MCP routes are never the wire"
+        assert answer["status"] == (405 if (method, path) == ("GET", "/mcp") else 401), answer
 
 
 def test_the_worker_admin_api_is_the_only_other_route_and_needs_the_token(worker):
@@ -1861,6 +1883,38 @@ def test_members_run_private_nip29_groups_themselves(relay):
     assert c.publish(carol.event(9021, [["h", f"no-such-{g}"]])) == (False, "restricted: no such group.")
 
 
+def test_a_group_invite_code_admits_one_key_at_once(relay):
+    """NIP-29 9009: an admin registers a code, and a join request carrying it is admitted at
+    once, one key, once. The code is for the group's admins to read, and the request that
+    spent it is not kept. nostr-mailbox's `topic invite` and `join` run on exactly this."""
+    (alice, a), (bob, b), (carol, c) = enrolled(relay, 3)
+    g = f"invites-{os.urandom(4).hex()}"
+    code = os.urandom(16).hex()
+    assert a.publish(alice.event(9007, [["h", g]])) == (True, f"info: group {g} created.")
+    assert b.publish(bob.event(9009, [["h", g], ["code", code]])) == (
+        False, "restricted: only a group admin may create invites.")
+    assert a.publish(alice.event(9009, [["h", g]])) == (False, "invalid: nip29: missing code tag (invite code)")
+    invite = alice.event(9009, [["h", g], ["code", code]])
+    assert a.publish(invite) == (True, "info: invite created.")
+    assert [e["id"] for e in a.read({"kinds": [9009], "#h": [g]})] == [invite["id"]]
+
+    assert b.publish(bob.event(9021, [["h", g], ["code", code]], "with the code")) == (
+        True, "info: welcome to the group!")
+    seats = a.read({"kinds": [39002], "#d": [g]})[0]
+    assert {t[1] for t in seats["tags"] if t[0] == "p"} == {alice.pubkey, bob.pubkey}
+    assert [e["kind"] for e in b.read({"kinds": [9007], "#h": [g]})] == [9007], "in, bob reads the group"
+    assert b.read({"kinds": [9009], "#h": [g]}) == [], "a code is for the group's admins"
+    assert a.read({"kinds": [9021], "#h": [g]}) == [], "the request that spent the code is not kept"
+    assert b.publish(bob.event(9021, [["h", g], ["code", code]], "again")) == (
+        True, "duplicate: you are already a member of this group.")
+
+    # One key, once: the spent code, and one never registered, admit nobody else.
+    for tried in (code, os.urandom(16).hex()):
+        assert c.publish(carol.event(9021, [["h", g], ["code", tried]])) == (
+            False, "restricted: that is an invalid invite code.")
+    assert c.refusal({"#h": [g]}) == f"restricted: valid membership in group {g} is required"
+
+
 def test_recipient_only_kinds_reach_only_the_key_they_name(relay, build):
     kinds = relay_settings((build / "compose" / "relay.yaml").read_text())["recipientOnlyKinds"]
     (alice, a), (bob, b), (_carol, c) = enrolled(relay, 3)
@@ -1970,7 +2024,7 @@ def test_the_worker_keeps_group_state_its_own(worker):
     meta = a.read({"kinds": [39000], "#d": [g]})[0]
     assert meta["tags"] == [["d", g], ["private"], ["restricted"], ["closed"]]
     roles = a.read({"kinds": [39003], "#d": [g]})[0]
-    assert roles["tags"] == [["d", g], ["role", "admin", "may put-user, remove-user, edit-metadata"]]
+    assert roles["tags"] == [["d", g], ["role", "admin", "may put-user, remove-user, edit-metadata, create-invite"]]
     assert event_is_signed(roles) and roles["pubkey"] == RELAY_PUBKEY
     for kind in (39000, 39002, 28935):
         forged = alice.event(kind, [["d", g], ["p", alice.pubkey]])
@@ -1979,7 +2033,7 @@ def test_the_worker_keeps_group_state_its_own(worker):
         False, "invalid: a group id is made of a-z, 0-9, '-' and '_' (NIP-29)")
     assert a.publish(alice.event(9007, [])) == (False, "invalid: nip29: missing h tag (group id)")
     assert a.publish(alice.event(9005, [["h", g], ["e", "0" * 64]])) == (
-        False, "invalid: kind 9005 is not a NIP-29 request this relay implements (9000, 9001, 9002, 9007, 9021, 9022)")
+        False, "invalid: kind 9005 is not a NIP-29 request this relay implements (9000, 9001, 9002, 9007, 9009, 9021, 9022)")
     # A group never loses its last admin.
     assert a.publish(alice.event(9001, [["h", g], ["p", alice.pubkey]])) == (
         False, "restricted: the group's last admin cannot be removed.")
@@ -2031,6 +2085,360 @@ def test_minting_invites_spends_the_key_rate_limit(limited_worker):
     for _ in range(3):
         a.invite()
     assert a.refusal({"kinds": [28935], "limit": 1}) == "rate-limited: at most 3 events and invites a minute per key"
+
+
+# ============================================================= the remote MCP server
+class Mcp:
+    """A remote MCP client as ChatGPT and Claude.ai speak Streamable HTTP: JSON-RPC POSTs to
+    /mcp carrying the nm1_ token (as a bearer header, or in the URL), and the Mcp-Session-Id
+    that initialize hands out."""
+
+    def __init__(self, harness: Harness, token: str, *, in_url: bool = False):
+        self.harness, self.token, self.in_url = harness, token, in_url
+        self.session: str | None = None
+        self.seq = 0
+
+    def post(self, message, *, session: str | None = None):
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        if not self.in_url:
+            headers["Authorization"] = f"Bearer {self.token}"
+        if session or self.session:
+            headers["Mcp-Session-Id"] = session or self.session
+            headers["MCP-Protocol-Version"] = "2025-06-18"
+        path = f"/mcp?token={self.token}" if self.in_url else "/mcp"
+        return self.harness.http("POST", path, headers=headers, body=json.dumps(message).encode())
+
+    def rpc(self, method: str, params: dict | None = None) -> dict:
+        self.seq += 1
+        status, headers, body = self.post({"jsonrpc": "2.0", "id": self.seq, "method": method, "params": params or {}})
+        assert status == 200, (status, body)
+        reply = json.loads(body)
+        assert reply["id"] == self.seq, reply
+        if method == "initialize":
+            self.session = headers["Mcp-Session-Id"]
+        return reply
+
+    def initialize(self) -> dict:
+        init = self.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                       "clientInfo": {"name": "a remote MCP client", "version": "1"}})
+        status, _, body = self.post({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        assert (status, body) == (202, b"")
+        return init["result"]
+
+    def result(self, name: str, arguments: dict | None = None) -> dict:
+        return self.rpc("tools/call", {"name": name, "arguments": arguments or {}})["result"]
+
+    def call(self, name: str, arguments: dict | None = None) -> dict:
+        result = self.result(name, arguments)
+        assert result["isError"] is False, result["content"][0]["text"]
+        assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
+        return result["structuredContent"]
+
+    def refusal(self, name: str, arguments: dict | None = None) -> str:
+        result = self.result(name, arguments)
+        assert result["isError"] is True, result
+        return result["content"][0]["text"]
+
+
+def action(harness: Harness, token: str, tool: str, arguments: dict) -> tuple[int, dict]:
+    """One OpenAPI Action call, as a Custom GPT makes it: POST /tools/<tool> with the token."""
+    status, _, body = harness.http("POST", f"/tools/{tool}", body=json.dumps(arguments).encode(),
+                                   headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    return status, json.loads(body)
+
+
+def admin_invite_code(harness: Harness) -> str:
+    status, _, body = harness.http("POST", "/_admin/invites", body=json.dumps({"ttl_seconds": 3600, "max_uses": 1}).encode(),
+                                   headers={"Authorization": f"Bearer {ADMIN_TOKEN}", "Content-Type": "application/json"})
+    assert status == 201, body
+    return json.loads(body)["code"]
+
+
+def org_token(harness: Harness, campaign: str, **declared) -> str:
+    """An org-scope token as nostr-mailbox's `invite` mints one: the campaign's declaration,
+    with its campaign_key (epoch 1 of its bus), and a relay invite code."""
+    bundle = {"schema": "cf.transport/1", "relay": f"wss://{RELAY_HOST}", "campaign": campaign,
+              "operator_pubkeys": [fresh_key().pubkey],
+              "campaign_key": hashlib.sha256(f"campaign key of {campaign}".encode()).hexdigest(),
+              "code": admin_invite_code(harness), **declared}
+    return invite_token(**bundle)
+
+
+def test_the_mcp_endpoints_take_only_a_token_for_this_relay(worker):
+    """Every MCP route wants a token, from the bearer header or the URL, for this relay and
+    still good here; a session is bound to its token; GET /mcp is no stream."""
+    token = org_token(worker, f"edge-{os.urandom(3).hex()}")
+
+    for method, path in (("POST", "/mcp"), ("DELETE", "/mcp"), ("GET", "/openapi.json"), ("POST", "/tools/mailbox_list")):
+        status, headers, body = worker.http(method, path, body=b"{}" if method == "POST" else None)
+        assert status == 401 and json.loads(body)["error"].startswith("an nm1_ invite token is required"), (path, body)
+        assert headers["WWW-Authenticate"].startswith("Bearer")
+    status, headers, _ = worker.http("GET", "/mcp", headers={"Authorization": f"Bearer {token}"})
+    assert (status, headers["Allow"]) == (405, "POST, DELETE"), "this server sends nothing unasked: no stream"
+
+    elsewhere = invite_token(**{**json.loads(base64.urlsafe_b64decode(token[4:] + "==")), "relay": "wss://relay.other.test"})
+    refusals = {
+        "elsewhere": (elsewhere, "this token is for wss://relay.other.test, not for wss://relay.example.com"),
+        "unreadable": ("nm1_bm90IGpzb24", "the nm1_ token is not base64url JSON"),
+        "no token": ("an-api-key", "give an nm1_ token, or a …/join/#nm1_… link"),
+    }
+    for presented, reason in refusals.values():
+        status, _, body = worker.http("GET", "/openapi.json", headers={"Authorization": f"Bearer {presented}"})
+        assert (status, json.loads(body)) == (401, {"error": reason})
+    status, _, body = worker.http("GET", f"/openapi.json?token={token}", headers={"Authorization": f"Bearer {elsewhere}"})
+    assert (status, json.loads(body)) == (400, {"error": "the Authorization header and ?token= carry two different tokens"})
+
+    status, _, body = worker.http("GET", f"/openapi.json?token={token}")
+    doc = json.loads(body)
+    assert (status, doc["openapi"], doc["servers"]) == (200, "3.1.0", [{"url": f"https://{RELAY_HOST}"}])
+    assert doc["components"]["securitySchemes"]["nm1"] == {
+        "type": "http", "scheme": "bearer", "description": "An nm1_ invite token minted by nostr-mailbox (topic invite)."}
+    tools = ["mailbox_list", "mailbox_invite", "mailbox_join", "mailbox_post", "mailbox_watch", "mailbox_board"]
+    assert [p["post"]["operationId"] for p in doc["paths"].values()] == tools
+    assert list(doc["paths"]) == [f"/tools/{t}" for t in tools]
+    assert all(len(p["post"]["description"]) <= 300 for p in doc["paths"].values()), "GPT Actions cap descriptions"
+
+    mcp = Mcp(worker, token)
+    init = mcp.initialize()
+    assert (init["protocolVersion"], init["capabilities"]) == ("2025-06-18", {"tools": {"listChanged": False}})
+    assert [t["name"] for t in mcp.rpc("tools/list")["result"]["tools"]] == tools
+    assert mcp.rpc("ping")["result"] == {}
+    assert mcp.rpc("resources/list")["error"] == {"code": -32601, "message": "method not found: resources/list"}
+    assert mcp.rpc("tools/call", {"name": "mailbox_nope"})["error"]["code"] == -32602
+    assert mcp.rpc("tools/call", {"name": "mailbox_post", "arguments": {"channel": "bus", "body": "x", "files": ["a"]}})[
+        "error"] == {"code": -32602, "message": "mailbox_post takes [\"body\",\"channel\",\"kind\",\"org\",\"persona\","
+                                                "\"reply_to\",\"subject\"]; unknown: [\"files\"]"}
+    status, _, body = mcp.post(b"not json".decode())
+    assert status == 200 and json.loads(body)["error"]["code"] == -32600, "a JSON string is no JSON-RPC message"
+    status, _, body = worker.http("POST", "/mcp", body=b"{", headers={"Authorization": f"Bearer {token}"})
+    assert (status, json.loads(body)["error"]["code"]) == (400, -32700)
+
+    # A session is its token's: another token cannot use it, and once ended it is gone.
+    other = Mcp(worker, org_token(worker, f"edge-{os.urandom(3).hex()}"))
+    status, _, body = other.post({"jsonrpc": "2.0", "id": 1, "method": "ping"}, session=mcp.session)
+    assert (status, json.loads(body)["error"]["code"]) == (404, -32001)
+    status, _, _ = worker.http("DELETE", "/mcp", headers={"Authorization": f"Bearer {token}", "Mcp-Session-Id": mcp.session})
+    assert status == 204
+    status, _, _ = mcp.post({"jsonrpc": "2.0", "id": 9, "method": "ping"})
+    assert status == 404, "an ended session answers 404, and the client initializes again"
+
+    # The plain-JSON twin: the same tool, the same refusals, by HTTP status.
+    assert action(worker, token, "mailbox_nope", {})[0] == 404
+    assert action(worker, token, "mailbox_post", {"channel": "bus"}) == (400, {"error": "mailbox_post needs [\"body\"]"})
+    assert action(worker, token, "mailbox_post", {"channel": "elsewhere", "body": "hi"}) == (
+        422, {"error": "channel \"elsewhere\" is neither 'bus' nor this token's campaign bus"})
+
+
+def test_two_personas_of_one_token_talk_on_its_campaign_bus(worker):
+    """An org token redeems itself on first use; a second persona of the same token is
+    introduced by the first, through a member-minted invite; what one posts the other
+    reads, decrypted, while the relay stores only NIP-44 ciphertext under epoch 1."""
+    campaign = f"edge-{os.urandom(3).hex()}"
+    token = org_token(worker, campaign)
+    mcp = Mcp(worker, token)
+    mcp.initialize()
+    before = mcp.call("mailbox_list")
+    persona = before["persona"]
+    assert (before["relay_member"], before["campaign"], before["token"]["redeemed"]) == (False, campaign, False)
+
+    body = "an edge note, sealed under the campaign key"
+    status, posted = action(worker, token, "mailbox_post", {"channel": "bus", "body": body, "subject": "hello"})
+    assert (status, posted["accepted"], posted["duplicate"], posted["topic"]) == (200, True, False, "bus"), posted
+    assert 0 < posted["bytes_used"] < posted["bytes_cap"] == 16_384
+    again = mcp.call("mailbox_post", {"channel": "bus", "body": body, "subject": "hello"})
+    assert (again["id"], again["duplicate"]) == (posted["id"], True), "the same post twice is one message"
+    assert mcp.call("mailbox_list")["relay_member"] is True
+
+    [(_watcher, w)] = enrolled(WorkerRelay(worker), 1)
+    [stored] = w.read({"ids": [posted["id"]]})
+    assert stored["pubkey"] == persona["pubkey"] and event_is_signed(stored)
+    assert ["epoch", "1"] in stored["tags"] and ["t", f"{campaign}:bus"] in stored["tags"]
+    assert body not in stored["content"] and base64.b64decode(stored["content"])[0] == 2, "NIP-44 v2"
+
+    reviewer = mcp.call("mailbox_join", {"token_or_url": f"https://{RELAY_HOST}/join/#{token}", "persona": "reviewer"})
+    assert reviewer["persona"] == "reviewer" and reviewer["npub"] != persona["npub"]
+    assert reviewer["relay_said"].endswith(f"(invited by persona default, {persona['npub']})")
+    watched = mcp.call("mailbox_watch", {"channel": "bus", "persona": "reviewer"})
+    assert [(m["id"], m["body"], m["author"]) for m in watched["messages"]] == [(posted["id"], body, persona["pubkey"])]
+    assert watched["seat"] == "reviewer"
+    settled = mcp.call("mailbox_watch", {"channel": "bus", "persona": "reviewer", "ack_id": posted["id"]})
+    assert (settled["messages"], settled["acked"][0]["disposition"]) == ([], "handled")
+    assert mcp.call("mailbox_watch", {"channel": "bus"})["messages"] == [], "a persona is not sent its own posts"
+    assert mcp.call("mailbox_watch", {"channel": "bus", "history": True})["messages"][0]["body"] == body
+    minted = mcp.call("mailbox_invite", {"target": campaign, "scope": "org", "recipient": "a colleague"})
+    assert minted["join_url"] == f"https://{RELAY_HOST}/join/#{minted['token']}"
+    assert json.loads(base64.urlsafe_b64decode(minted["token"][4:] + "=="))["member"] == "a colleague"
+    assert "keeper" in mcp.refusal("mailbox_invite", {"target": "bus"}), "a channel invite is the keeper's"
+
+    # The token is spent on its own persona: another token carrying the same code is not.
+    reworded = invite_token(**{**json.loads(base64.urlsafe_b64decode(token[4:] + "==")), "member": "someone else"})
+    status, _, refused = worker.http("GET", "/openapi.json", headers={"Authorization": f"Bearer {reworded}"})
+    spent = "this token's relay invite is spent, expired or unknown, and its persona is not a member of this relay"
+    assert (status, json.loads(refused)["error"]) == (401, spent)
+
+
+@pytest.fixture
+def keeper(worker, tmp_path):
+    """nostr-mailbox's own CLI keeps a topic on the Worker: `setup`, `topic create` and
+    `topic invite`, the token a person pastes into ChatGPT or Claude.ai."""
+    if not os.environ.get("NOSTR_MAILBOX_SRC"):
+        pytest.skip("set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to run its CLI against the Worker")
+    sys.path.insert(0, os.environ["NOSTR_MAILBOX_SRC"])
+    from nostr_mailbox import bech32  # type: ignore[import-not-found]
+
+    home = tmp_path / "keeper"
+    campaign, topic = f"demo-{os.urandom(3).hex()}", f"agents-{os.urandom(3).hex()}"
+    setup = nostr_mailbox_cli(home, "setup", "--relay", f"ws://127.0.0.1:{worker.port}", "--campaign", campaign)
+    trust = Path(setup["trust_file"])
+    trust.write_text(trust.read_text() + f'relay_auth_url = "wss://{RELAY_HOST}"\n')
+    run_shim(worker, "members", "add", bech32.pubkey_hex(setup["npub"]))
+    assert nostr_mailbox_cli(home, "topic", "create", topic)["created"] is True
+    invite = nostr_mailbox_cli(home, "topic", "invite", topic, "--for", "chatgpt")
+    assert (invite["topic"], invite["role"], invite["epochs_in_token"]) == (topic, "read-write", [1])
+
+    def cli(*args: str) -> dict:
+        return nostr_mailbox_cli(home, "--topic", topic, *args)
+
+    return {"cli": cli, "topic": topic, "campaign": campaign, "token": invite["token"],
+            "join_url": invite["join_url"], "pubkey": bech32.pubkey_hex(setup["npub"]), "npub": setup["npub"]}
+
+
+def test_chatgpt_and_a_local_agent_talk_through_the_worker_mcp(worker, keeper):
+    """The whole loop, with nothing faked on either end: nostr-mailbox's CLI mints a topic
+    token; a remote MCP client posts with it over /mcp and over an OpenAPI Action; the CLI
+    decrypts both and replies on the bus; the client reads the reply over /mcp, settles
+    it, and is woken by the next one while it waits."""
+    token, topic, cli = keeper["token"], keeper["topic"], keeper["cli"]
+    chatgpt = Mcp(worker, token)
+    chatgpt.initialize()
+    listed = chatgpt.call("mailbox_list")
+    persona = listed["persona"]
+    assert (listed["campaign"], listed["bus"]["topic"], listed["relay_member"]) == (keeper["campaign"], topic, False)
+    [channel] = listed["channels"]
+    assert (channel["name"], channel["held_epochs"], channel["keeper_npub"], channel["standing"]) == (
+        topic, [1], keeper["npub"], "outside")
+
+    asked = chatgpt.call("mailbox_post", {"channel": "bus", "kind": "question", "subject": "ci",
+                                          "body": "From ChatGPT: are the tests green on main?"})
+    assert (asked["accepted"], asked["topic"], asked["channel"]) == (True, "bus", "bus")
+    status, acted = action(worker, token, "mailbox_post", {"channel": topic, "body": "From a GPT Action: and the docs?"})
+    assert status == 200 and acted["accepted"] is True
+    listed = chatgpt.call("mailbox_list")
+    assert (listed["relay_member"], listed["channels"][0]["standing"]) == (True, "member")
+
+    seen = cli("watch", "bus", "--wait-seconds", "0")
+    # One second can hold both posts, and the journal orders a tie by id: compare as a set.
+    assert {(m["id"], m["author"], m["kind"], m["body"]) for m in seen["messages"]} == {
+        (asked["id"], persona["pubkey"], "question", "From ChatGPT: are the tests green on main?"),
+        (acted["id"], persona["pubkey"], "message", "From a GPT Action: and the docs?"),
+    }
+    assert "rejected" not in seen, seen["rejected"]
+    reply = cli("post", "bus", "From the local agent: green, 206 passed", "--kind", "answer", "--reply-to", asked["id"])
+    assert reply["accepted"] is True
+
+    # Another connection, the token in its URL, as a client without custom headers uses it.
+    claude = Mcp(worker, token, in_url=True)
+    claude.initialize()
+    watched = claude.call("mailbox_watch", {"channel": "bus"})
+    assert [(m["id"], m["author"], m["kind"], m["reply_to"], m["body"]) for m in watched["messages"]] == [
+        (reply["id"], keeper["pubkey"], "answer", asked["id"], "From the local agent: green, 206 passed")]
+    settled = claude.call("mailbox_watch", {"channel": "bus", "ack_id": reply["id"], "result_ref": "PR 1"})
+    assert (settled["messages"], settled["acked"][0]["disposition"], settled["acked"][0]["result_ref"]) == (
+        [], "handled", "PR 1")
+
+    # A watch that waits is woken by the next reply, not by its deadline.
+    patience = 120
+    woken: dict = {}
+    waiting = threading.Thread(target=lambda: woken.update(
+        chatgpt.call("mailbox_watch", {"channel": "bus", "wait_seconds": patience}), at=time.monotonic()))
+    started = time.monotonic()
+    waiting.start()
+    later = cli("post", "bus", "From the local agent: docs too", "--kind", "answer")
+    waiting.join(patience + 30)
+    assert [m["id"] for m in woken["messages"]] == [later["id"]]
+    assert woken["at"] - started < patience, "the wait ended when the reply arrived"
+
+    history = cli("read", "bus")
+    assert {m["id"] for m in history["messages"]} == {asked["id"], acted["id"], reply["id"], later["id"]}
+
+
+def test_a_rotated_channel_key_reaches_the_mcp_persona_as_a_gift_wrap(worker, keeper):
+    """The token carries epoch 1 alone. The keeper approves the persona, then rotates the
+    topic: epoch 2 reaches the persona only as a NIP-59 gift wrap to its key, which the
+    Worker opens on the next call, so the persona reads and writes under epoch 2."""
+    token, cli, topic = keeper["token"], keeper["cli"], keeper["topic"]
+    mcp = Mcp(worker, token)
+    mcp.initialize()
+    mcp.call("mailbox_post", {"channel": "bus", "body": "written under epoch 1"})
+    persona = mcp.call("mailbox_list")["persona"]
+
+    approved = cli("topic", "approve", topic, persona["npub"])
+    assert approved["delivered"] == {persona["npub"]: [1]}, "the keeper wraps what the persona is owed"
+    rotated = cli("topic", "invite", topic, "--history", "from-now", "--for", "a newcomer")
+    assert (rotated["rotated_to"], rotated["delivered"]) == (2, {persona["npub"]: [2]})
+
+    listed = mcp.call("mailbox_list")
+    assert listed["channels"][0]["held_epochs"] == [1, 2] and "rejected" not in listed, listed
+    asked = cli("post", "bus", "written under epoch 2", "--kind", "question")
+    watched = mcp.call("mailbox_watch", {"channel": "bus"})
+    assert [(m["id"], m["body"]) for m in watched["messages"]] == [(asked["id"], "written under epoch 2")]
+    answered = mcp.call("mailbox_post", {"channel": "bus", "body": "read under epoch 2", "reply_to": asked["id"]})
+    seen = cli("watch", "bus", "--wait-seconds", "0")
+    assert {m["id"]: m["body"] for m in seen["messages"]}[answered["id"]] == "read under epoch 2"
+    assert "rejected" not in seen, seen["rejected"]
+
+
+def test_the_board_reads_and_writes_what_the_cli_does(worker, keeper):
+    """mailbox_board against nostr-mailbox's CLI on one topic: handoffs, conditions, claims
+    and decisions, checkpoints and the Route Board, each written on one side and read on
+    the other, where only the keys the campaign names may write."""
+    token, cli = keeper["token"], keeper["cli"]
+    mcp = Mcp(worker, token)
+    mcp.initialize()
+
+    def board(action_name: str, **params) -> dict:
+        return mcp.call("mailbox_board", {"action": action_name, "params": params})
+
+    sent = board("handoff_send", original_goal="ship the MCP edge", open_condition="docs reviewed",
+                 evidence="tests: 206 passed", next_action="review docs/cloudflare-workers.md")
+    persona = mcp.call("mailbox_list")["persona"]
+    [packet] = cli("handoff", "read", "--all-seats")["handoffs"]
+    assert (packet["event_id"], packet["from"], packet["next_action"]) == (
+        sent["event_id"], persona["npub"], "review docs/cloudflare-workers.md")
+
+    opened = cli("condition", "open", "edge-mcp", "--goal", "remote agents on the bus", "--statement",
+                 "ChatGPT reads what a local agent writes", "--next-action", "post and watch")
+    [standing] = board("condition_list")["conditions"]
+    assert (standing["event_id"], standing["rev"], standing["state"], standing["reviewer"]) == (
+        opened["event_id"], 1, "open", keeper["npub"])
+    digest = hashlib.sha256(b"the candidate").hexdigest()
+    claimed = board("claim_put", condition="edge-mcp", condition_rev="1", effect="closes",
+                    candidate_digest=digest, evidence_ref="tests/test_hydrate.py")
+    [listed] = cli("claim", "list")["claims"]
+    assert (listed["event_id"], listed["author"], listed["status"], listed["evidence_refs"]) == (
+        claimed["event_id"], persona["npub"], "proposal", ["tests/test_hydrate.py"])
+    cli("claim", "decide", claimed["event_id"], "--outcome", "accepted", "--reason", "witnessed end to end",
+        "--next-action", "deploy")
+    [moved] = board("condition_list")["conditions"]
+    assert (moved["rev"], moved["state"], moved["evidence"]) == (2, "closed", ["tests/test_hydrate.py"])
+    [decided] = board("claim_list")["claims"]
+    assert (decided["status"], decided["decisions"][0]["outcome"]) == ("decided", "accepted")
+    refused = mcp.refusal("mailbox_board", {"action": "claim_decide", "params": {
+        "claim_id": claimed["event_id"], "outcome": "rejected", "reason": "no", "next_action": "x", "reopen_if": "y"}})
+    assert "decided by a reviewer or operator key" in refused
+
+    put = board("checkpoint_put", seq=1, sha256=digest, note="first")
+    got = cli("checkpoint", "get", "--seat", "default", "--author", persona["npub"])
+    assert (put["written"], got["checkpoint"]["seq"], got["checkpoint"]["note"]) == (True, 1, "first")
+    assert board("checkpoint_put", seq=1, sha256=digest, note="first")["written"] is False, "an exact retry writes nothing"
+    assert "behind the recorded" in mcp.refusal("mailbox_board", {"action": "checkpoint_put", "params": {
+        "seq": 0, "sha256": digest}})
+
+    cli("route", "put", "edge", "--state", "active", "--hypothesis", "remote MCP clients join at the edge",
+        "--falsification-criterion", "a client cannot read a reply")
+    assert [r["route"] for r in board("route_list")["routes"]] == ["edge"]
+    assert "lead or operator key" in mcp.refusal("mailbox_board", {"action": "route_put", "params": {
+        "route": "mine", "state": "active", "hypothesis": "h", "falsification_criterion": "f"}})
 
 
 # ====================================================================== check-clean

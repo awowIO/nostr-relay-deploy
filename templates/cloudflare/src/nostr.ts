@@ -1,9 +1,13 @@
 // Pure Nostr primitives for the Cloudflare Worker relay: BIP-340 Schnorr verification and
-// signing, NIP-01 event ids, event and filter rules, and the edge route table.
+// signing, secp256k1 ECDH (for NIP-44's pairwise keys), NIP-01 event ids, event and filter
+// rules, and the edge route table.
 //
 // No Cloudflare API is used here, and only erasable TypeScript syntax, so the same file
 // runs unchanged under wrangler (esbuild) and under Node's type stripping, which is how
 // tests/test_hydrate.py checks it against the published BIP-340 test vectors.
+
+/** The Worker's version: NIP-11's `version`, and the MCP server's `serverInfo`. */
+export const VERSION = "0.1.0";
 
 // ------------------------------------------------------------------ secp256k1 / BIP-340
 const P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
@@ -126,7 +130,7 @@ export async function sha256(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 }
 
-function concat(...parts: Uint8Array[]): Uint8Array {
+export function concat(...parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let at = 0;
   for (const p of parts) {
@@ -189,6 +193,16 @@ export async function verifySchnorr(
   return (y & 1n) === 0n && x === r;
 }
 
+/** The x coordinate of `key`·P, where P is the point whose x-only public key is
+ * `pubkey`: the shared secret NIP-44 v2 derives a pairwise conversation key from. x(d·P)
+ * is the same for both lifts of P, so the even one BIP-340 names is enough. */
+export function sharedSecretX(key: SecretKey, pubkey: string): Uint8Array {
+  if (!HEX64.test(pubkey)) throw new RangeError("a public key is 64 lowercase hex characters");
+  const pt = liftX(bytesToBig(hexToBytes(pubkey)));
+  if (pt === null) throw new RangeError("the public key is not a point on secp256k1");
+  return bigToBytes32(toAffine(mulAdd(key.scalar, pt, 0n, INFINITY))[0]);
+}
+
 /** A secp256k1 secret key: 64 hex characters naming a scalar from 1 to n-1. */
 export interface SecretKey {
   scalar: bigint;
@@ -204,7 +218,8 @@ export function secretKey(hex: string): SecretKey {
 
 /** BIP-340 signing (the specification's default algorithm, with 32 bytes of `aux`), checked
  * by verifying the result before it is returned. BigInt arithmetic is not constant-time:
- * the relay's key signs only the relay's own invites and group state with it. */
+ * the relay's key signs only the relay's own invites and group state with it, and an MCP
+ * persona's key (mailbox.ts) only what its bearer token asks for. */
 export async function signSchnorr(msg: Uint8Array, key: SecretKey, aux: Uint8Array): Promise<Uint8Array> {
   if (aux.length !== 32) throw new RangeError("BIP-340 aux is 32 bytes");
   const [px, py] = multiplyG(key.scalar);
@@ -277,6 +292,7 @@ export const GROUP_KINDS = {
   removeUser: 9001,
   editMetadata: 9002,
   createGroup: 9007,
+  createInvite: 9009,
   joinRequest: 9021,
   leaveRequest: 9022,
   metadata: 39000,
@@ -360,6 +376,26 @@ export function wireEvent(e: NostrEvent): NostrEvent {
     content: e.content,
     sig: e.sig,
   };
+}
+
+/** Whether `value` names this relay, wss://<host>/ (NIP-42's relay tag; an nm1_ token's
+ * relay_auth_url or relay). */
+export function sameRelayUrl(value: string | null, host: string): boolean {
+  if (value === null) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch (err) {
+    if (err instanceof TypeError) return false; // not a URL at all: the tag is wrong
+    throw err;
+  }
+  return (
+    url.protocol === "wss:" &&
+    url.hostname === host &&
+    (url.port === "" || url.port === "443") &&
+    (url.pathname === "/" || url.pathname === "") &&
+    url.search === ""
+  );
 }
 
 export function tagValue(e: NostrEvent, name: string): string | null {
@@ -469,8 +505,8 @@ export function matchesFilter(f: Filter, e: NostrEvent): boolean {
 
 // ----------------------------------------------------------------------- edge routes
 // The whole public surface. The Caddyfile (compose target) and the Traefik IngressRoute
-// (kubernetes target) admit exactly these but `/join`, and tests/test_hydrate.py holds
-// all three to one table.
+// (kubernetes target) admit exactly these but `/join` and the MCP routes, and
+// tests/test_hydrate.py holds all three to one table.
 export const BLOB_PATH = /^\/(media\/)?([0-9a-f]{64})([.][a-z0-9]{1,8})?$/;
 const NIP11_TYPE = "application/nostr+json";
 // Where nostr-mailbox's invite links point: `invite` and `topic invite` print a
@@ -478,6 +514,12 @@ const NIP11_TYPE = "application/nostr+json";
 // browser never sends, so the path alone is the route. Only the Worker serves it: the
 // pinned ncli has no page there (it answers 404), so the two ncli edges keep it shut.
 export const JOIN_PATHS = ["/join", "/join/"];
+// The remote MCP server and its OpenAPI twin (mcp.ts), for ChatGPT, Claude.ai and any
+// other remote client that holds an nm1_ token. Only the Worker serves them: the pinned
+// ncli has no such endpoint, so the two ncli edges keep them shut as well.
+export const MCP_PATH = "/mcp";
+export const OPENAPI_PATH = "/openapi.json";
+export const TOOL_PATH = /^\/tools\/([a-z][a-z0-9_]{0,63})$/;
 
 // `GET`/`HEAD /` always reaches the relay; what it answers depends on the headers:
 //   wire          GET with `Upgrade: websocket` (any case, RFC 6455)
@@ -486,7 +528,10 @@ export const JOIN_PATHS = ["/join", "/join/"];
 //                 as the ncli relay answers it, rather than guess which one was meant
 //   page          anything else, a browser included: the Visual Web Console
 // `GET`/`HEAD /join` and `/join/` are the console page whatever the headers.
-export type EdgeRoute = "wire" | "info" | "unacceptable" | "page" | "upload" | "blob";
+//   mcp           POST, GET and DELETE /mcp: MCP Streamable HTTP (GET answers 405)
+//   openapi       GET /openapi.json: the OpenAPI 3.1 document of the tools
+//   tool          POST /tools/<name>: one tool call as plain JSON (OpenAPI Actions)
+export type EdgeRoute = "wire" | "info" | "unacceptable" | "page" | "upload" | "blob" | "mcp" | "openapi" | "tool";
 
 export function edgeRoute(method: string, path: string, headers: Headers): EdgeRoute | null {
   if (path === "/" && (method === "GET" || method === "HEAD")) {
@@ -499,5 +544,8 @@ export function edgeRoute(method: string, path: string, headers: Headers): EdgeR
   if (JOIN_PATHS.includes(path) && (method === "GET" || method === "HEAD")) return "page";
   if (method === "PUT" && (path === "/upload" || path === "/media/upload")) return "upload";
   if ((method === "GET" || method === "HEAD") && BLOB_PATH.test(path)) return "blob";
+  if (path === MCP_PATH && (method === "POST" || method === "GET" || method === "DELETE")) return "mcp";
+  if (path === OPENAPI_PATH && method === "GET") return "openapi";
+  if (method === "POST" && TOOL_PATH.test(path)) return "tool";
   return null;
 }
