@@ -3,7 +3,7 @@
 # nostr-relay-deploy
 
 - Operator values (domains, cluster, storage and priority classes, kubeconfig paths) live only in
-  `relay.local.toml` and `.build/`, both gitignored. Templates carry `{{ placeholders }}` and example
+  `*.local.toml` and `.build/`, both gitignored. Templates carry `{{ placeholders }}` and example
   values (`relay.example.com`). Never write an operator value into a tracked file, a test or a commit
   message.
 - Before every commit: `python3 scripts/hydrate.py --check-clean`. Tests that need secret-shaped

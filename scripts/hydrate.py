@@ -3,13 +3,14 @@
 
     python3 scripts/hydrate.py --target all                   relay.local.toml -> .build/<target>/
     python3 scripts/hydrate.py --example --target all         relay.toml.example -> .build/<target>/
+    python3 scripts/hydrate.py --config relay.external.local.toml --profile external --target cloudflare
     python3 scripts/hydrate.py --check-clean                  nothing private in what Git would publish
     python3 scripts/hydrate.py --target kubernetes --apply    namespace, signing Secret, apply -k
     python3 scripts/hydrate.py --target kubernetes --verify   rollout state + NIP-11 at https://<relay_host>/
 
-Targets: kubernetes, compose, cloudflare, github-pages (or all). Output goes to the
-gitignored .build/<target>/. relay.local.toml is gitignored too: it is the only place an
-operator's domain, cluster and storage names live. Standard library only, Python 3.12+.
+Targets: kubernetes, compose, cloudflare, github-pages (or all). Output goes to
+.build/<target>/ or .build/<profile>/<target>/. Both .build/ and *.local.toml are
+gitignored. Standard library only, Python 3.12+.
 """
 from __future__ import annotations
 
@@ -630,21 +631,24 @@ def write_target(target: str, files: dict[str, str], build_dir: Path = BUILD_DIR
 
 
 NEXT_STEPS = {
-    "kubernetes": "python3 scripts/hydrate.py --target kubernetes --apply   (then --verify)",
-    "compose": "copy .build/compose/ to the host and follow the steps at the top of compose.yaml",
-    "cloudflare": "cd .build/cloudflare and follow the steps at the top of wrangler.toml",
-    "github-pages": "publish .build/github-pages/ as the site root of a GitHub Pages branch",
+    "kubernetes": "python3 scripts/hydrate.py --config {config}{profile_arg} --target kubernetes --apply",
+    "compose": "copy {out}/ to the host and follow the steps at the top of compose.yaml",
+    "cloudflare": "cd {out} and follow the steps at the top of wrangler.toml",
+    "github-pages": "publish {out}/ as the site root of a GitHub Pages branch",
 }
 
 
-def hydrate(cfg: Config, targets: list[str]) -> list[Path]:
+def hydrate(cfg: Config, targets: list[str], profile: str | None = None) -> list[Path]:
+    build_dir = BUILD_DIR / profile if profile else BUILD_DIR
     written = []
     for target in targets:
         files = RENDERERS[target](cfg)
-        out = write_target(target, files)
+        out = write_target(target, files, build_dir)
         written.append(out)
         print(f"hydrated {out.relative_to(REPO_ROOT)}/ ({len(files)} files) from {_shown(cfg.path)}")
-        print(f"  next: {NEXT_STEPS[target]}")
+        next_step = NEXT_STEPS[target].format(out=_shown(out), config=shlex.quote(_shown(cfg.path)),
+                                              profile_arg=f" --profile {profile}" if profile else "")
+        print(f"  next: {next_step}")
     return written
 
 
@@ -695,7 +699,7 @@ def _secret_hits(data: bytes) -> list[tuple[str, int]]:
     return hits
 
 
-def private_tokens(local: Config, example: Config, extra: list[str]) -> tuple[dict[str, str], list[str]]:
+def private_tokens(local: Config, example: Config) -> tuple[dict[str, str], list[str]]:
     """Tokens that must not be published, each with where it came from, and notes on
     values deliberately not checked."""
     tokens: dict[str, str] = {}
@@ -731,8 +735,6 @@ def private_tokens(local: Config, example: Config, extra: list[str]) -> tuple[di
                 tokens.setdefault(folded, f"{origin} in {_shown(local.path)}")
     for token in local["hygiene"]["forbidden_tokens"]:
         tokens.setdefault(token.casefold(), f"hygiene.forbidden_tokens in {_shown(local.path)}")
-    for token in extra:
-        tokens.setdefault(token.casefold(), "--forbid")
     return tokens, notes
 
 
@@ -749,7 +751,7 @@ def _git(*args: str, data: bytes | None = None) -> bytes:
 
 
 def _ignored(rel: str) -> bool:
-    argv = ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", "--no-index", rel]
+    argv = ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", "--no-index", "--", rel]
     code = subprocess.run(argv, capture_output=True, check=False).returncode
     if code not in (0, 1):                  # 0: ignored, 1: not ignored, anything else: broken
         raise HydrateError(f"`{shlex.join(argv)}` exited {code}: is {REPO_ROOT} a Git repository?")
@@ -824,21 +826,32 @@ def _line_of(data: bytes, offset: int) -> int:
 def check_clean(cfg_path: Path | None, extra_tokens: list[str]) -> int:
     """0 when nothing private would be published, 1 when something would."""
     problems: list[str] = []
-    for probe in ("relay.local.toml", ".build/kubernetes/statefulset.yaml", ".env"):
+    # Include ignored operator files. Avoid walking relay data volumes and installed
+    # dependencies, which can be much larger than the configuration tree.
+    config_names = _git("ls-files", "-z", "--cached", "--others", "--exclude=.build/",
+                        "--exclude=.venv/", "--exclude=node_modules/", "--", "*.local.toml")
+    local_names = set(config_names.decode().split("\0")) - {""}
+    local_paths = {REPO_ROOT / rel for rel in local_names if (REPO_ROOT / rel).is_file()}
+    probes = {"relay.local.toml", "relay.profile.local.toml", ".build/kubernetes/statefulset.yaml",
+              ".build/profile/kubernetes/statefulset.yaml", ".env"}
+    probes.update(local_names)
+    for probe in sorted(probes):
         if not _ignored(probe):
             problems.append(f"{probe} is not gitignored: restore the rules in .gitignore")
-    tracked_private = _git("ls-files", "--", "relay.local.toml", "*.local.toml", ".build", ".env").decode().split()
+    tracked_private = _git("ls-files", "-z", "--", "*.local.toml", ".build", ".env").decode().split("\0")[:-1]
     problems.extend(f"{rel} is tracked by Git: `git rm --cached {rel}`" for rel in tracked_private)
 
     example = load_config(EXAMPLE_CONFIG)
-    if cfg_path is None and not LOCAL_CONFIG.exists():
-        local = example
-        print("check-clean: no relay.local.toml; checking secret patterns and --forbid tokens only")
-    else:
-        local = load_config(cfg_path or LOCAL_CONFIG)
-    tokens, notes = private_tokens(local, example, extra_tokens)
-    for note in notes:
-        print(f"check-clean: note: {note}")
+    if cfg_path is not None:
+        local_paths.add(cfg_path.absolute())
+    if not local_paths:
+        print("check-clean: no relay.local.toml or other *.local.toml; checking secret patterns and --forbid")
+    tokens = {token.casefold(): "--forbid" for token in extra_tokens}
+    for path in sorted(local_paths):
+        derived, notes = private_tokens(load_config(path), example)
+        tokens.update(derived)
+        for note in notes:
+            print(f"check-clean: note: {note}")
 
     findings: dict[str, Finding] = {}
     for location, data in _publishable():
@@ -898,7 +911,7 @@ _IMMUTABLE_HINT = (
     "\nThe live StatefulSet differs in a field Kubernetes never updates in place "
     "(serviceName, selector, podManagementPolicy or volumeClaimTemplates). For a "
     "zero-downtime apply, set kubernetes.storage_size and kubernetes.storage_class in "
-    "relay.local.toml to the live values: kubectl -n {ns} get statefulset {name} "
+    "{config} to the live values: kubectl -n {ns} get statefulset {name} "
     "-o jsonpath='{{.spec.volumeClaimTemplates}}'")
 
 
@@ -918,7 +931,8 @@ def apply_kubernetes(cfg: Config, build: Path) -> None:
         run_kubectl([*k, "apply", "-k", str(build), "--dry-run=server"])
     except ApplyError as exc:
         if "updates to statefulset spec" in str(exc):
-            raise ApplyError(str(exc) + _IMMUTABLE_HINT.format(ns=ns, name=STATEFULSET_NAME)) from exc
+            raise ApplyError(str(exc) + _IMMUTABLE_HINT.format(config=_shown(cfg.path), ns=ns,
+                                                               name=STATEFULSET_NAME)) from exc
         raise
     print(run_kubectl([*k, "apply", "-k", str(build)]).rstrip())
     print(f"applied. updateStrategy is OnDelete: a changed template reaches the pod only when "
@@ -984,18 +998,25 @@ def verify_nip11(cfg: Config, url: str | None = None) -> dict[str, Any]:
 
 
 # ================================================================================ main
+def profile_name(value: str) -> str:
+    if not _DNS_LABEL.fullmatch(value) or value in TARGETS:
+        raise argparse.ArgumentTypeError("use a lowercase DNS label distinct from the target names")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hydrate.py", description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     source = p.add_mutually_exclusive_group()
     source.add_argument("--config", type=Path, help="configuration file (default: relay.local.toml)")
     source.add_argument("--example", action="store_true", help="use relay.toml.example")
-    p.add_argument("--target", choices=[*TARGETS, "all"], help="render .build/<target>/")
+    p.add_argument("--profile", type=profile_name, help="write targets under .build/<profile>/")
+    p.add_argument("--target", choices=[*TARGETS, "all"], help="render the selected deployment target(s)")
     p.add_argument("--check-clean", action="store_true",
                    help="fail if anything Git would publish holds a private value or a secret")
     p.add_argument("--forbid", action="append", default=[], metavar="TOKEN",
                    help="one more forbidden token for --check-clean (repeatable)")
-    p.add_argument("--apply", action="store_true", help="apply .build/kubernetes/ (needs --target kubernetes)")
+    p.add_argument("--apply", action="store_true", help="apply the rendered manifests (needs --target kubernetes)")
     p.add_argument("--verify", action="store_true",
                    help="check the NIP-11 document at https://<relay_host>/ (and, with --target "
                         "kubernetes, the StatefulSet rollout)")
@@ -1020,9 +1041,9 @@ def main(argv: list[str] | None = None) -> int:
             cfg = load_config(config_path or LOCAL_CONFIG)
             if args.target:
                 targets = list(TARGETS) if args.target == "all" else [args.target]
-                hydrate(cfg, targets)
-            if args.apply:
-                apply_kubernetes(cfg, BUILD_DIR / "kubernetes")
+                written = hydrate(cfg, targets, args.profile)
+                if args.apply:
+                    apply_kubernetes(cfg, written[0])
             if args.verify:
                 if args.target == "kubernetes" and not args.verify_url:
                     verify_rollout(cfg)

@@ -523,6 +523,65 @@ def test_rehydrating_removes_only_what_hydration_wrote(tmp_path):
         assert path.read_text() == "the operator's own", path
 
 
+def test_profiles_render_separate_configs_and_preserve_other_builds(tmp_path):
+    ws = copy_repo(tmp_path)
+    run_cli(ws, "--example", "--target", "all")
+    build = ws / ".build"
+
+    def snapshot(directory):
+        return {p.relative_to(directory): p.read_bytes() for p in directory.rglob("*") if p.is_file()}
+
+    default = {target: snapshot(build / target) for target in hydrate.TARGETS}
+    for profile in ("internal", "external"):
+        host = f"{profile}.example.test"
+        config = f"relay.{profile}.local.toml"
+        (ws / config).write_text(dump_toml(private_config(relay_host=host)))
+        done = run_cli(ws, "--config", config, "--target", "all", "--profile", profile)
+        assert f"--config {config} --profile {profile}" in done.stdout
+        for target, output in (("compose", ".env.example"), ("cloudflare", "wrangler.toml"),
+                               ("kubernetes", "ingressroute.yaml"), ("github-pages", "index.html")):
+            assert host in (build / profile / target / output).read_text()
+            assert f".build/{profile}/{target}" in done.stdout
+
+    external = snapshot(build / "external")
+    run_cli(ws, "--example", "--target", "all", "--profile", "internal")
+    assert not (build / "internal/kubernetes/traefik-networkpolicy.yaml").exists()
+    assert snapshot(build / "external") == external
+    assert {target: snapshot(build / target) for target in hydrate.TARGETS} == default
+
+
+@pytest.mark.parametrize("profile", ["", ".", "..", "../external", "/tmp", "two/levels", "compose", "CLOUDFLARE"])
+def test_invalid_profiles_are_refused_before_writing(tmp_path, profile):
+    ws = copy_repo(tmp_path)
+    done = run_cli(ws, "--example", "--target", "all", "--profile", profile, expect=2)
+    assert "--profile" in done.stderr
+    assert not (ws / ".build").exists()
+
+
+def test_apply_uses_the_selected_profiles_kustomization_and_context(tmp_path, monkeypatch):
+    config = tmp_path / "relay.internal.local.toml"
+    config.write_text(dump_toml(private_config(kubernetes={"namespace": "fleet-test", "context": "fleet-test"})))
+    monkeypatch.setattr(hydrate, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(hydrate, "BUILD_DIR", tmp_path / ".build")
+    calls = []
+
+    def kubectl(argv):
+        calls.append(argv)
+        return "secret/nostr-relay-signing" if "get" in argv else ""
+
+    monkeypatch.setattr(hydrate, "run_kubectl", kubectl)
+    assert hydrate.main(["--config", str(config), "--profile", "internal", "--target", "kubernetes", "--apply"]) == 0
+    rendered = tmp_path / ".build/internal/kubernetes"
+    assert "namespace: fleet-test" in (rendered / "statefulset.yaml").read_text()
+    k = ["kubectl", "--context", "fleet-test"]
+    assert calls == [
+        [*k, "apply", "-f", str(rendered / "namespace.yaml")],
+        [*k, "-n", "fleet-test", "get", "secret", hydrate.SIGNING_SECRET, "--ignore-not-found", "-o", "name"],
+        [*k, "apply", "-k", str(rendered), "--dry-run=server"],
+        [*k, "apply", "-k", str(rendered)],
+    ]
+
+
 @pytest.mark.skipif(shutil.which("kubectl") is None, reason="kubectl is not installed")
 def test_kustomize_builds_the_hydrated_tree(private_ws):
     out = subprocess.run(["kubectl", "kustomize", str(private_ws / ".build" / "kubernetes")],
@@ -1981,6 +2040,40 @@ def test_check_clean_passes_on_a_clean_repository(tmp_path):
     assert PRIVATE["relay_host"] in (ws / ".build" / "kubernetes" / "ingressroute.yaml").read_text()
     done = run_cli(ws, "--check-clean")
     assert "check-clean: OK" in done.stdout
+
+
+def test_check_clean_includes_every_local_relay(tmp_path):
+    ws = git_workspace(tmp_path)
+    (ws / "relay.local.toml").rename(ws / "relay.internal.local.toml")
+    edge_host = "edge.remote-zeta.test"
+    (ws / "profiles").mkdir()
+    external = "profiles/relay.external.local.toml"
+    (ws / external).write_text(dump_toml(private_config(relay_host=edge_host)))
+    for profile in ("internal", "external"):
+        config = external if profile == "external" else "relay.internal.local.toml"
+        run_cli(ws, "--config", config, "--profile", profile, "--target", "all")
+    assert git(ws, "status", "--porcelain") == ""
+    run_cli(ws, "--check-clean")
+
+    (ws / "notes.md").write_text(PRIVATE["relay_host"] + "\n" + edge_host)
+    for source in ([], ["--config", external], ["--example"]):
+        done = run_cli(ws, "--check-clean", *source, expect=1)
+        assert "relay.internal.local.toml" in done.stderr and edge_host in done.stderr
+
+
+def test_check_clean_rejects_unignored_and_force_added_profile_configs(tmp_path):
+    ws = git_workspace(tmp_path)
+    # An example-only config still needs protection even when it has no private tokens.
+    (ws / "configs").mkdir()
+    profile = "configs/relay.external.local.toml"
+    shutil.copyfile(ws / "relay.toml.example", ws / profile)
+    gitignore = ws / ".gitignore"
+    rules = gitignore.read_text()
+    gitignore.write_text(rules + f"\n!{profile}\n")
+    assert f"{profile} is not gitignored" in run_cli(ws, "--check-clean", expect=1).stderr
+    gitignore.write_text(rules)
+    git(ws, "add", "-f", profile)
+    assert f"{profile} is tracked by Git" in run_cli(ws, "--check-clean", expect=1).stderr
 
 
 LEAKS = {

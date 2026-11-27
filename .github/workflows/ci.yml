@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: deploy
+    env:
+      NOSTR_MAILBOX_SRC: ${{ github.workspace }}/mailbox/skills/nostr-mailbox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: deploy
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the mailbox integration client
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: awowIO/nostr-mailbox
+          ref: c8eabb8de4b3935b66d2e9d9604dbc048e8c90ea
+          path: mailbox
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          working-directory: deploy
+          python-version: '3.12'
+      - name: Install development tools
+        run: |
+          uv sync --locked
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Lint
+        run: ruff check .
+      - name: Check Git hygiene
+        run: python3 scripts/hydrate.py --check-clean
+      - name: Run the full suite
+        run: |
+          pytest -q --junitxml="$RUNNER_TEMP/results.xml"
+          python3 - "$RUNNER_TEMP/results.xml" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          skipped = ET.parse(sys.argv[1]).findall(".//testcase/skipped")
+          if skipped:
+              sys.exit(f"{len(skipped)} integration test(s) skipped")
+          PY

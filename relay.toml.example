@@ -6,6 +6,10 @@
 #   python3 scripts/hydrate.py --target kubernetes --apply
 #   python3 scripts/hydrate.py --check-clean          # before every commit
 #
+# For a separate relay, copy this example, edit its settings and render into .build/<profile>/<target>/.
+#   cp -i relay.toml.example relay.external.local.toml
+#   python3 scripts/hydrate.py --config relay.external.local.toml --profile external --target cloudflare
+#
 # Every key is required: hydrate.py refuses unknown and missing keys rather than guessing.
 
 relay_host = "relay.example.com"       # public DNS name; clients sign wss://<relay_host> in NIP-42
