@@ -580,8 +580,8 @@ def docker_problem() -> str | None:
         return "docker is not installed: the pinned ncli release runs in its container image"
     done = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True,
                           check=False)
-    if done.returncode != 0:
-        return f"no Docker daemon answers (docker info: {done.stderr.strip()[:300]}); set DOCKER_HOST"
+    if done.returncode != 0 or not done.stdout.strip():
+        return f"no Docker daemon answers (docker info: {(done.stderr or done.stdout).strip()[:300]}); set DOCKER_HOST"
     return None
 
 
