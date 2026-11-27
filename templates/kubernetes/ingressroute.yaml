@@ -1,20 +1,22 @@
 # The whole public surface, and nothing else: the Caddyfile of the compose target and the
-# Cloudflare Worker's edge filter carry the same four routes, and a test holds the three
+# Cloudflare Worker's edge filter carry the same routes, and a test holds the three
 # together.
 #
-#   GET  /                         WebSocket upgrade, or NIP-11 (Accept: application/nostr+json)
+#   GET, HEAD  /                   WebSocket upgrade, NIP-11 (Accept: application/nostr+json),
+#                                  or the relay's page for a browser (relay.yaml `homepage`)
 #   PUT  /upload  /media/upload    signed, members-only Blossom upload
 #   GET, HEAD  /<sha256>[.ext]  /media/<sha256>[.ext]   signed, members-only download
 #
 # Everything else never reaches the relay: its admin listener, query and metrics
-# surfaces, DELETE on a blob, any other method or path.
+# surfaces, DELETE on a blob, any other method or path. `/` itself is one route: the
+# relay tells a WebSocket, a NIP-11 client and a browser apart.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata: { name: {{ statefulset_name }}, namespace: {{ namespace }} }
 spec:
   entryPoints: [websecure]
   routes:
-    - match: 'Host(`{{ relay_host }}`) && Path(`/`) && Method(`GET`) && (Header(`Upgrade`, `websocket`) || Header(`Accept`, `application/nostr+json`))'
+    - match: 'Host(`{{ relay_host }}`) && Path(`/`) && (Method(`GET`) || Method(`HEAD`))'
       kind: Rule
       priority: {{ ingress_priority }}
       services: [{ name: {{ statefulset_name }}, port: 5500 }]

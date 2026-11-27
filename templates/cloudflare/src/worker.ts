@@ -1,42 +1,68 @@
 // A private, invite-gated Nostr + Blossom relay for nostr-mailbox on Cloudflare Workers.
 //
-//   Worker          the edge filter: the same four public routes as the Caddyfile and the
-//                   Traefik IngressRoute, 404 for everything else
-//   Durable Object  one instance holds every socket, the event store and the member list
-//                   in its SQLite storage (ctx.storage.sql)
+//   Worker          the edge filter: the same public routes as the Caddyfile and the
+//                   Traefik IngressRoute, 404 for everything else. It answers NIP-11 and
+//                   the Visual Web Console page (src/console.ts) itself.
+//   Durable Object  one instance holds every socket, the event store, the member list
+//                   and the NIP-29 groups in its SQLite storage (ctx.storage.sql)
 //   R2              Blossom blobs, addressed by SHA-256 (binding BLOSSOM_BUCKET)
 //
 // The three gates of the ncli deployments hold here too:
 //   1. auth_required        nothing is read or written before the NIP-42 AUTH answer
 //   2. membership_required  an authenticated key that is not enrolled gets nothing
-//   3. single-use invites   NIP-43 kind 28934 redeems an invite the admin API minted
+//   3. single-use invites   NIP-43 kind 28934 redeems an invite. The admin API mints
+//                           them, and so may any member, with REQ {"kinds": [28935]}
+//                           (memberClaims): one use, seven days, as relay.yaml says
+//
+// And so does the rest of templates/shared/relay.yaml, with the ncli relay's answers:
+//   recipientOnlyKinds  kinds 1059, 4410 and 4411 reach only a reader named in their `p`
+//                       tags, over REQ and live subscriptions alike
+//   groups              NIP-29: members create groups (9007), which start private,
+//                       restricted and closed with the creator as admin. Admins add
+//                       (9000), remove (9001) and edit (9002); a join (9021) waits for
+//                       them (pendingJoins); accepted moderation is kept (moderationLog).
+//                       What carries a private group's `h` tag, and its state
+//                       (39000-39003), reaches its members only.
+//
+// The relay signs its invites and group state with RELAY_SIGNING_KEY (a 64-hex secret:
+// `wrangler secret put RELAY_SIGNING_KEY`), the key NIP-11 names as `self`, as the ncli
+// targets sign with theirs. Without it the relay does not start.
 //
 // Membership is managed over /_admin/ with ADMIN_TOKEN (`wrangler secret put ADMIN_TOKEN`)
 // by scripts/cf_ncli_shim.py, which speaks the `ncli relay ...` argv nostr-mailbox's
 // `--exec` sends. Without ADMIN_TOKEN, /_admin/ answers 404 like any other path.
 
+import { CONSOLE_SCRIPT, CONSOLE_STYLE, consoleHtml } from "./console.ts";
 import {
   AUTH_KIND,
   BLOB_PATH,
   BLOSSOM_AUTH_KIND,
+  GROUP_ID,
+  GROUP_KINDS,
   INVITE_CLAIM_KIND,
+  INVITE_KIND,
+  RECIPIENT_ONLY_KINDS,
   dTag,
   edgeRoute,
   eventError,
   expirationOf,
+  isGroupRequestKind,
+  isGroupStateKind,
   isHex64,
   isProtected,
   kindClass,
   matchesFilter,
   parseFilter,
   randomHex,
+  secretKey,
   sha256,
+  signEvent,
   tagValue,
   tagValues,
   utf8,
   wireEvent,
 } from "./nostr.ts";
-import type { Filter, KindClass, NostrEvent } from "./nostr.ts";
+import type { Filter, KindClass, NostrEvent, SecretKey } from "./nostr.ts";
 
 // ----------------------------------------------------------- runtime types (minimal)
 // Structural types for the parts of the Workers runtime this file uses, so it needs no
@@ -94,6 +120,7 @@ interface Env {
   MAX_BLOB_BYTES: string;
   MAX_UPLOADS_PER_SIGNER: string;
   ADMIN_TOKEN?: string;
+  RELAY_SIGNING_KEY?: string;
 }
 
 // ------------------------------------------------------------------------ constants
@@ -112,6 +139,10 @@ const MAX_SUBID_LENGTH = 64;
 // What R2's checksum refusal says when the bytes do not hash to the `sha256` put option.
 const CHECKSUM_REFUSAL = /sha-?256|checksum|digest/i;
 const MS_PER_MINUTE = 60_000;
+// membership.inviteTTL and inviteMaxUses in templates/shared/relay.yaml: what an invite a
+// member mints over REQ kind 28935 gets. tests/test_hydrate.py reads them from there.
+const MEMBER_INVITE_TTL_S = 168 * 3600;
+const MEMBER_INVITE_MAX_USES = 1;
 
 interface Config {
   relayHost: string;
@@ -119,6 +150,7 @@ interface Config {
   eventsPerMinute: number;
   maxBlobBytes: number;
   maxUploadsPerSigner: number;
+  relayKey: SecretKey;
 }
 
 function positiveInt(env: Env, name: keyof Env): number {
@@ -128,6 +160,25 @@ function positiveInt(env: Env, name: keyof Env): number {
     throw new Error(`${name} must be a positive integer in wrangler.toml [vars], got ${JSON.stringify(raw)}`);
   }
   return n;
+}
+
+// Deriving the public key is a scalar multiplication: once per key and isolate.
+let derivedKey: { raw: string; key: SecretKey } | null = null;
+
+function relayKey(env: Env): SecretKey {
+  const raw = env.RELAY_SIGNING_KEY;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new Error("RELAY_SIGNING_KEY is not set: openssl rand -hex 32 | npx wrangler secret put RELAY_SIGNING_KEY");
+  }
+  if (derivedKey === null || derivedKey.raw !== raw) {
+    try {
+      derivedKey = { raw, key: secretKey(raw.trim()) };
+    } catch (err) {
+      if (err instanceof RangeError) throw new Error(`RELAY_SIGNING_KEY is not a secp256k1 secret key: ${err.message}`);
+      throw err;
+    }
+  }
+  return derivedKey.key;
 }
 
 function readConfig(env: Env): Config {
@@ -140,6 +191,7 @@ function readConfig(env: Env): Config {
     eventsPerMinute: positiveInt(env, "EVENTS_PER_MINUTE"),
     maxBlobBytes: positiveInt(env, "MAX_BLOB_BYTES"),
     maxUploadsPerSigner: positiveInt(env, "MAX_UPLOADS_PER_SIGNER"),
+    relayKey: relayKey(env),
   };
 }
 
@@ -164,11 +216,15 @@ function refuse(status: number, reason: string): Response {
   });
 }
 
-function nip11(cfg: Config): Response {
+function nip11(cfg: Config, method: string): Response {
   const document = {
     name: cfg.relayName,
     description: "Private, invite-gated Nostr + Blossom relay for nostr-mailbox.",
-    supported_nips: [1, 11, 40, 42, 43, 70],
+    // The relay's own key, which signs its invites (28935) and group state (39000-39003).
+    // As on ncli, `pubkey` is that key too.
+    pubkey: cfg.relayKey.pubkey,
+    self: cfg.relayKey.pubkey,
+    supported_nips: [1, 11, 29, 40, 42, 43, 70],
     software: "nostr-relay-deploy/cloudflare-worker",
     version: VERSION,
     limitation: {
@@ -180,12 +236,44 @@ function nip11(cfg: Config): Response {
       max_subid_length: MAX_SUBID_LENGTH,
     },
   };
-  return new Response(JSON.stringify(document), {
+  return new Response(method === "HEAD" ? null : JSON.stringify(document), {
     headers: {
       "Content-Type": "application/nostr+json",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "*",
       "Access-Control-Allow-Methods": "GET",
+    },
+  });
+}
+
+async function base64Sha256(text: string): Promise<string> {
+  return btoa(String.fromCharCode(...(await sha256(utf8(text)))));
+}
+
+// The page runs only its own inline script and style, by hash, and talks only to this
+// origin: the relay's WebSocket and its NIP-11 document.
+let consoleHashes: Promise<[string, string]> | null = null;
+
+async function consolePage(cfg: Config, method: string): Promise<Response> {
+  consoleHashes ??= Promise.all([base64Sha256(CONSOLE_SCRIPT), base64Sha256(CONSOLE_STYLE)]);
+  const [script, style] = await consoleHashes;
+  const policy = [
+    "default-src 'none'",
+    `script-src 'sha256-${script}'`,
+    `style-src 'sha256-${style}'`,
+    `connect-src 'self' wss://${cfg.relayHost}`,
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+  return new Response(method === "HEAD" ? null : consoleHtml(), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": policy,
+      "Cache-Control": "no-cache",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
     },
   });
 }
@@ -213,10 +301,21 @@ export default {
     if (url.pathname.startsWith(ADMIN_PREFIX)) {
       return (await adminAuthorized(request, env)) ? relayStub(env).fetch(request) : notFound();
     }
-    const route = edgeRoute(request.method, url.pathname, request.headers);
-    if (route === null) return notFound();
-    if (route === "info") return nip11(readConfig(env));
-    return relayStub(env).fetch(request);
+    switch (edgeRoute(request.method, url.pathname, request.headers)) {
+      case null:
+        return notFound();
+      case "info":
+        return nip11(readConfig(env), request.method);
+      case "page":
+        return consolePage(readConfig(env), request.method);
+      case "unacceptable":
+        return new Response("ask for exactly Accept: application/nostr+json (NIP-11), or for the page\n", {
+          status: 400,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      default:
+        return relayStub(env).fetch(request);
+    }
   },
 };
 
@@ -249,7 +348,140 @@ const SCHEMA = [
      PRIMARY KEY (conn, sub_id))`,
   `CREATE TABLE IF NOT EXISTS rate (
      pubkey TEXT PRIMARY KEY, tokens REAL NOT NULL, updated_ms INTEGER NOT NULL)`,
+  // NIP-29. `metadata` holds the tags of the group's kind 39000 after its `d` tag, as the
+  // group's 9007 or its latest 9002 left them; its flags (private, restricted, hidden,
+  // closed) are what the relay enforces. `roles` is a JSON array of role names.
+  `CREATE TABLE IF NOT EXISTS groups (
+     id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, created_by TEXT NOT NULL, metadata TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS group_members (
+     group_id TEXT NOT NULL, pubkey TEXT NOT NULL, roles TEXT NOT NULL, added_at INTEGER NOT NULL,
+     PRIMARY KEY (group_id, pubkey))`,
 ];
+
+// ------------------------------------------------------------------------- NIP-29
+const GROUP_FLAGS: readonly string[] = ["private", "restricted", "hidden", "closed"];
+const GROUP_VALUE_TAGS: readonly string[] = ["name", "about", "picture"];
+// A new group: members alone read it (private) and post to it (restricted), and a join
+// waits for an admin (closed). The ncli relay starts a group private and closed, and takes
+// posts from members only in either case.
+const NEW_GROUP_METADATA: string[][] = [["private"], ["restricted"], ["closed"]];
+const ADMIN_ROLE = "admin";
+// groups.roles.admin in relay.yaml also lists 9005, 9008, 9009 and 9010 for the ncli
+// targets. This relay implements the three below and refuses the others by name.
+const ADMIN_ROLE_DESCRIPTION = "may put-user, remove-user, edit-metadata";
+const IMPLEMENTED_GROUP_REQUESTS = "9000, 9001, 9002, 9007, 9021, 9022";
+
+interface Group {
+  id: string;
+  metadata: string[][];
+  flags: Set<string>;
+}
+
+function loadGroup(sql: SqlStorage, id: string): Group | null {
+  const [row] = sql.exec<{ metadata: string }>("SELECT metadata FROM groups WHERE id = ?", id).toArray();
+  if (row === undefined) return null;
+  const metadata = JSON.parse(row.metadata) as string[][];
+  return { id, metadata, flags: new Set(metadata.filter((t) => GROUP_FLAGS.includes(t[0])).map((t) => t[0])) };
+}
+
+/** The 39000 tags a kind 9002 asks for. It replaces the metadata whole, as on the ncli
+ * relay: a flag it leaves out is off. */
+function requestedMetadata(e: NostrEvent): string[][] {
+  const seen = new Set<string>();
+  const out: string[][] = [];
+  for (const t of e.tags) {
+    if (seen.has(t[0])) continue;
+    if (GROUP_FLAGS.includes(t[0])) out.push([t[0]]);
+    else if (GROUP_VALUE_TAGS.includes(t[0]) && t.length > 1) out.push([t[0], t[1]]);
+    else continue;
+    seen.add(t[0]);
+  }
+  return out;
+}
+
+/** What one authenticated member may see, with the groups looked up once per message.
+ * The single rule both stored reads (REQ) and live delivery apply. */
+class Access {
+  sql: SqlStorage;
+  reader: string;
+  relayPubkey: string;
+  groups = new Map<string, Group | null>();
+  roles = new Map<string, string[] | null>();
+
+  constructor(sql: SqlStorage, reader: string, relayPubkey: string) {
+    this.sql = sql;
+    this.reader = reader;
+    this.relayPubkey = relayPubkey;
+  }
+
+  group(id: string): Group | null {
+    if (!this.groups.has(id)) this.groups.set(id, loadGroup(this.sql, id));
+    return this.groups.get(id) as Group | null;
+  }
+
+  /** The reader's roles in group `id`, or null when it is not a member. */
+  rolesIn(id: string): string[] | null {
+    if (!this.roles.has(id)) {
+      const [row] = this.sql
+        .exec<{ roles: string }>("SELECT roles FROM group_members WHERE group_id = ? AND pubkey = ?", id, this.reader)
+        .toArray();
+      this.roles.set(id, row === undefined ? null : (JSON.parse(row.roles) as string[]));
+    }
+    return this.roles.get(id) as string[] | null;
+  }
+
+  isMember(id: string): boolean {
+    return this.rolesIn(id) !== null;
+  }
+
+  isAdmin(id: string): boolean {
+    return this.rolesIn(id)?.includes(ADMIN_ROLE) ?? false;
+  }
+
+  /** What carries group `id`'s `h` tag: a private group's members only. A group that does
+   * not exist reads as one the reader may not see, as on the ncli relay. */
+  readsGroup(id: string): boolean {
+    const g = this.group(id);
+    return g !== null && (!g.flags.has("private") || this.isMember(id));
+  }
+
+  /** The group's own state (39000-39003): hidden from non-members when private or hidden. */
+  readsGroupState(id: string): boolean {
+    const g = this.group(id);
+    return g !== null && (!(g.flags.has("private") || g.flags.has("hidden")) || this.isMember(id));
+  }
+
+  visible(e: NostrEvent): boolean {
+    if (RECIPIENT_ONLY_KINDS.includes(e.kind) && !tagValues(e, "p").includes(this.reader)) return false;
+    for (const id of tagValues(e, "h")) {
+      const g = this.group(id);
+      if (g !== null && g.flags.has("private") && !this.isMember(id)) return false;
+      // A pending join request is for the group's admins, and its author.
+      if (e.kind === GROUP_KINDS.joinRequest && e.pubkey !== this.reader && !this.isAdmin(id)) return false;
+    }
+    if (isGroupStateKind(e.kind) && e.pubkey === this.relayPubkey) {
+      const g = this.group(dTag(e));
+      if (g !== null && !this.readsGroupState(g.id)) return false;
+    }
+    return true;
+  }
+}
+
+/** Why a REQ names a group the reader may not read, or null. Like the ncli relay, a REQ
+ * naming a private group (its `#h`, or its `#d` among group-state kinds) is refused
+ * whole, and one naming a group that does not exist is refused the same way. */
+function readRefusal(filters: Filter[], access: Access): string | null {
+  for (const f of filters) {
+    const stateOnly = f.kinds !== undefined && f.kinds.length > 0 && f.kinds.every(isGroupStateKind);
+    for (const [name, values] of f.tags) {
+      for (const id of values) {
+        const denied = (name === "h" && !access.readsGroup(id)) || (name === "d" && stateOnly && !access.readsGroupState(id));
+        if (denied) return `restricted: valid membership in group ${id} is required`;
+      }
+    }
+  }
+  return null;
+}
 
 interface EventRow {
   id: string;
@@ -317,6 +549,9 @@ export class RelayDurableObject {
   // and per-connection queues are empty whenever the object may hibernate.
   uploadsInFlight = new Map<string, number>();
   queues = new Map<string, Promise<void>>();
+  // Group state is signed (an await) after the change it reflects is committed. One chain
+  // for the whole object, so the newest 39000-39003 always describe the newest state.
+  stateChain: Promise<void> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {
     this.ctx = ctx;
@@ -468,6 +703,20 @@ export class RelayDurableObject {
     if (expiration !== null && expiration <= nowS()) {
       return send(ws, ["OK", id, false, "invalid: the event has already expired"]);
     }
+    if (e.kind === INVITE_KIND || isGroupStateKind(e.kind)) {
+      return send(ws, ["OK", id, false, `restricted: kind ${e.kind} is signed by the relay alone`]);
+    }
+    if (isGroupRequestKind(e.kind)) return this.onGroupRequest(ws, e, me, expiration);
+    // Posting into a group that is private, restricted or closed takes a member of it: the
+    // key that authenticated, and the author when that is someone else.
+    for (const group of tagValues(e, "h")) {
+      const g = this.access(me).group(group);
+      if (g === null || !["private", "restricted", "closed"].some((flag) => g.flags.has(flag))) continue;
+      const members = e.pubkey === me ? [me] : [me, e.pubkey];
+      if (!members.every((pk) => this.access(pk).isMember(group))) {
+        return send(ws, ["OK", id, false, `restricted: only members may post in group ${group}`]);
+      }
+    }
     const cls = kindClass(e.kind);
     if (cls === "ephemeral") {
       send(ws, ["OK", id, true, ""]);
@@ -502,6 +751,198 @@ export class RelayDurableObject {
     });
     if (!redeemed) return send(ws, ["OK", e.id, false, "restricted: the invite is unknown, spent or expired"]);
     send(ws, ["OK", e.id, true, ""]);
+  }
+
+  // ----------------------------------------------------------------------- NIP-29
+  /** A group request (9000-9022). Answers in the ncli relay's words. */
+  async onGroupRequest(ws: RelaySocket, e: NostrEvent, me: string, expiration: number | null): Promise<void> {
+    const reply = (ok: boolean, message: string) => send(ws, ["OK", e.id, ok, message]);
+    if (e.pubkey !== me) {
+      return reply(false, "restricted: a group request is accepted only from the key that authenticated");
+    }
+    const id = tagValue(e, "h");
+    if (id === null || id === "") return reply(false, "invalid: nip29: missing h tag (group id)");
+    if (!GROUP_ID.test(id)) return reply(false, "invalid: a group id is made of a-z, 0-9, '-' and '_' (NIP-29)");
+    // A request already applied is not applied again: a replayed put-user re-adds no one.
+    if (this.sql.exec("SELECT 1 AS hit FROM events WHERE id = ?", e.id).toArray().length > 0) {
+      return reply(true, "duplicate: already have this event");
+    }
+    const access = this.access(me);
+    const group = access.group(id);
+    const now = nowS();
+    const { admins, members, metadata, roles } = GROUP_KINDS;
+
+    if (e.kind === GROUP_KINDS.createGroup) {
+      // groups.create: [members]. Every key that gets this far is an enrolled member.
+      if (group !== null) return reply(access.isAdmin(id), "duplicate: a group with that id already exists.");
+      this.ctx.storage.transactionSync(() => {
+        this.sql.exec(
+          "INSERT INTO groups (id, created_at, created_by, metadata) VALUES (?, ?, ?, ?)",
+          id,
+          now,
+          me,
+          JSON.stringify(NEW_GROUP_METADATA),
+        );
+        this.sql.exec(
+          "INSERT INTO group_members (group_id, pubkey, roles, added_at) VALUES (?, ?, ?, ?)",
+          id,
+          me,
+          JSON.stringify([ADMIN_ROLE]),
+          now,
+        );
+      });
+      this.keepModeration(e, expiration);
+      await this.publishGroupState(id, [metadata, admins, members, roles]);
+      return reply(true, `info: group ${id} created.`);
+    }
+    if (group === null) return reply(false, "restricted: no such group.");
+
+    if (e.kind === GROUP_KINDS.putUser || e.kind === GROUP_KINDS.removeUser) {
+      const adding = e.kind === GROUP_KINDS.putUser;
+      if (!access.isAdmin(id)) {
+        return reply(false, `restricted: you may not ${adding ? "add members to" : "remove members from"} this group.`);
+      }
+      const target = e.tags.find((t) => t[0] === "p" && t.length > 1);
+      if (target === undefined) return reply(false, "invalid: nip29: missing p tag");
+      if (!isHex64(target[1])) return reply(false, "invalid: the p tag is not a 64-hex public key");
+      const pk = target[1];
+      const granted = [...new Set(target.slice(2).map((r) => r.trim().toLowerCase()).filter((r) => r !== ""))];
+      if ((!adding || !granted.includes(ADMIN_ROLE)) && this.isLastAdmin(id, pk)) {
+        return reply(false, `restricted: the group's last admin cannot be ${adding ? "demoted" : "removed"}.`);
+      }
+      this.ctx.storage.transactionSync(() => {
+        if (adding) {
+          this.sql.exec(
+            `INSERT INTO group_members (group_id, pubkey, roles, added_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT (group_id, pubkey) DO UPDATE SET roles = excluded.roles`,
+            id,
+            pk,
+            JSON.stringify(granted),
+            now,
+          );
+        } else {
+          this.sql.exec("DELETE FROM group_members WHERE group_id = ? AND pubkey = ?", id, pk);
+        }
+        // An accepted or declined join request is no longer pending.
+        this.dropJoinRequests(id, pk);
+      });
+      this.keepModeration(e, expiration);
+      await this.publishGroupState(id, [admins, members]);
+      return reply(true, adding ? "info: member added." : "info: member removed.");
+    }
+
+    if (e.kind === GROUP_KINDS.editMetadata) {
+      if (!access.isAdmin(id)) return reply(false, "restricted: only a group admin may edit this group's metadata.");
+      this.sql.exec("UPDATE groups SET metadata = ? WHERE id = ?", JSON.stringify(requestedMetadata(e)), id);
+      this.keepModeration(e, expiration);
+      await this.publishGroupState(id, [metadata]);
+      return reply(true, "info: group metadata updated.");
+    }
+
+    if (e.kind === GROUP_KINDS.joinRequest) {
+      if (access.isMember(id)) return reply(true, "duplicate: you are already a member of this group.");
+      if (group.flags.has("closed")) {
+        // groups.pendingJoins: the request waits for the group's admins, who read it with
+        // REQ {"kinds": [9021], "#h": [<group>]} and answer with 9000 or 9001.
+        this.store(e, "regular", expiration);
+        this.broadcast(e);
+        return reply(true, "info: your join request is pending admin approval.");
+      }
+      this.ctx.storage.transactionSync(() => {
+        this.sql.exec("INSERT INTO group_members (group_id, pubkey, roles, added_at) VALUES (?, ?, '[]', ?)", id, me, now);
+        this.dropJoinRequests(id, me); // one left from when the group was closed
+      });
+      await this.publishGroupState(id, [members]);
+      return reply(true, "info: you joined the group.");
+    }
+
+    if (e.kind === GROUP_KINDS.leaveRequest) {
+      if (!access.isMember(id)) {
+        const withdrawn = this.ctx.storage.transactionSync(() => this.dropJoinRequests(id, me));
+        return reply(true, withdrawn > 0 ? "info: your join request is withdrawn." : "duplicate: you are not a member of this group.");
+      }
+      if (this.isLastAdmin(id, me)) return reply(false, "restricted: the group's last admin cannot leave it.");
+      this.sql.exec("DELETE FROM group_members WHERE group_id = ? AND pubkey = ?", id, me);
+      await this.publishGroupState(id, [admins, members]);
+      return reply(true, "info: you have left the group.");
+    }
+
+    return reply(false, `invalid: kind ${e.kind} is not a NIP-29 request this relay implements (${IMPLEMENTED_GROUP_REQUESTS})`);
+  }
+
+  /** groups.moderationLog: an accepted moderation event is kept, for the group to read. */
+  keepModeration(e: NostrEvent, expiration: number | null): void {
+    this.store(e, "regular", expiration);
+    this.broadcast(e);
+  }
+
+  isLastAdmin(id: string, pubkey: string): boolean {
+    const admins = this.sql
+      .exec<{ pubkey: string }>(
+        "SELECT pubkey FROM group_members, json_each(group_members.roles) AS role WHERE group_id = ? AND role.value = ?",
+        id,
+        ADMIN_ROLE,
+      )
+      .toArray();
+    return admins.length === 1 && admins[0].pubkey === pubkey;
+  }
+
+  /** Delete `pubkey`'s pending join requests to group `id`; how many there were. */
+  dropJoinRequests(id: string, pubkey: string): number {
+    const pending = this.sql
+      .exec<{ id: string }>(
+        `SELECT id FROM events WHERE kind = ? AND pubkey = ?
+         AND id IN (SELECT event_id FROM event_tags WHERE name = 'h' AND value = ?)`,
+        GROUP_KINDS.joinRequest,
+        pubkey,
+        id,
+      )
+      .toArray();
+    for (const row of pending) {
+      this.sql.exec("DELETE FROM event_tags WHERE event_id = ?", row.id);
+      this.sql.exec("DELETE FROM events WHERE id = ?", row.id);
+    }
+    return pending.length;
+  }
+
+  /** Sign and store group `id`'s state events of `kinds` as the tables hold it now. Runs in
+   * order on one chain; a failure reaches the caller and is logged. */
+  publishGroupState(id: string, kinds: number[]): Promise<void> {
+    const run = this.stateChain.then(() => this.writeGroupState(id, kinds));
+    this.stateChain = run.catch((err: unknown) => console.error(`relay: publishing the state of group ${id} failed`, err));
+    return run;
+  }
+
+  async writeGroupState(id: string, kinds: number[]): Promise<void> {
+    const group = loadGroup(this.sql, id);
+    if (group === null) throw new Error(`group ${id} has no row to publish`);
+    const seats = this.sql
+      .exec<{ pubkey: string; roles: string }>(
+        "SELECT pubkey, roles FROM group_members WHERE group_id = ? ORDER BY added_at, pubkey",
+        id,
+      )
+      .toArray()
+      .map((row) => ({ pubkey: row.pubkey, roles: JSON.parse(row.roles) as string[] }));
+    const key = this.cfg.relayKey;
+    for (const kind of kinds) {
+      const d = ["d", id];
+      let tags: string[][];
+      if (kind === GROUP_KINDS.metadata) tags = [d, ...group.metadata];
+      else if (kind === GROUP_KINDS.admins) tags = [d, ...seats.filter((s) => s.roles.length > 0).map((s) => ["p", s.pubkey, ...s.roles])];
+      else if (kind === GROUP_KINDS.members) tags = [d, ...seats.map((s) => ["p", s.pubkey])];
+      else if (kind === GROUP_KINDS.roles) tags = [d, ["role", ADMIN_ROLE, ADMIN_ROLE_DESCRIPTION]];
+      else throw new Error(`kind ${kind} is not group state`);
+      // Strictly newer than the version it replaces, so every client's NIP-01 rule agrees.
+      const [current] = this.sql
+        .exec<{ created_at: number }>("SELECT created_at FROM events WHERE pubkey = ? AND kind = ? AND d_tag = ?", key.pubkey, kind, id)
+        .toArray();
+      const createdAt = Math.max(nowS(), current === undefined ? 0 : current.created_at + 1);
+      const state = await signEvent(key, kind, tags, "", createdAt);
+      if (this.store(state, "addressable", null) !== "stored") {
+        throw new Error(`group ${id} state kind ${kind} was not stored over the version before it`);
+      }
+      this.broadcast(state);
+    }
   }
 
   store(e: NostrEvent, cls: KindClass, expiration: number | null): "stored" | "duplicate" | "superseded" {
@@ -547,7 +988,7 @@ export class RelayDurableObject {
     });
   }
 
-  onReq(ws: RelaySocket, subId: unknown, rawFilters: unknown[]): void {
+  async onReq(ws: RelaySocket, subId: unknown, rawFilters: unknown[]): Promise<void> {
     if (typeof subId !== "string" || subId.length === 0 || subId.length > MAX_SUBID_LENGTH) {
       return send(ws, ["NOTICE", `invalid: a subscription id is a string of 1 to ${MAX_SUBID_LENGTH} characters`]);
     }
@@ -561,6 +1002,12 @@ export class RelayDurableObject {
       if (typeof f === "string") return send(ws, ["CLOSED", subId, `invalid: ${f}`]);
       filters.push(f);
     }
+    if (filters.length === 1 && filters[0].kinds?.length === 1 && filters[0].kinds[0] === INVITE_KIND) {
+      return this.mintInvite(ws, subId, att.pubkey);
+    }
+    const access = this.access(att.pubkey);
+    const refusal = readRefusal(filters, access);
+    if (refusal !== null) return send(ws, ["CLOSED", subId, refusal]);
     this.sql.exec(
       "INSERT INTO subscriptions (conn, sub_id, filters) VALUES (?, ?, ?) ON CONFLICT (conn, sub_id) DO UPDATE SET filters = excluded.filters",
       att.conn,
@@ -569,10 +1016,10 @@ export class RelayDurableObject {
     );
     const now = nowS();
     if (filters.length === 1) {
-      for (const e of this.query(filters[0], now)) send(ws, ["EVENT", subId, e]);
+      for (const e of this.query(filters[0], now, access)) send(ws, ["EVENT", subId, e]);
     } else {
       const seen = new Map<string, NostrEvent>();
-      for (const f of filters) for (const e of this.query(f, now)) seen.set(e.id, e);
+      for (const f of filters) for (const e of this.query(f, now, access)) seen.set(e.id, e);
       const events = [...seen.values()].sort(
         (a, b) => b.created_at - a.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
@@ -581,9 +1028,41 @@ export class RelayDurableObject {
     send(ws, ["EOSE", subId]);
   }
 
-  *query(f: Filter, now: number): Generator<NostrEvent> {
+  /** NIP-43 invite request: a member mints a single-use invite and gets it back as an
+   * ephemeral kind 28935 the relay signs, then EOSE, then the one-shot subscription closes,
+   * as on the ncli relay. Each one costs a token of the key's event rate limit. */
+  async mintInvite(ws: RelaySocket, subId: string, me: string): Promise<void> {
+    if (!this.takeToken(me)) {
+      return send(ws, ["CLOSED", subId, `rate-limited: at most ${this.cfg.eventsPerMinute} events and invites a minute per key`]);
+    }
+    const now = nowS();
+    const code = randomHex(32);
+    const invite = await signEvent(this.cfg.relayKey, INVITE_KIND, [["-"], ["claim", code]], "", now);
+    this.sql.exec(
+      "INSERT INTO invites (code, created_at, expires_at, max_uses, uses) VALUES (?, ?, ?, ?, 0)",
+      code,
+      now,
+      now + MEMBER_INVITE_TTL_S,
+      MEMBER_INVITE_MAX_USES,
+    );
+    send(ws, ["EVENT", subId, invite]);
+    send(ws, ["EOSE", subId]);
+    send(ws, ["CLOSED", subId, "one-shot invite request completed"]);
+  }
+
+  access(reader: string): Access {
+    return new Access(this.sql, reader, this.cfg.relayKey.pubkey);
+  }
+
+  /** The stored events `f` matches that `access` may see, newest first, at most `limit` of
+   * them. Pages through the store, so events the reader may not see never use up the
+   * limit. */
+  *query(f: Filter, now: number, access: Access): Generator<NostrEvent> {
     const where = ["(expires_at IS NULL OR expires_at > ?)"];
     const binds: SqlValue[] = [now];
+    // A first cut of the recipient-only rule in SQL; access.visible() below is the rule.
+    where.push("(kind NOT IN (SELECT value FROM json_each(?)) OR id IN (SELECT event_id FROM event_tags WHERE name = 'p' AND value = ?))");
+    binds.push(JSON.stringify(RECIPIENT_ONLY_KINDS), access.reader);
     if (f.ids !== undefined) {
       where.push("id IN (SELECT value FROM json_each(?))");
       binds.push(JSON.stringify(f.ids));
@@ -609,14 +1088,29 @@ export class RelayDurableObject {
       binds.push(name, JSON.stringify(values));
     }
     // `limit: 0` means "no limit" on the ncli relay too; either way MAX_LIMIT caps it.
-    const limit = f.limit === undefined || f.limit === 0 ? MAX_LIMIT : Math.min(f.limit, MAX_LIMIT);
-    const rows = this.sql.exec<EventRow>(
-      `SELECT id, pubkey, created_at, kind, tags, content, sig FROM events WHERE ${where.join(" AND ")}
-       ORDER BY created_at DESC, id ASC LIMIT ?`,
-      ...binds,
-      limit,
-    );
-    for (const row of rows) yield rowToEvent(row);
+    let wanted = f.limit === undefined || f.limit === 0 ? MAX_LIMIT : Math.min(f.limit, MAX_LIMIT);
+    let after: [number, string] | null = null;
+    while (wanted > 0) {
+      const asked = wanted;
+      const page: EventRow[] = this.sql
+        .exec<EventRow>(
+          `SELECT id, pubkey, created_at, kind, tags, content, sig FROM events WHERE ${where.join(" AND ")}
+           ${after === null ? "" : "AND (created_at < ? OR (created_at = ? AND id > ?))"}
+           ORDER BY created_at DESC, id ASC LIMIT ?`,
+          ...binds,
+          ...(after === null ? [] : [after[0], after[0], after[1]]),
+          asked,
+        )
+        .toArray();
+      for (const row of page) {
+        after = [row.created_at, row.id];
+        const e = rowToEvent(row);
+        if (!access.visible(e)) continue;
+        wanted--;
+        yield e;
+      }
+      if (page.length < asked) return;
+    }
   }
 
   onClose(ws: RelaySocket, subId: unknown): void {
@@ -625,22 +1119,20 @@ export class RelayDurableObject {
   }
 
   broadcast(e: NostrEvent): void {
-    const membership = new Map<string, boolean>();
+    // Per reader: false when it is not a member, or may not see `e`.
+    const sees = new Map<string, boolean>();
     for (const ws of this.ctx.getWebSockets()) {
       const att = attachmentOf(ws);
       if (att.pubkey === null) continue;
-      let member = membership.get(att.pubkey);
-      if (member === undefined) {
-        member = this.isMember(att.pubkey);
-        membership.set(att.pubkey, member);
-      }
-      if (!member) continue;
+      const reader = att.pubkey;
       const subs = this.sql
         .exec<{ sub_id: string; filters: string }>("SELECT sub_id, filters FROM subscriptions WHERE conn = ?", att.conn)
         .toArray();
       for (const sub of subs) {
         const filters = (JSON.parse(sub.filters) as unknown[]).map(parseFilter) as Filter[];
         if (!filters.some((f) => matchesFilter(f, e))) continue;
+        if (!sees.has(reader)) sees.set(reader, this.isMember(reader) && this.access(reader).visible(e));
+        if (!sees.get(reader)) continue;
         try {
           send(ws, ["EVENT", sub.sub_id, e]);
         } catch (err) {

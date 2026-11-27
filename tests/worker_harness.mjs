@@ -4,8 +4,10 @@
 //
 // Prints {"ready": true, "port": N} once it listens on 127.0.0.1:N.
 //
-// Real here: every line of worker.ts and nostr.ts (edge filter, NIP-11, NIP-42, NIP-43,
-// NIP-01 store and filters, Blossom, admin API), SQLite (node:sqlite stands in for
+// Real here: every line of worker.ts, nostr.ts and console.ts (edge filter, NIP-11, the
+// console page, NIP-42, NIP-43 invites and member-minted invites, NIP-29 groups,
+// recipient-only kinds, NIP-01 store and filters, Blossom, admin API, BIP-340 signing and
+// verification), SQLite (node:sqlite stands in for
 // ctx.storage.sql: the same engine, json_each and RETURNING), HTTP and RFC 6455 frames over
 // loopback sockets, and WebCrypto.
 //
@@ -16,6 +18,7 @@
 // Harness-only routes, never forwarded to the Worker:
 //   POST /__harness/fetch   {method, host, path, headers} -> {status, upgrade}  (in-process fetch)
 //   POST /__harness/verify  {pubkey, msg, sig} -> {valid}                      (BIP-340 vectors)
+//   POST /__harness/sign    {secret, msg, aux} -> {pubkey, sig}                (BIP-340 vectors)
 //   POST /__harness/clock   {offset_s}                                          (shift Date.now)
 import { createHash } from "node:crypto";
 import http from "node:http";
@@ -276,6 +279,10 @@ async function control(route, body, res) {
       nostr.hexToBytes(input.sig),
     );
     output = { valid };
+  } else if (route === "/__harness/sign") {
+    const key = nostr.secretKey(input.secret);
+    const sig = await nostr.signSchnorr(nostr.hexToBytes(input.msg), key, nostr.hexToBytes(input.aux));
+    output = { pubkey: key.pubkey, sig: nostr.bytesToHex(sig) };
   } else if (route === "/__harness/fetch") {
     const request = new Request(`https://${input.host}${input.path}`, {
       method: input.method,

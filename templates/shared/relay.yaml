@@ -28,12 +28,33 @@ membership:
   # it is asked for. `nostr-mailbox relay invite` always asks for exactly one use and
   # refuses to hand out an invite the relay reports otherwise.
   inviteMaxUses: 1
-  memberClaims: false
+  # Self-service invites: an enrolled member (not only the operator) mints a code over
+  # the WebSocket with REQ {"kinds": [28935], "limit": 1}, or NIP-86 `createclaim`, with
+  # no kubectl. A member's code takes the two defaults above (one use, seven days) and
+  # no roles. ncli keeps no count of codes per member; the cap is that every code is
+  # single-use, and revoking the member who handed one out does not revoke the code
+  # (`ncli relay invites list` / `revoke` do).
+  memberClaims: true
   publishAddRemoveEvents: false
 
+# NIP-29 topic groups that members run themselves. A new group (kind 9007) is private
+# and closed, its creator its admin.
 groups:
+  create: [members]           # only enrolled members (and the operator) create groups
+  pendingJoins: true          # a codeless join (kind 9021) waits for the group's admins
+  moderationLog: true         # members read the group's accepted moderation events
   roles:
     admin: [9000, 9001, 9002, 9005, 9008, 9009, 9010]
+
+# Served only to a socket authenticated (NIP-42) as a pubkey in the event's `p` tags:
+# NIP-59 gift wraps (1059: personal dropboxes, Epoch Key Ring delivery) and the
+# agent-mailbox pairwise envelopes and receipts (4410, 4411). Every other member gets
+# nothing back for them, not even that they exist.
+recipientOnlyKinds: [1059, 4410, 4411]
+
+# A browser opening https://<relay host>/ gets the relay's own page, built from NIP-11.
+# The Caddyfile and the IngressRoute route GET and HEAD / to it.
+homepage: true
 
 limits:
   events:

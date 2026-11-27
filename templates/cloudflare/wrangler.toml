@@ -4,8 +4,13 @@
 #
 #   npx wrangler r2 bucket create {{ r2_bucket }}
 #   openssl rand -hex 32 | tee /dev/stderr | npx wrangler secret put ADMIN_TOKEN   # keep it in your password manager
+#   openssl rand -hex 32 | npx wrangler secret put RELAY_SIGNING_KEY             # never shown, never needed again
 #   npx wrangler deploy
 #   curl -fsS -H 'Accept: application/nostr+json' https://{{ relay_host }}/
+#
+# RELAY_SIGNING_KEY is the relay's own key (NIP-11 `self`): it signs the invites members
+# mint and the NIP-29 group state. The relay refuses to start without it. Replacing it
+# later changes the relay's identity, so set it once.
 #
 # The zone of {{ relay_host }} must be on this Cloudflare account: the route below makes the
 # Worker that host's custom domain. workers.dev and preview URLs stay off, because every

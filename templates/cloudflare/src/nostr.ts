@@ -1,5 +1,5 @@
-// Pure Nostr primitives for the Cloudflare Worker relay: BIP-340 Schnorr verification,
-// NIP-01 event ids, event and filter rules, and the edge route table.
+// Pure Nostr primitives for the Cloudflare Worker relay: BIP-340 Schnorr verification and
+// signing, NIP-01 event ids, event and filter rules, and the edge route table.
 //
 // No Cloudflare API is used here, and only erasable TypeScript syntax, so the same file
 // runs unchanged under wrangler (esbuild) and under Node's type stripping, which is how
@@ -136,11 +136,37 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-let challengeTag: Uint8Array | null = null;
+const tagHashes = new Map<string, Uint8Array>();
 
-async function challengeHash(data: Uint8Array): Promise<Uint8Array> {
-  challengeTag ??= await sha256(utf8("BIP0340/challenge"));
-  return sha256(concat(challengeTag, challengeTag, data));
+/** BIP-340's tagged hash: SHA-256(SHA-256(tag) || SHA-256(tag) || data). */
+async function taggedHash(tag: string, data: Uint8Array): Promise<Uint8Array> {
+  let prefix = tagHashes.get(tag);
+  if (prefix === undefined) {
+    prefix = await sha256(utf8(tag));
+    tagHashes.set(tag, prefix);
+  }
+  return sha256(concat(prefix, prefix, data));
+}
+
+function bigToBytes32(n: bigint): Uint8Array {
+  const out = new Uint8Array(32);
+  let v = n;
+  for (let i = 31; i >= 0; i--) {
+    out[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return out;
+}
+
+function toAffine(p: Point): [bigint, bigint] {
+  if (p[2] === 0n) throw new RangeError("the point at infinity has no affine coordinates");
+  const zInv = invert(p[2]);
+  const zInv2 = mod(zInv * zInv);
+  return [mod(p[0] * zInv2), mod(p[1] * zInv2 * zInv)];
+}
+
+function multiplyG(k: bigint): [bigint, bigint] {
+  return toAffine(mulAdd(k, G, 0n, INFINITY));
 }
 
 /** BIP-340 verification of `sig` over `msg` under the x-only public key `pubkey`. */
@@ -156,14 +182,46 @@ export async function verifySchnorr(
   const r = bytesToBig(rBytes);
   const s = bytesToBig(sig.subarray(32));
   if (r >= P || s >= N) return false;
-  const e = mod(bytesToBig(await challengeHash(concat(rBytes, pubkey, msg))), N);
+  const e = mod(bytesToBig(await taggedHash("BIP0340/challenge", concat(rBytes, pubkey, msg))), N);
   const point = mulAdd(s, G, mod(N - e, N), pt);
   if (point[2] === 0n) return false;
-  const zInv = invert(point[2]);
-  const zInv2 = mod(zInv * zInv);
-  const x = mod(point[0] * zInv2);
-  const y = mod(point[1] * zInv2 * zInv);
+  const [x, y] = toAffine(point);
   return (y & 1n) === 0n && x === r;
+}
+
+/** A secp256k1 secret key: 64 hex characters naming a scalar from 1 to n-1. */
+export interface SecretKey {
+  scalar: bigint;
+  pubkey: string; // x-only, 64 lowercase hex
+}
+
+export function secretKey(hex: string): SecretKey {
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new RangeError("a secret key is 64 hex characters");
+  const scalar = BigInt(`0x${hex}`);
+  if (scalar === 0n || scalar >= N) throw new RangeError("a secret key is a number from 1 to n-1 (secp256k1)");
+  return { scalar, pubkey: bytesToHex(bigToBytes32(multiplyG(scalar)[0])) };
+}
+
+/** BIP-340 signing (the specification's default algorithm, with 32 bytes of `aux`), checked
+ * by verifying the result before it is returned. BigInt arithmetic is not constant-time:
+ * the relay's key signs only the relay's own invites and group state with it. */
+export async function signSchnorr(msg: Uint8Array, key: SecretKey, aux: Uint8Array): Promise<Uint8Array> {
+  if (aux.length !== 32) throw new RangeError("BIP-340 aux is 32 bytes");
+  const [px, py] = multiplyG(key.scalar);
+  const d = (py & 1n) === 0n ? key.scalar : N - key.scalar;
+  const pBytes = bigToBytes32(px);
+  const masked = await taggedHash("BIP0340/aux", aux);
+  const dBytes = bigToBytes32(d);
+  const t = masked.map((byte, i) => byte ^ dBytes[i]);
+  const k0 = mod(bytesToBig(await taggedHash("BIP0340/nonce", concat(t, pBytes, msg))), N);
+  if (k0 === 0n) throw new RangeError("BIP-340: the nonce is zero; sign again with other aux bytes");
+  const [rx, ry] = multiplyG(k0);
+  const k = (ry & 1n) === 0n ? k0 : N - k0;
+  const rBytes = bigToBytes32(rx);
+  const e = mod(bytesToBig(await taggedHash("BIP0340/challenge", concat(rBytes, pBytes, msg))), N);
+  const sig = concat(rBytes, bigToBytes32(mod(k + e * d, N)));
+  if (!(await verifySchnorr(pBytes, msg, sig))) throw new Error("BIP-340: a signature just made does not verify");
+  return sig;
 }
 
 // ------------------------------------------------------------------------------ hex
@@ -204,7 +262,34 @@ export interface NostrEvent {
 
 export const AUTH_KIND = 22242; // NIP-42
 export const INVITE_CLAIM_KIND = 28934; // NIP-43 join request
+export const INVITE_KIND = 28935; // NIP-43 invite: REQ it, the relay answers with a signed code
 export const BLOSSOM_AUTH_KIND = 24242; // Blossom authorization
+
+// Served only to a socket authenticated as a pubkey in the event's `p` tags: NIP-59 gift
+// wraps, and agent-mailbox's pairwise envelopes and receipts. The same list as
+// `recipientOnlyKinds` in templates/shared/relay.yaml; tests/test_hydrate.py reads that
+// file and holds the Worker to every kind in it.
+export const RECIPIENT_ONLY_KINDS: readonly number[] = [1059, 4410, 4411];
+
+// NIP-29
+export const GROUP_KINDS = {
+  putUser: 9000,
+  removeUser: 9001,
+  editMetadata: 9002,
+  createGroup: 9007,
+  joinRequest: 9021,
+  leaveRequest: 9022,
+  metadata: 39000,
+  admins: 39001,
+  members: 39002,
+  roles: 39003,
+} as const;
+/** Moderation and request kinds a client sends (9000-9022), and the group state the relay
+ * alone signs (39000-39009). */
+export const isGroupRequestKind = (kind: number): boolean => kind >= 9000 && kind <= 9022;
+export const isGroupStateKind = (kind: number): boolean => kind >= 39000 && kind <= 39009;
+/** NIP-29: a group id is made of a-z, 0-9, '-' and '_'. */
+export const GROUP_ID = /^[a-z0-9_-]+$/;
 
 /** Why `raw` is not a well-formed event, or null when it is. Checks types only. */
 export function eventShapeError(raw: unknown): string | null {
@@ -247,6 +332,21 @@ export async function eventError(raw: unknown): Promise<string | null> {
   if ((await computeEventId(e)) !== e.id) return "id is not the hash of the event";
   const ok = await verifySchnorr(hexToBytes(e.pubkey), hexToBytes(e.id), hexToBytes(e.sig));
   return ok ? null : "signature does not verify";
+}
+
+/** A new event signed with `key`: the relay's own invites and group state. */
+export async function signEvent(
+  key: SecretKey,
+  kind: number,
+  tags: string[][],
+  content: string,
+  createdAt: number,
+): Promise<NostrEvent> {
+  const e: NostrEvent = { id: "", pubkey: key.pubkey, created_at: createdAt, kind, tags, content, sig: "" };
+  e.id = await computeEventId(e);
+  const aux = crypto.getRandomValues(new Uint8Array(32));
+  e.sig = bytesToHex(await signSchnorr(hexToBytes(e.id), key, aux));
+  return e;
 }
 
 /** Only the seven NIP-01 fields, in their usual order: what the relay stores and sends. */
@@ -372,14 +472,23 @@ export function matchesFilter(f: Filter, e: NostrEvent): boolean {
 // (kubernetes target) admit exactly these, and tests/test_hydrate.py holds all three to
 // one table.
 export const BLOB_PATH = /^\/(media\/)?([0-9a-f]{64})([.][a-z0-9]{1,8})?$/;
+const NIP11_TYPE = "application/nostr+json";
 
-export type EdgeRoute = "wire" | "info" | "upload" | "blob";
+// `GET`/`HEAD /` always reaches the relay; what it answers depends on the headers:
+//   wire          GET with `Upgrade: websocket` (any case, RFC 6455)
+//   info          `Accept: application/nostr+json`, exactly (NIP-11)
+//   unacceptable  an Accept list that names application/nostr+json among others: 400,
+//                 as the ncli relay answers it, rather than guess which one was meant
+//   page          anything else, a browser included: the Visual Web Console
+export type EdgeRoute = "wire" | "info" | "unacceptable" | "page" | "upload" | "blob";
 
 export function edgeRoute(method: string, path: string, headers: Headers): EdgeRoute | null {
-  if (path === "/" && method === "GET") {
-    if (headers.get("Upgrade") === "websocket") return "wire";
-    if (headers.get("Accept") === "application/nostr+json") return "info";
-    return null;
+  if (path === "/" && (method === "GET" || method === "HEAD")) {
+    if (method === "GET" && (headers.get("Upgrade") ?? "").toLowerCase() === "websocket") return "wire";
+    const accept = (headers.get("Accept") ?? "").trim().toLowerCase();
+    if (accept === NIP11_TYPE) return "info";
+    if (accept.includes(NIP11_TYPE)) return "unacceptable";
+    return "page";
   }
   if (method === "PUT" && (path === "/upload" || path === "/media/upload")) return "upload";
   if ((method === "GET" || method === "HEAD") && BLOB_PATH.test(path)) return "blob";

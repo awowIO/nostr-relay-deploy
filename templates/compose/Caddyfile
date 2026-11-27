@@ -5,30 +5,22 @@
 # target and the Cloudflare Worker's edge filter carry the same one, and a test holds the
 # three together.
 #
-#   GET  /                                  WebSocket upgrade      the relay
+#   GET  /                                  WebSocket upgrade      the relay (NIP-42 first)
 #   GET  /                                  NIP-11 document        Accept: application/nostr+json
+#   GET  HEAD /                             the relay's page       a browser (relay.yaml `homepage`)
 #   PUT  /upload  /media/upload             blob upload            signed, members only
 #   GET  /<sha256>[.ext]                    blob download          signed, members only
 #   HEAD /media/<sha256>[.ext]              (both addresses, both methods)
 #
 # Everything else answers 404 here and never reaches the relay: its admin listener, its
-# query and metrics surfaces, DELETE on a blob, any other method or path.
+# query and metrics surfaces, DELETE on a blob, any other method or path. `/` itself is
+# one route: the relay tells a WebSocket, a NIP-11 client and a browser apart.
 {$RELAY_HOST} {
-	@wire {
+	@root {
 		path /
-		method GET
-		header Upgrade websocket
+		method GET HEAD
 	}
-	handle @wire {
-		reverse_proxy relay:5500
-	}
-
-	@info {
-		path /
-		method GET
-		header Accept application/nostr+json
-	}
-	handle @info {
+	handle @root {
 		reverse_proxy relay:5500
 	}
 

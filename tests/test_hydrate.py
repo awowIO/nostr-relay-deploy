@@ -14,11 +14,19 @@ What is exercised for real, and how:
     fetching through its real handler.
   - `kubectl kustomize` (offline) builds the hydrated Kubernetes tree when kubectl is
     installed.
+  - When a Docker daemon answers, the pinned ncli release itself: `ncli relay --check`
+    on the hydrated relay.yaml, and a live ncli relay booted on it. The self-service
+    scenarios (member-minted invites, NIP-29 groups, recipient-only kinds, what `/`
+    answers) run against that relay and against the Worker, with the same assertions,
+    so the Worker is held to what the relay the other two targets deploy actually does.
 
 Not covered here, said plainly: `--apply` against a cluster (its real-contact path is an
 operator's first apply, which runs a server-side dry run before it mutates anything);
 the Workers runtime itself (WebSocketPair, hibernation, Durable Object routing, R2; the
-harness stands in for those); Caddy and Traefik binaries; `docker compose config`.
+harness stands in for those); Caddy and Traefik binaries; `docker compose config`; the
+console page in a browser (its script is syntax-checked by Node and its CSP hashes are
+checked, but no browser runs it). Without Docker the ncli witnesses are SKIPPED, and
+nothing else here proves agreement with ncli.
 Set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to also run
 nostr-mailbox's own client, admin wrapper and Blossom client against the Worker.
 """
@@ -50,11 +58,25 @@ sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import hydrate
-from nostr_testkit import Harness, Key, N, node_problem, pubkey_gen, schnorr_sign
+from cf_ncli_shim import duration_seconds
+from nostr_testkit import (
+    Harness,
+    Key,
+    N,
+    WsClient,
+    event_is_signed,
+    node_problem,
+    pubkey_gen,
+    schnorr_sign,
+    schnorr_verify,
+)
 
 RELAY_HOST = "relay.example.com"
 SHIM = REPO / "scripts" / "cf_ncli_shim.py"
 ADMIN_TOKEN = hashlib.sha256(b"nostr-relay-deploy test admin token").hexdigest()
+# The Worker's RELAY_SIGNING_KEY in these tests, and the public key NIP-11 must name.
+RELAY_KEY = hashlib.sha256(b"nostr-relay-deploy test relay signing key").hexdigest()
+RELAY_PUBKEY = pubkey_gen(bytes.fromhex(RELAY_KEY)).hex()
 NCLI_CONFIG = "/app/ncli/relay.yaml"          # what nostr-mailbox appends after `--config`
 NIP19_NPUB = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
 NIP19_HEX = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
@@ -168,6 +190,39 @@ def assert_ncli_invite(invite: dict) -> None:
     assert invite["expires_at"] > invite["created_at"]
 
 
+def _flow_value(text: str):
+    if text.startswith("[") and text.endswith("]"):
+        return [_flow_value(item.strip()) for item in text[1:-1].split(",") if item.strip()]
+    if text in ("true", "false"):
+        return text == "true"
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    if text.startswith('"'):
+        return json.loads(text)
+    return text
+
+
+def relay_settings(text: str) -> dict:
+    """The settings of a hydrated relay.yaml by dotted path ("groups.roles.admin"): enough
+    YAML for this file's block mappings, scalars and flow lists, with comments dropped."""
+    settings: dict = {}
+    parents: list[tuple[int, str]] = []
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        line = re.sub(r"\s+#.*$", "", raw)
+        indent = len(line) - len(line.lstrip())
+        key, _, value = line.strip().partition(":")
+        while parents and parents[-1][0] >= indent:
+            parents.pop()
+        path = ".".join([*(name for _, name in parents), key])
+        if value.strip():
+            settings[path] = _flow_value(value.strip())
+        else:
+            parents.append((indent, key))
+    return settings
+
+
 _key_counter = iter(range(1000, 10**6))
 
 
@@ -241,12 +296,15 @@ def private_ws(tmp_path_factory) -> Path:
     return ws
 
 
-def _start_harness(build: Path, **overrides: str) -> Harness:
+def _start_harness(build: Path, **overrides: str | None) -> Harness:
+    """The hydrated Worker with wrangler.toml's [vars], the secrets wrangler would add, and
+    `overrides` (None removes a variable)."""
     problem = node_problem()
     if problem is not None:
         pytest.skip(problem)
     variables = tomllib.loads((build / "cloudflare" / "wrangler.toml").read_text())["vars"]
-    return Harness(build / "cloudflare" / "src" / "worker.ts", {**variables, **overrides})
+    merged = {**variables, "RELAY_SIGNING_KEY": RELAY_KEY, **overrides}
+    return Harness(build / "cloudflare" / "src" / "worker.ts", {k: v for k, v in merged.items() if v is not None})
 
 
 @pytest.fixture(scope="session")
@@ -260,6 +318,14 @@ def worker(build):
 def tight_worker(build):
     """A Worker with small limits and no ADMIN_TOKEN: rate limits, blob size, hidden admin."""
     harness = _start_harness(build, EVENTS_PER_MINUTE="3", MAX_BLOB_BYTES="16")
+    yield harness
+    harness.stop()
+
+
+@pytest.fixture
+def limited_worker(build):
+    """A Worker with an admin token and three events a minute per key."""
+    harness = _start_harness(build, ADMIN_TOKEN=ADMIN_TOKEN, EVENTS_PER_MINUTE="3")
     yield harness
     harness.stop()
 
@@ -487,9 +553,75 @@ def test_compose_hydrates_one_host_with_the_same_relay_config(build):
     shared = (compose / "relay.yaml").read_text()
     assert shared == (build / "kubernetes" / "relay.yaml").read_text()
     for line in ('name: "Private campaign relay"', "auth_required: true", "membership_required: true",
-                 "inviteMaxUses: 1", "perPubkey: {events: 60, per: 1m, burst: 60}", "maxBlobBytes: 104857600",
+                 "inviteMaxUses: 1", "memberClaims: true", "create: [members]", "pendingJoins: true",
+                 "moderationLog: true", "recipientOnlyKinds: [1059, 4410, 4411]", "homepage: true",
+                 "perPubkey: {events: 60, per: 1m, burst: 60}", "maxBlobBytes: 104857600",
                  "maxUploadsPerSigner: 2", "membersOnly: {upload: true, download: true}"):
         assert line in shared, line
+
+
+def test_relay_yaml_turns_on_self_service_invites_groups_and_recipient_only_kinds(build):
+    settings = relay_settings((build / "compose" / "relay.yaml").read_text())
+    assert settings["membership.memberClaims"] is True, "members mint invites over REQ kind 28935"
+    assert settings["membership.inviteMaxUses"] == 1 and settings["membership.inviteTTL"] == "168h"
+    assert settings["groups.create"] == ["members"]
+    assert settings["groups.pendingJoins"] is True and settings["groups.moderationLog"] is True
+    assert settings["groups.roles.admin"] == [9000, 9001, 9002, 9005, 9008, 9009, 9010]
+    assert settings["recipientOnlyKinds"] == [1059, 4410, 4411]
+    assert settings["homepage"] is True, "the edges route GET / to the relay for a browser"
+    assert settings["nip11.limitation.auth_required"] is True
+    assert settings["nip11.limitation.membership_required"] is True
+
+
+# ============================================================ the pinned ncli release
+def docker_problem() -> str | None:
+    """Why the pinned ncli image cannot run here, or None when a Docker daemon answers."""
+    if shutil.which("docker") is None:
+        return "docker is not installed: the pinned ncli release runs in its container image"
+    done = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"], capture_output=True, text=True,
+                          check=False)
+    if done.returncode != 0:
+        return f"no Docker daemon answers (docker info: {done.stderr.strip()[:300]}); set DOCKER_HOST"
+    return None
+
+
+# The image's own shell writes the hydrated file inside the container, so no host path has
+# to be shared with the Docker VM. The relay runs as it does in compose.yaml: UID 65532, a
+# read-only root, and a writable data directory.
+_NCLI_ENTRY = 'printf "%s" "$RELAY_YAML" > /tmp/relay.yaml && exec ncli relay --config /tmp/relay.yaml "$@"'
+NCLI_CONFIG_IN_CONTAINER = "/tmp/relay.yaml"
+
+
+def ncli_argv(*docker_args: str, ncli_args: tuple[str, ...] = ()) -> list[str]:
+    return ["docker", "run", "--user", "65532:65532", "--read-only", "--tmpfs", "/tmp",
+            "--tmpfs", "/app/ncli/data:uid=65532,gid=65532", "-e", "RELAY_YAML", "-e", "NCLI_NIP11_PRIVKEY",
+            "-e", f"NCLI_NIP11_URL=wss://{RELAY_HOST}", "-e", "HOME=/app/ncli/data", *docker_args,
+            "--entrypoint", "/bin/sh", hydrate.NCLI_IMAGE, "-c", _NCLI_ENTRY, "ncli", *ncli_args]
+
+
+def ncli_env(relay_yaml: str) -> dict[str, str]:
+    """The relay.yaml and a throwaway relay key, handed to docker through its environment."""
+    return {**os.environ, "RELAY_YAML": relay_yaml, "NCLI_NIP11_PRIVKEY": os.urandom(32).hex()}
+
+
+def ncli_check(relay_yaml: str) -> subprocess.CompletedProcess:
+    return subprocess.run(ncli_argv("--rm", ncli_args=("--check", "--json")), env=ncli_env(relay_yaml),
+                          capture_output=True, text=True, check=False)
+
+
+def test_the_pinned_ncli_accepts_the_hydrated_relay_yaml(build, private_ws):
+    problem = docker_problem()
+    if problem is not None:
+        pytest.skip(problem)
+    for config in (build / "compose" / "relay.yaml", private_ws / ".build" / "kubernetes" / "relay.yaml"):
+        done = ncli_check(config.read_text())
+        assert done.returncode == 0, f"ncli --check refuses {config}:\n{done.stdout}\n{done.stderr}"
+        report = json.loads(done.stdout[done.stdout.index("{\n"):])
+        assert report["ok"] is True and report["warnings"] == [], report
+    # The control: the same check refuses a key the release does not know, so its OK means something.
+    typo = (build / "compose" / "relay.yaml").read_text().replace("  memberClaims: true", "  memberClaim: true")
+    refused = ncli_check(typo)
+    assert refused.returncode != 0 and "memberClaim" in refused.stdout + refused.stderr
 
 
 # ======================================================================= cloudflare
@@ -507,8 +639,11 @@ def test_cloudflare_hydrates_wrangler_and_copies_the_worker(build):
     assert wrangler["migrations"] == [{"tag": "v1", "new_sqlite_classes": ["RelayDurableObject"]}]
     assert wrangler["r2_buckets"] == [{"binding": "BLOSSOM_BUCKET", "bucket_name": "nostr-campaign-blobs"}]
     assert "ADMIN_TOKEN" not in wrangler["vars"], "the admin token is a secret, never a var"
-    for name in ("worker.ts", "nostr.ts"):
+    assert {p.name for p in (cf / "src").iterdir()} == {"worker.ts", "nostr.ts", "console.ts"}
+    for name in ("worker.ts", "nostr.ts", "console.ts"):
         assert (cf / "src" / name).read_bytes() == (REPO / "templates" / "cloudflare" / "src" / name).read_bytes()
+    assert "secret put RELAY_SIGNING_KEY" in (cf / "wrangler.toml").read_text()
+    assert "RELAY_SIGNING_KEY" not in wrangler["vars"], "the relay's key is a secret, never a var"
 
 
 # ===================================================================== github pages
@@ -588,16 +723,22 @@ def test_github_pages_publishes_nip05_names_and_a_custom_domain(tmp_path):
 # ================================================================ edge-route parity
 SHA = "ab" * 32
 OTHER_HOST = "evil.example.org"
+# `GET` and `HEAD /` are one route on every edge, whatever the headers: the relay behind it
+# tells a WebSocket, a NIP-11 client and a browser apart. Every other path stays shut.
 PROBES = [
     ("websocket upgrade", "GET", "/", {"Upgrade": "websocket", "Connection": "Upgrade"}, None, True),
     ("NIP-11", "GET", "/", {"Accept": "application/nostr+json"}, None, True),
-    ("plain GET /", "GET", "/", {}, None, False),
-    ("browser GET /", "GET", "/", {"Accept": "text/html"}, None, False),
-    ("NIP-11 inside a list Accept", "GET", "/", {"Accept": "application/nostr+json, */*"}, None, False),
-    ("upgrade spelt WebSocket", "GET", "/", {"Upgrade": "WebSocket"}, None, False),
+    ("plain GET /", "GET", "/", {}, None, True),
+    ("browser GET /", "GET", "/", {"Accept": "text/html,application/xhtml+xml,*/*;q=0.8"}, None, True),
+    ("browser HEAD /", "HEAD", "/", {"Accept": "text/html"}, None, True),
+    ("NIP-11 inside a list Accept", "GET", "/", {"Accept": "application/nostr+json, */*"}, None, True),
+    ("upgrade spelt WebSocket", "GET", "/", {"Upgrade": "WebSocket", "Connection": "Upgrade"}, None, True),
     ("POST / with upgrade", "POST", "/", {"Upgrade": "websocket"}, None, False),
-    ("HEAD / NIP-11", "HEAD", "/", {"Accept": "application/nostr+json"}, None, False),
+    ("PUT /", "PUT", "/", {}, None, False),
+    ("HEAD / NIP-11", "HEAD", "/", {"Accept": "application/nostr+json"}, None, True),
     ("CORS preflight", "OPTIONS", "/", {"Access-Control-Request-Method": "GET"}, None, False),
+    ("the page under another name", "GET", "/index.html", {"Accept": "text/html"}, None, False),
+    ("the ncli page's assets", "GET", "/_home/assets/home.js", {}, None, False),
     ("upload", "PUT", "/upload", {}, None, True),
     ("media upload", "PUT", "/media/upload", {}, None, True),
     ("POST upload", "POST", "/upload", {}, None, False),
@@ -620,6 +761,7 @@ PROBES = [
     ("Worker admin API without a token", "GET", "/_admin/members", {}, None, False),
     ("upgrade on another host", "GET", "/", {"Upgrade": "websocket"}, OTHER_HOST, False),
     ("NIP-11 on another host", "GET", "/", {"Accept": "application/nostr+json"}, OTHER_HOST, False),
+    ("the page on another host", "GET", "/", {"Accept": "text/html"}, OTHER_HOST, False),
     ("blob on another host", "GET", f"/{SHA}", {}, OTHER_HOST, False),
 ]
 
@@ -746,8 +888,8 @@ def traefik_admits(ingressroute: str, host: str, method: str, path: str, headers
 
 
 @pytest.mark.parametrize("name, method, path, headers, host, admitted", PROBES, ids=[p[0] for p in PROBES])
-def test_caddy_traefik_and_the_worker_admit_the_same_four_routes(build, worker, name, method, path, headers,
-                                                                 host, admitted):
+def test_caddy_traefik_and_the_worker_admit_the_same_routes(build, worker, name, method, path, headers,
+                                                            host, admitted):
     host = host or RELAY_HOST
     caddy = caddy_admits((build / "compose" / "Caddyfile").read_text(), host, method, path, headers)
     traefik = traefik_admits((build / "kubernetes" / "ingressroute.yaml").read_text(), host, method, path, headers)
@@ -798,6 +940,16 @@ P_FIELD = 2**256 - 2**32 - 977
 def test_the_test_signer_reproduces_the_bip340_vectors(secret, pubkey, aux, msg, sig):
     assert pubkey_gen(bytes.fromhex(secret)).hex() == pubkey.lower()
     assert schnorr_sign(bytes.fromhex(msg), bytes.fromhex(secret), bytes.fromhex(aux)).hex() == sig.lower()
+    assert schnorr_verify(bytes.fromhex(msg), bytes.fromhex(pubkey), bytes.fromhex(sig))
+    flipped = sig[:-1] + format(int(sig[-1], 16) ^ 1, "X")
+    assert not schnorr_verify(bytes.fromhex(msg), bytes.fromhex(pubkey), bytes.fromhex(flipped))
+
+
+def test_the_worker_signs_as_bip340_specifies(worker):
+    """The key that signs the relay's invites and group state: vectors 0-3, byte for byte."""
+    for secret, pubkey, aux, msg, sig in BIP340:
+        made = worker.control("sign", {"secret": secret.lower(), "msg": msg.lower(), "aux": aux.lower()})
+        assert made == {"pubkey": pubkey.lower(), "sig": sig.lower()}
 
 
 def test_the_worker_verifies_bip340_and_rejects_every_way_a_signature_can_be_wrong(worker):
@@ -838,7 +990,75 @@ def test_nip11_advertises_both_gates(worker):
     assert info["name"] == "Private campaign relay"
     assert info["limitation"]["auth_required"] is True and info["limitation"]["membership_required"] is True
     assert info["limitation"]["max_limit"] >= 1024, "nostr-mailbox pages stored reads 1,024 events at a time"
-    assert {1, 11, 42, 43}.issubset(info["supported_nips"])
+    assert {1, 11, 29, 42, 43}.issubset(info["supported_nips"])
+    assert info["self"] == info["pubkey"] == RELAY_PUBKEY, "the key that signs invites and group state"
+    status, headers, body = worker.http("HEAD", "/", headers={"Accept": "application/nostr+json"})
+    assert (status, headers["Content-Type"], body) == (200, "application/nostr+json", b"")
+
+
+def test_the_worker_does_not_start_without_its_signing_key(build):
+    harness = _start_harness(build, RELAY_SIGNING_KEY=None)
+    try:
+        for accept in ("application/nostr+json", "text/html"):
+            status, _, body = harness.http("GET", "/", headers={"Accept": accept})
+            assert status == 500 and b"RELAY_SIGNING_KEY is not set" in body, (accept, status, body[:200])
+    finally:
+        harness.stop()
+    harness = _start_harness(build, RELAY_SIGNING_KEY="f" * 64)            # not below the group order
+    try:
+        status, _, body = harness.http("GET", "/", headers={"Accept": "application/nostr+json"})
+        assert status == 500 and b"RELAY_SIGNING_KEY is not a secp256k1 secret key" in body
+    finally:
+        harness.stop()
+
+
+def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
+    status, headers, body = worker.http("GET", "/", headers={"Accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
+    assert status == 200 and headers["Content-Type"] == "text/html; charset=utf-8"
+    assert worker.http("GET", "/")[0] == 200, "no Accept at all is a browser too"
+    page = body.decode()
+    assert page.startswith("<!doctype html>\n<html lang=\"en\">")
+    parsed = _Collect()
+    parsed.feed(page)
+    tags = [t for t, _ in parsed.tags]
+    for tag in ("html", "head", "meta", "title", "style", "body", "main", "script"):
+        assert tag in tags, tag
+    metas = [a for t, a in parsed.tags if t == "meta"]
+    assert {"charset": "utf-8"} in metas
+    assert any(a.get("name") == "viewport" and "width=device-width" in a.get("content", "") for a in metas)
+    # Self-contained: no stylesheet, script, image or link to anywhere, and no other site named.
+    assert not [(t, a) for t, a in parsed.tags if "src" in a or "href" in a or t == "link"]
+    assert "http://" not in page and "https://" not in page
+    # The CSP admits this script and this style, by hash, and connects to this relay only.
+    script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
+    style = re.search(r"<style>(.*?)</style>", page, re.DOTALL).group(1)
+    policy = dict(part.strip().split(" ", 1) for part in headers["Content-Security-Policy"].split(";"))
+    digest = lambda text: "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
+    assert policy["default-src"] == "'none'" and policy["frame-ancestors"] == "'none'"
+    assert policy["script-src"] == digest(script) and policy["style-src"] == digest(style)
+    assert policy["connect-src"] == f"'self' wss://{RELAY_HOST}"
+    assert headers["X-Content-Type-Options"] == "nosniff" and headers["Referrer-Policy"] == "no-referrer"
+    # The script parses: the same engine family as the browsers that run it.
+    (tmp_path / "console.js").write_text(script)
+    checked = subprocess.run(["node", "--check", str(tmp_path / "console.js")], capture_output=True, text=True,
+                             check=False)
+    assert checked.returncode == 0, checked.stderr
+    for needle in ("['AUTH', proof]", "kinds: [28935], limit: 1", "28934, [['-'], ['claim', code]]",
+                   "publish(9007, [['h', id]]", "kinds: [9021], '#h': [id]", "kinds: [1059, 4410, 4411], '#p'",
+                   "'wss://' + location.host", "window.nostr"):
+        assert needle in script, needle
+    assert "innerHTML" not in script, "what the relay sends is text, never markup"
+    # Full width, light and dark, like the GitHub Pages page.
+    css = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
+    page_rule = re.search(r"\.page\s*\{([^}]*)\}", css).group(1)
+    assert re.search(r"(^|;)\s*width:\s*100%", page_rule) and re.search(r"max-width:\s*none", page_rule)
+    assert "padding-inline: clamp(20px, 4vw, 64px)" in page_rule
+    assert re.findall(r"max-width\s*:\s*([^;}]+)", css) == ["none"], "no boxed max-width container anywhere"
+    assert "@media (prefers-color-scheme: dark)" in css and "color-scheme: light dark" in css
+    status, headers, body = worker.http("HEAD", "/", headers={"Accept": "text/html"})
+    assert (status, headers["Content-Type"], body) == (200, "text/html; charset=utf-8", b"")
+    status, _, body = worker.http("GET", "/", headers={"Accept": "application/nostr+json, */*"})
+    assert status == 400 and b"application/nostr+json" in body
 
 
 def test_nothing_before_auth_and_only_this_connections_proof_counts(worker):
@@ -1172,6 +1392,404 @@ def test_nostr_mailbox_itself_against_the_worker(worker, monkeypatch):
         with pytest.raises(relay.RelayRejected) as refused:
             client.query({"kinds": [8891]})
         assert refused.value.prefix == "restricted"
+
+
+# ============================================== self-service: the Worker and ncli alike
+class Refused(Exception):
+    """The relay closed a REQ; the message is its reason."""
+
+
+class Wire:
+    """One socket, read the same way on the Worker and on the ncli relay. ncli repeats a
+    refusal as a NOTICE before its CLOSED and answers a CLOSE with CLOSED "closed"; both are
+    skipped here, so a scenario asserts only what the two relays both say."""
+
+    def __init__(self, ws: WsClient):
+        self.ws = ws
+        self.closed: set[str] = set()
+
+    def frame(self) -> list:
+        while True:
+            f = self.ws.recv()
+            if f[0] == "NOTICE" or (f[0] == "CLOSED" and f[1] in self.closed):
+                continue
+            return f
+
+    def auth(self, key: Key) -> None:
+        verb, challenge = self.ws.recv()
+        assert verb == "AUTH"
+        proof = key.event(22242, [["relay", f"wss://{RELAY_HOST}"], ["challenge", challenge]])
+        self.ws.send(["AUTH", proof])
+        answer = self.frame()
+        assert answer[:3] == ["OK", proof["id"], True], answer
+
+    def publish(self, event: dict) -> tuple[bool, str]:
+        self.ws.send(["EVENT", event])
+        answer = self.frame()
+        assert answer[:2] == ["OK", event["id"]], answer
+        return answer[2], answer[3]
+
+    def req(self, *filters: dict) -> tuple[str, list[dict]]:
+        """Open a subscription and read it to EOSE. Refused when the relay closes it."""
+        sub = os.urandom(6).hex()
+        self.ws.send(["REQ", sub, *filters])
+        events = []
+        while True:
+            f = self.frame()
+            if f[:2] == ["EOSE", sub]:
+                return sub, events
+            if f[:2] == ["CLOSED", sub]:
+                raise Refused(f[2])
+            assert f[:2] == ["EVENT", sub], f
+            events.append(f[2])
+
+    def close(self, sub: str) -> None:
+        self.closed.add(sub)
+        self.ws.send(["CLOSE", sub])
+
+    def read(self, *filters: dict) -> list[dict]:
+        sub, events = self.req(*filters)
+        self.close(sub)
+        return events
+
+    def refusal(self, *filters: dict) -> str:
+        with pytest.raises(Refused) as caught:
+            self.read(*filters)
+        return str(caught.value)
+
+    def live(self, sub: str) -> dict:
+        f = self.frame()
+        assert f[:2] == ["EVENT", sub], f
+        return f[2]
+
+    def quiet(self) -> None:
+        """Nothing is queued for this socket: the next frame after a fresh REQ is its EOSE."""
+        assert self.read({"ids": ["0" * 64]}) == []
+
+    def invite(self) -> dict:
+        """NIP-43: REQ kind 28935 answers one relay-signed invite, EOSE, and closes itself."""
+        sub = os.urandom(6).hex()
+        self.ws.send(["REQ", sub, {"kinds": [28935], "limit": 1}])
+        f = self.frame()
+        if f[:2] == ["CLOSED", sub]:
+            raise Refused(f[2])
+        assert f[:2] == ["EVENT", sub], f
+        assert self.frame() == ["EOSE", sub]
+        assert self.frame() == ["CLOSED", sub, "one-shot invite request completed"]
+        self.closed.add(sub)
+        return f[2]
+
+
+class WorkerRelay:
+    name = "worker"
+
+    def __init__(self, harness: Harness):
+        self.harness = harness
+
+    def connect(self) -> Wire:
+        return Wire(self.harness.connect())
+
+    def admin(self, *args: str) -> str:
+        return run_shim(self.harness, *args).stdout
+
+    def http(self, method: str, headers: dict[str, str]):
+        return self.harness.http(method, "/", headers=headers)
+
+
+class NcliRelay:
+    """The pinned ncli release, running on the hydrated relay.yaml in its own image."""
+    name = "ncli"
+
+    def __init__(self, container: str, port: int):
+        self.container, self.port = container, port
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def connect(self) -> Wire:
+        return Wire(WsClient(self.port))
+
+    def admin(self, *args: str) -> str:
+        """`ncli relay ...` inside the container, as nostr-mailbox's `--compose` runs it."""
+        argv = ["docker", "exec", self.container, "ncli", "relay", *args, "--config", NCLI_CONFIG_IN_CONTAINER]
+        done = subprocess.run(argv, capture_output=True, text=True, check=False)
+        if done.returncode != 0:
+            pytest.fail(f"{shlex.join(argv)} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
+        return done.stdout
+
+    def http(self, method: str, headers: dict[str, str]):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}/", method=method, headers=headers)
+        try:
+            with self.opener.open(request) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.headers, exc.read()
+
+    def running(self) -> bool:
+        done = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.container],
+                              capture_output=True, text=True, check=False)
+        return done.stdout.strip() == "true"
+
+    def wait_until_serving(self) -> None:
+        while True:
+            if not self.running():
+                logs = subprocess.run(["docker", "logs", self.container], capture_output=True, text=True, check=False)
+                pytest.fail(f"the ncli relay stopped before it served:\n{logs.stdout[-3000:]}{logs.stderr[-3000:]}")
+            try:
+                if self.http("GET", {"Accept": "application/nostr+json"})[0] == 200:
+                    return
+            except (ConnectionError, urllib.error.URLError):
+                pass                            # not listening yet; the container is still running
+            time.sleep(0.1)
+
+
+@pytest.fixture(scope="session")
+def ncli_relay(build):
+    problem = docker_problem()
+    if problem is not None:
+        pytest.skip(problem)
+    name = f"nostr-relay-deploy-test-{os.urandom(4).hex()}"
+    env = ncli_env((build / "compose" / "relay.yaml").read_text())
+    started = subprocess.run(ncli_argv("-d", "--name", name, "-p", "127.0.0.1::5500"), env=env,
+                             capture_output=True, text=True, check=False)
+    if started.returncode != 0:
+        pytest.fail(f"docker run of the pinned ncli image failed:\n{started.stderr}")
+    try:
+        mapped = subprocess.run(["docker", "port", name, "5500/tcp"], capture_output=True, text=True,
+                                check=True).stdout.splitlines()[0]
+        relay = NcliRelay(name, int(mapped.rsplit(":", 1)[1]))
+        relay.wait_until_serving()
+        yield relay
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+
+
+@pytest.fixture(params=["worker", "ncli"])
+def relay(request):
+    if request.param == "worker":
+        return WorkerRelay(request.getfixturevalue("worker"))
+    return request.getfixturevalue("ncli_relay")
+
+
+def enrolled(relay, count: int) -> list[tuple[Key, Wire]]:
+    """`count` fresh keys, enrolled by the operator's admin path, each with a signed-in socket."""
+    out = []
+    for _ in range(count):
+        key = fresh_key()
+        relay.admin("members", "add", key.pubkey)
+        wire = relay.connect()
+        wire.auth(key)
+        out.append((key, wire))
+    return out
+
+
+def relay_pubkey(relay) -> str:
+    status, _, body = relay.http("GET", {"Accept": "application/nostr+json"})
+    assert status == 200
+    return json.loads(body)["pubkey"]
+
+
+def d_of(event: dict) -> str:
+    return next((t[1] for t in event["tags"] if t[0] == "d" and len(t) > 1), "")
+
+
+def test_a_member_mints_a_single_use_invite_over_the_websocket(relay, build):
+    settings = relay_settings((build / "compose" / "relay.yaml").read_text())
+    [(_alice, a)] = enrolled(relay, 1)
+    invite = a.invite()
+    assert invite["kind"] == 28935 and invite["content"] == ""
+    assert invite["pubkey"] == relay_pubkey(relay) and event_is_signed(invite), "signed by the relay's own key"
+    assert invite["tags"][0] == ["-"]
+    code = next(t[1] for t in invite["tags"] if t[0] == "claim")
+    listed = next(i for i in json.loads(relay.admin("invites", "list", "--json"))["invites"] if i["code"] == code)
+    assert listed["max_uses"] == settings["membership.inviteMaxUses"] == 1 and listed["uses"] == 0
+    assert listed["expires_at"] - listed["created_at"] == duration_seconds(settings["membership.inviteTTL"])
+
+    newcomer, second = fresh_key(), fresh_key()
+    n = relay.connect()
+    n.auth(newcomer)
+    assert n.refusal({"ids": ["0" * 64]}).startswith("restricted:")
+    assert n.refusal({"kinds": [28935], "limit": 1}).startswith("restricted:"), "a stranger mints nothing"
+    assert n.publish(newcomer.event(28934, [["-"], ["claim", code]]))[0] is True
+    assert n.read({"ids": ["0" * 64]}) == [], "the code enrolled the newcomer"
+    s = relay.connect()
+    s.auth(second)
+    assert s.publish(second.event(28934, [["-"], ["claim", code]]))[0] is False, "and only the newcomer"
+    assert s.refusal({"ids": ["0" * 64]}).startswith("restricted:")
+    anonymous = relay.connect()
+    assert anonymous.ws.recv()[0] == "AUTH"
+    with pytest.raises(Refused, match="^auth-required:"):
+        anonymous.invite()
+
+
+def test_members_run_private_nip29_groups_themselves(relay):
+    (alice, a), (bob, b), (carol, c) = enrolled(relay, 3)
+    g = f"standup-{os.urandom(4).hex()}"
+    need = f"restricted: valid membership in group {g} is required"
+    assert a.publish(alice.event(9007, [["h", g]])) == (True, f"info: group {g} created.")
+    state = {e["kind"]: e for e in a.read({"kinds": [39000, 39001, 39002], "#d": [g]})}
+    assert set(state) == {39000, 39001, 39002}
+    assert all(e["pubkey"] == relay_pubkey(relay) and event_is_signed(e) for e in state.values())
+    assert {"private", "closed"} <= {t[0] for t in state[39000]["tags"] if len(t) == 1}
+    assert ["p", alice.pubkey, "admin"] in state[39001]["tags"]
+    assert [t for t in state[39002]["tags"] if t[0] == "p"] == [["p", alice.pubkey]]
+
+    # Bob is a member of the relay, not of the group: none of it is his to read or write.
+    assert b.refusal({"#h": [g]}) == need
+    assert b.refusal({"kinds": [39000], "#d": [g]}) == need
+    assert g not in {d_of(e) for e in b.read({"kinds": [39000]})}
+    assert b.publish(bob.event(9, [["h", g]], "may I post?")) == (False, f"restricted: only members may post in group {g}")
+    assert b.publish(bob.event(9007, [["h", g]])) == (False, "duplicate: a group with that id already exists.")
+
+    # pendingJoins: his join request waits for the group's admin.
+    ask = bob.event(9021, [["h", g]], "the standup notes, please")
+    assert b.publish(ask) == (True, "info: your join request is pending admin approval.")
+    assert [e["id"] for e in a.read({"kinds": [9021], "#h": [g]})] == [ask["id"]]
+    assert b.publish(bob.event(9000, [["h", g], ["p", bob.pubkey]])) == (
+        False, "restricted: you may not add members to this group.")
+    assert a.publish(alice.event(9000, [["h", g], ["p", bob.pubkey]])) == (True, "info: member added.")
+    assert a.read({"kinds": [9021], "#h": [g]}) == [], "an accepted request is no longer pending"
+    seats = a.read({"kinds": [39002], "#d": [g]})[0]
+    assert {t[1] for t in seats["tags"] if t[0] == "p"} == {alice.pubkey, bob.pubkey}
+
+    # In, bob posts and reads; carol, outside, sees none of it, not even the group's existence.
+    note = bob.event(9, [["h", g]], "hello group")
+    assert b.publish(note) == (True, "")
+    assert b.read({"kinds": [9], "#h": [g]}) == [note]
+    assert note["id"] not in {e["id"] for e in c.read({"kinds": [9]})}
+    assert c.refusal({"#h": [g]}) == need
+    assert g not in {d_of(e) for e in c.read({"kinds": [39002], "#p": [alice.pubkey]})}
+    # moderationLog: the group reads the moderation it accepted.
+    assert {e["kind"] for e in b.read({"kinds": [9000, 9007], "#h": [g]})} == {9000, 9007}
+
+    # Only an admin edits the metadata, and an edit replaces it whole.
+    assert b.publish(bob.event(9002, [["h", g], ["name", "mine now"]])) == (
+        False, "restricted: only a group admin may edit this group's metadata.")
+    edit = alice.event(9002, [["h", g], ["name", "Standup"], ["private"], ["closed"]])
+    assert a.publish(edit) == (True, "info: group metadata updated.")
+    meta = a.read({"kinds": [39000], "#d": [g]})[0]
+    assert sorted(t for t in meta["tags"] if t[0] != "d") == [["closed"], ["name", "Standup"], ["private"]]
+
+    # Removed, bob is outside again.
+    assert a.publish(alice.event(9001, [["h", g], ["p", bob.pubkey]])) == (True, "info: member removed.")
+    assert b.refusal({"#h": [g]}) == need
+    assert b.publish(bob.event(9, [["h", g]], "still here?")) == (False, f"restricted: only members may post in group {g}")
+    assert c.publish(carol.event(9021, [["h", f"no-such-{g}"]])) == (False, "restricted: no such group.")
+
+
+def test_recipient_only_kinds_reach_only_the_key_they_name(relay, build):
+    kinds = relay_settings((build / "compose" / "relay.yaml").read_text())["recipientOnlyKinds"]
+    (alice, a), (bob, b), (_carol, c) = enrolled(relay, 3)
+    to_bob, _ = b.req({"kinds": kinds, "authors": [alice.pubkey]})
+    _to_carol, _ = c.req({"kinds": kinds, "authors": [alice.pubkey]})
+    base = int(time.time())
+    public = alice.event(1, [["p", bob.pubkey]], "anyone may read this", created_at=base - 60)
+    assert a.publish(public) == (True, "")
+    sealed = []
+    for i, kind in enumerate(kinds):
+        event = alice.event(kind, [["p", bob.pubkey]], f"sealed for bob, kind {kind}", created_at=base - i)
+        assert a.publish(event) == (True, ""), kind
+        assert b.live(to_bob) == event, "the recipient gets it live"
+        sealed.append(event)
+    c.quiet()                                   # and no one else does
+    assert sorted(e["id"] for e in b.read({"kinds": kinds})) == sorted(e["id"] for e in sealed)
+    assert c.read({"kinds": kinds}) == []
+    assert c.read({"ids": [e["id"] for e in sealed]}) == [], "not even by id"
+    assert a.read({"kinds": kinds, "authors": [alice.pubkey]}) == [], "not even to their author"
+    newest = c.read({"authors": [alice.pubkey], "limit": 1})
+    if relay.name == "worker":
+        assert newest == [public], "what a reader may not see uses up none of its limit"
+    else:
+        # The one difference: the pinned ncli applies `limit` before it drops what the reader
+        # may not see, so a hidden newer event leaves this answer empty. README says so.
+        assert newest == [], "ncli changed how limit meets recipientOnlyKinds: update this and the README"
+
+
+def test_a_gift_wrap_under_a_one_time_key_is_refused_like_any_stranger(relay):
+    """A members-only relay takes events only by enrolled authors, so a NIP-59 gift wrap
+    signed by a one-time key is refused on both relays, whoever sends it."""
+    (_alice, a), (bob, _b) = enrolled(relay, 2)
+    wrap = fresh_key().event(1059, [["p", bob.pubkey]], "sealed under a one-time key")
+    assert a.publish(wrap)[0] is False
+
+
+def test_root_answers_a_browser_and_a_nip11_client_on_both_relays(relay):
+    for method in ("GET", "HEAD"):
+        status, headers, body = relay.http(method, {"Accept": "text/html"})
+        assert status == 200 and headers["Content-Type"].startswith("text/html"), (method, status)
+        assert (body == b"") == (method == "HEAD")
+        status, headers, _ = relay.http(method, {"Accept": "application/nostr+json"})
+        assert status == 200 and headers["Content-Type"] == "application/nostr+json", (method, status)
+    assert relay.http("GET", {"Accept": "application/nostr+json, */*"})[0] == 400, "neither relay guesses"
+
+
+# ======================================================= self-service: the Worker only
+def test_the_worker_keeps_group_state_its_own(worker):
+    (alice, a), (bob, b) = enrolled(WorkerRelay(worker), 2)
+    g = f"ops-{os.urandom(4).hex()}"
+    assert a.publish(alice.event(9007, [["h", g]])) == (True, f"info: group {g} created.")
+    meta = a.read({"kinds": [39000], "#d": [g]})[0]
+    assert meta["tags"] == [["d", g], ["private"], ["restricted"], ["closed"]]
+    roles = a.read({"kinds": [39003], "#d": [g]})[0]
+    assert roles["tags"] == [["d", g], ["role", "admin", "may put-user, remove-user, edit-metadata"]]
+    assert event_is_signed(roles) and roles["pubkey"] == RELAY_PUBKEY
+    for kind in (39000, 39002, 28935):
+        forged = alice.event(kind, [["d", g], ["p", alice.pubkey]])
+        assert a.publish(forged) == (False, f"restricted: kind {kind} is signed by the relay alone")
+    assert a.publish(alice.event(9007, [["h", "Not An Id"]])) == (
+        False, "invalid: a group id is made of a-z, 0-9, '-' and '_' (NIP-29)")
+    assert a.publish(alice.event(9007, [])) == (False, "invalid: nip29: missing h tag (group id)")
+    assert a.publish(alice.event(9005, [["h", g], ["e", "0" * 64]])) == (
+        False, "invalid: kind 9005 is not a NIP-29 request this relay implements (9000, 9001, 9002, 9007, 9021, 9022)")
+    # A group never loses its last admin.
+    assert a.publish(alice.event(9001, [["h", g], ["p", alice.pubkey]])) == (
+        False, "restricted: the group's last admin cannot be removed.")
+    assert a.publish(alice.event(9000, [["h", g], ["p", alice.pubkey]])) == (
+        False, "restricted: the group's last admin cannot be demoted.")
+    assert a.publish(alice.event(9022, [["h", g]])) == (False, "restricted: the group's last admin cannot leave it.")
+    # A group request counts only from its author, and a replay re-applies nothing.
+    put = alice.event(9000, [["h", g], ["p", bob.pubkey]])
+    assert b.publish(put) == (False, "restricted: a group request is accepted only from the key that authenticated")
+    assert a.publish(put) == (True, "info: member added.")
+    assert a.publish(alice.event(9001, [["h", g], ["p", bob.pubkey]])) == (True, "info: member removed.")
+    assert a.publish(put) == (True, "duplicate: already have this event")
+    seats = a.read({"kinds": [39002], "#d": [g]})[0]
+    assert [t for t in seats["tags"] if t[0] == "p"] == [["p", alice.pubkey]]
+    # Open, the group admits a join at once; closed, it would have waited.
+    assert a.publish(alice.event(9002, [["h", g], ["name", "open house"]])) == (True, "info: group metadata updated.")
+    assert b.publish(bob.event(9021, [["h", g]], "hi")) == (True, "info: you joined the group.")
+    assert b.publish(bob.event(9021, [["h", g]], "hi again")) == (True, "duplicate: you are already a member of this group.")
+    assert b.publish(bob.event(9022, [["h", g]])) == (True, "info: you have left the group.")
+    assert b.publish(bob.event(9022, [["h", g]], "again")) == (True, "duplicate: you are not a member of this group.")
+    later = [e["created_at"] for e in a.read({"kinds": [39002], "#d": [g]})]
+    assert len(later) == 1 and later[0] > seats["created_at"], "each state replaces the one before it"
+
+
+def test_a_private_group_stays_private_on_live_subscriptions(worker):
+    (alice, a), (bob, b), (carol, c) = enrolled(WorkerRelay(worker), 3)
+    g = f"live-{os.urandom(4).hex()}"
+    assert a.publish(alice.event(9007, [["h", g]]))[0] is True
+    assert a.publish(alice.event(9000, [["h", g], ["p", bob.pubkey]]))[0] is True
+    group_feed, _ = a.req({"kinds": [9]})
+    _outside_feed, _ = c.req({"kinds": [9]})
+    note = bob.event(9, [["h", g]], "for the group only")
+    assert b.publish(note) == (True, "")
+    assert a.live(group_feed) == note
+    c.quiet()
+    admin_queue, _ = a.req({"kinds": [9021], "#h": [g]})
+    _member_view, _ = b.req({"kinds": [9021], "#h": [g]})
+    ask = carol.event(9021, [["h", g]], "me too")
+    assert c.publish(ask) == (True, "info: your join request is pending admin approval.")
+    assert a.live(admin_queue) == ask, "the admin sees a join request at once"
+    b.quiet()                                   # a plain member does not
+    assert c.refusal({"kinds": [9021], "#h": [g]}) == f"restricted: valid membership in group {g} is required"
+    assert c.publish(carol.event(9022, [["h", g]])) == (True, "info: your join request is withdrawn.")
+    assert a.read({"kinds": [9021], "#h": [g]}) == []
+
+
+def test_minting_invites_spends_the_key_rate_limit(limited_worker):
+    [(_alice, a)] = enrolled(WorkerRelay(limited_worker), 1)
+    for _ in range(3):
+        a.invite()
+    assert a.refusal({"kinds": [28935], "limit": 1}) == "rate-limited: at most 3 events and invites a minute per key"
 
 
 # ====================================================================== check-clean

@@ -79,6 +79,33 @@ def schnorr_sign(msg: bytes, secret: bytes, aux: bytes) -> bytes:
     return r[0].to_bytes(32, "big") + ((k + e * d) % N).to_bytes(32, "big")
 
 
+def schnorr_verify(msg: bytes, pubkey: bytes, sig: bytes) -> bool:
+    """BIP-340 verification, the specification's reference algorithm."""
+    if len(pubkey) != 32 or len(sig) != 64:
+        return False
+    x = int.from_bytes(pubkey, "big")
+    if x >= P:
+        return False
+    c = (pow(x, 3, P) + 7) % P
+    y = pow(c, (P + 1) // 4, P)
+    if pow(y, 2, P) != c:
+        return False
+    point = (x, y if y % 2 == 0 else P - y)
+    r, s = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")
+    if r >= P or s >= N:
+        return False
+    e = int.from_bytes(_tagged("BIP0340/challenge", sig[:32] + pubkey + msg), "big") % N
+    combined = _add(_mul(G, s), _mul(point, N - e))
+    return combined is not None and combined[1] % 2 == 0 and combined[0] == r
+
+
+def event_is_signed(event: dict) -> bool:
+    """True when `event`'s id is the hash of its fields and its signature verifies."""
+    if event_id(event["pubkey"], event["created_at"], event["kind"], event["tags"], event["content"]) != event["id"]:
+        return False
+    return schnorr_verify(bytes.fromhex(event["id"]), bytes.fromhex(event["pubkey"]), bytes.fromhex(event["sig"]))
+
+
 def event_id(pubkey: str, created_at: int, kind: int, tags: list, content: str) -> str:
     serial = json.dumps([0, pubkey, created_at, kind, tags, content], separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(serial.encode("utf-8")).hexdigest()
