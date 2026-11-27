@@ -1,6 +1,11 @@
-// The Visual Web Console: the page a browser gets at https://<relay host>/ from the
-// Cloudflare Worker. One self-contained document, served same-origin with the relay, so it
-// talks to nothing but this relay's WebSocket and NIP-11 document.
+// The Visual Web Console: the page a browser gets at https://<relay host>/, /join and
+// /join/ from the Cloudflare Worker. One self-contained document, served same-origin with
+// the relay, so it talks to nothing but this relay's WebSocket and NIP-11 document.
+//
+// It opens nostr-mailbox's invite links (…/join/#nm1_…, …/#join=nm1_…, …/#invite=<code>):
+// it reads the fragment once, takes it off the address bar, and fills in the code of a
+// relay invite for this relay. A topic invite, whose keys it cannot keep, and an invite
+// for another relay are shown but never redeemed here.
 //
 // It signs with a NIP-07 browser extension (window.nostr), so no secret key reaches the
 // page. Through the relay's own wire protocol, and nothing else, a member:
@@ -79,6 +84,20 @@ const BODY = String.raw`
     <dl class="facts" id="facts"></dl>
   </header>
 
+  <section class="card" id="link-card" aria-labelledby="link-title" hidden>
+    <h2 id="link-title">Your invite</h2>
+    <p id="link-about"></p>
+    <p id="link-next" aria-live="polite"></p>
+    <div id="link-cli" hidden>
+      <p class="muted">Or join with the nostr-mailbox CLI, which makes and keeps a key of its own:</p>
+      <div class="row"><code id="link-command"></code>
+        <button id="link-copy" type="button" class="quiet">Copy</button></div>
+    </div>
+    <p class="muted">The token admits one key, once. It reached this page in the link's
+    fragment, which a browser never sends to a server, and the page has taken it off the
+    address bar.</p>
+  </section>
+
   <section class="card" aria-labelledby="signin-title">
     <h2 id="signin-title">Sign in</h2>
     <p>This relay is private. A connection reads and writes nothing until it answers the
@@ -90,7 +109,8 @@ const BODY = String.raw`
 
   <section class="card" id="join-card" aria-labelledby="join-title" hidden>
     <h2 id="join-title">Redeem an invite</h2>
-    <p>Your key is not enrolled yet. Paste the single-use code a member gave you.</p>
+    <p>Your key is not enrolled yet. Paste the single-use code a member gave you; an
+    invite link fills it in.</p>
     <form id="join-form">
       <input type="text" id="join-code" required autocomplete="off" spellcheck="false" aria-label="Invite code">
       <button type="submit">Redeem</button>
@@ -194,7 +214,7 @@ export const CONSOLE_SCRIPT = String.raw`
   var RELAY_URL = 'wss://' + location.host;
   var KIND_NAMES = { 1059: 'gift wrap', 4410: 'envelope', 4411: 'receipt' };
   var state = { ws: null, me: null, member: false, relayKey: null, challenge: null,
-                pending: new Map(), subs: new Map(), seq: 0, group: null };
+                pending: new Map(), subs: new Map(), seq: 0, group: null, link: null };
 
   function $(id) { return document.getElementById(id); }
   function now() { return Math.floor(Date.now() / 1000); }
@@ -244,6 +264,107 @@ export const CONSOLE_SCRIPT = String.raw`
     });
     if (out.length !== 32 || bits >= 5 || acc !== 0) throw new Error('that npub is not a 32-byte key');
     return out.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  // BEGIN invite-link reader
+  // The same block runs in the Worker console and on the GitHub Pages page, and
+  // tests/test_hydrate.py runs it under Node. It reads what a nostr-mailbox invite link
+  // carries in its fragment, which a browser never sends to a server:
+  //   #nm1_...[&topic=...&role=...&ticket=...]  the join_url of 'invite' and 'topic invite'
+  //   #join=nm1_...[&topic=...]                 the web console's web_link
+  //   #invite=<code>                            a bare relay invite code
+  // and the nm1_ token itself: base64url of the JSON that 'nostr-mailbox join' reads.
+  // It returns null when the fragment holds no invite, and throws when it holds one it
+  // cannot read. It never sends, stores or logs the token.
+  function readInviteLink(fragment) {
+    var frag = String(fragment || '').replace(/^#/, '');
+    var token = null;
+    if (frag.indexOf('nm1_') === 0) {
+      var at = frag.indexOf('&');
+      token = at < 0 ? frag : frag.slice(0, at);
+      frag = at < 0 ? '' : frag.slice(at + 1);
+    }
+    var params = new URLSearchParams(frag);
+    token = token || params.get('join');
+    var hint = { topic: params.get('topic'), role: params.get('role') };
+    if (!token) {
+      var code = params.get('invite');
+      return code ? { token: null, code: code, topic: hint.topic, role: hint.role } : null;
+    }
+    if (!/^nm1_[A-Za-z0-9_-]+$/.test(token)) throw new Error('the link carries no readable nm1_ token');
+    var body = token.slice(4), bundle;
+    try {
+      var bin = atob(body.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - body.length % 4) % 4));
+      var bytes = Uint8Array.from(bin, function (c) { return c.charCodeAt(0); });
+      bundle = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    } catch (err) {
+      throw new Error('the nm1_ token is not base64url JSON');
+    }
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) throw new Error('the nm1_ token holds no invite');
+    if (bundle.schema !== 'cf.transport/1') throw new Error('the nm1_ token is not a cf.transport/1 invite');
+    if (typeof bundle.code !== 'string' || bundle.code === '') throw new Error('the nm1_ token carries no invite code');
+    // The relay's public name: relay_auth_url when the inviter dials it by another address.
+    var named = typeof bundle.relay_auth_url === 'string' ? bundle.relay_auth_url : bundle.relay;
+    var relay;
+    try { relay = new URL(named); } catch (err) { throw new Error('the nm1_ token names no relay URL'); }
+    if (relay.protocol !== 'wss:' && relay.protocol !== 'ws:') throw new Error('the nm1_ token names no ws:// or wss:// relay');
+    return {
+      token: token, code: bundle.code, relay: named, host: relay.host.toLowerCase(),
+      campaign: typeof bundle.campaign === 'string' ? bundle.campaign : null,
+      member: typeof bundle.member === 'string' ? bundle.member : null,
+      topic: typeof bundle.topic === 'string' ? bundle.topic : hint.topic,
+      role: hint.role,
+      // A topic invite carries the channel's keys, which only nostr-mailbox keeps.
+      channel: typeof bundle.group_code === 'string' || (!!bundle.epochs && typeof bundle.epochs === 'object'),
+    };
+  }
+  // END invite-link reader
+
+  // ------------------------------------------------------------------ invite links
+  function takeInviteLink() {
+    if (!location.hash) return null;
+    var fragment = location.hash;
+    // Off the address bar and out of the history: until it is redeemed, the token is a
+    // bearer secret.
+    history.replaceState(null, '', location.pathname + location.search);
+    try { return readInviteLink(fragment); } catch (err) { return { error: err.message }; }
+  }
+  function forThisRelay(link) { return !link.token || link.host === location.host.toLowerCase(); }
+  function usableHere(link) { return !link.error && !link.channel && forThisRelay(link); }
+  function renderLink() {
+    var link = state.link;
+    $('link-card').hidden = !link;
+    if (!link) return;
+    var about = $('link-about'), next = $('link-next');
+    next.className = '';
+    $('link-cli').hidden = true;
+    if (link.error) {
+      about.textContent = 'This invite link could not be read: ' + link.error + '. Nothing was sent; ask for a new link.';
+      next.textContent = '';
+      return;
+    }
+    if (!forThisRelay(link)) {
+      about.textContent = 'This invite is for ' + link.relay + ', not for this relay (' + RELAY_URL + '). Nothing here uses it.';
+      next.textContent = '';
+      return;
+    }
+    if (link.token) {
+      $('link-command').textContent = 'nostr-mailbox join ' + link.token;
+      $('link-cli').hidden = false;
+    }
+    var where = link.campaign ? 'campaign ' + link.campaign + ' on this relay' : 'this relay';
+    if (link.channel) {
+      about.textContent = 'An invite into the channel ' + (link.topic || '(unnamed)') + ' of ' + where +
+        (link.member ? ', for ' + link.member : '') + '. It carries the channel keys, which this console cannot keep.';
+      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below.';
+      return;
+    }
+    about.textContent = 'An invite to ' + where + (link.member ? ', for ' + link.member : '') +
+      (link.topic ? ', to ask for the channel ' + link.topic + ' next' : '') + '.';
+    if (link.spent) { next.textContent = 'Redeemed: ' + short(state.me) + ' is a member now.'; next.className = 'good'; }
+    else if (!state.me) next.textContent = 'Sign in with your NIP-07 extension, then press Redeem: the code is filled in, and it admits the key your extension holds.';
+    else if (state.member) next.textContent = short(state.me) + ' is already a member; the invite was not used.';
+    else next.textContent = 'Press Redeem below to admit ' + short(state.me) + '.';
   }
 
   // --------------------------------------------------------------------- the wire
@@ -354,6 +475,7 @@ export const CONSOLE_SCRIPT = String.raw`
     if (!code) throw new Error('paste the invite code first');
     await publish(28934, [['-'], ['claim', code]], '');
     $('join-code').value = '';
+    if (state.link && state.link.code === code) state.link.spent = true;
     await probeMembership();
   }
   async function mint() {
@@ -521,8 +643,12 @@ export const CONSOLE_SCRIPT = String.raw`
     $('join-card').hidden = !state.me || state.member;
     ['invite-card', 'groups-card', 'mailbox-card'].forEach(function (id) { $(id).hidden = !state.member; });
     if (!state.member) $('group-card').hidden = true;
+    renderLink();
   }
 
+  state.link = takeInviteLink();
+  if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;
+  $('link-copy').addEventListener('click', action(function () { return navigator.clipboard.writeText($('link-command').textContent); }));
   $('signin').addEventListener('click', action(signIn));
   $('join-form').addEventListener('submit', action(redeem));
   $('mint').addEventListener('click', action(mint));

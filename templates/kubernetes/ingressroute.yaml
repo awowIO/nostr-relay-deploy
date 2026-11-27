@@ -10,6 +10,11 @@
 # Everything else never reaches the relay: its admin listener, query and metrics
 # surfaces, DELETE on a blob, any other method or path. `/` itself is one route: the
 # relay tells a WebSocket, a NIP-11 client and a browser apart.
+#
+# `/join` and `/join/`, where nostr-mailbox's invite links point (…/join/#nm1_…), stay
+# shut too: the pinned ncli has no page there and answers 404 itself, and Traefik serves
+# no page of its own. The Cloudflare Worker serves its console there; on this target the
+# link works with `nostr-mailbox join '<link>'`, which reads the token from the link.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata: { name: {{ statefulset_name }}, namespace: {{ namespace }} }

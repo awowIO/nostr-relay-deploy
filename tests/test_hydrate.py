@@ -24,11 +24,13 @@ Not covered here, said plainly: `--apply` against a cluster (its real-contact pa
 operator's first apply, which runs a server-side dry run before it mutates anything);
 the Workers runtime itself (WebSocketPair, hibernation, Durable Object routing, R2; the
 harness stands in for those); Caddy and Traefik binaries; `docker compose config`; the
-console page in a browser (its script is syntax-checked by Node and its CSP hashes are
-checked, but no browser runs it). Without Docker the ncli witnesses are SKIPPED, and
+console and GitHub Pages pages in a browser (their scripts are syntax-checked by Node, the
+invite-link reader they share runs under Node, and the console's CSP hashes are checked,
+but no browser runs them). Without Docker the ncli witnesses are SKIPPED, and
 nothing else here proves agreement with ncli.
 Set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to also run
-nostr-mailbox's own client, admin wrapper and Blossom client against the Worker.
+nostr-mailbox's own client, admin wrapper and Blossom client against the Worker, and its
+CLI (`setup`, `invite`, `join '<join_url>'`, `relay check`) against both relays.
 """
 from __future__ import annotations
 
@@ -696,9 +698,17 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
                     "claude plugin install nostr-mailbox@nostr-mailbox",
                     "codex plugin marketplace add awowIO/nostr-mailbox",
                     "uv tool install git+https://github.com/awowIO/nostr-mailbox",
-                    "nostr-mailbox join &lt;nm1_ token from your operator&gt;", "nostr-mailbox relay check",
+                    "nostr-mailbox join &lt;nm1_ token or invite link from your operator&gt;",
+                    "nostr-mailbox relay check",
                     f"nostr-mailbox setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl"):
         assert command in page, command
+    # An invite link opens this page at / or /join/ (GitHub Pages sends /join there): the
+    # page reads the token from the fragment, then takes the fragment off the address bar.
+    assert (pages / "join" / "index.html").read_text() == page
+    invite = next(a for t, a in parsed.tags if a.get("id") == "invite")
+    assert "hidden" in invite, "nothing about an invite shows without one"
+    assert re.search(r"^  showInvite\(\);\n  checkRelay\(\);\n</script>", page, re.MULTILINE)
+    assert 'history.replaceState(null, "", location.pathname + location.search);' in page
     assert (pages / ".nojekyll").exists()
     assert json.loads((pages / ".well-known" / "nostr.json").read_text()) == {"names": {}, "relays": {}}
     assert not (pages / "CNAME").exists() and "{{" not in page
@@ -724,7 +734,13 @@ def test_github_pages_publishes_nip05_names_and_a_custom_domain(tmp_path):
 SHA = "ab" * 32
 OTHER_HOST = "evil.example.org"
 # `GET` and `HEAD /` are one route on every edge, whatever the headers: the relay behind it
-# tells a WebSocket, a NIP-11 client and a browser apart. Every other path stays shut.
+# tells a WebSocket, a NIP-11 client and a browser apart. Every other path stays shut, but
+# one: `/join` and `/join/`, where nostr-mailbox's invite links point, are WORKER_ONLY. The
+# Worker is its own relay and serves its console there; the pinned ncli has no page there
+# (test_only_the_worker_has_a_page_where_invite_links_point holds that against the image),
+# so the Caddyfile and the IngressRoute keep it shut rather than forward to a 404.
+WORKER_ONLY = "worker only"
+JOIN_PATHS = ("/join", "/join/")
 PROBES = [
     ("websocket upgrade", "GET", "/", {"Upgrade": "websocket", "Connection": "Upgrade"}, None, True),
     ("NIP-11", "GET", "/", {"Accept": "application/nostr+json"}, None, True),
@@ -763,6 +779,17 @@ PROBES = [
     ("NIP-11 on another host", "GET", "/", {"Accept": "application/nostr+json"}, OTHER_HOST, False),
     ("the page on another host", "GET", "/", {"Accept": "text/html"}, OTHER_HOST, False),
     ("blob on another host", "GET", f"/{SHA}", {}, OTHER_HOST, False),
+    ("invite link page", "GET", "/join", {"Accept": "text/html"}, None, WORKER_ONLY),
+    ("invite link page with a slash", "GET", "/join/", {"Accept": "text/html"}, None, WORKER_ONLY),
+    ("invite link page HEAD", "HEAD", "/join/", {}, None, WORKER_ONLY),
+    ("invite link page asked for NIP-11", "GET", "/join", {"Accept": "application/nostr+json"}, None, WORKER_ONLY),
+    ("upgrade at the invite link page", "GET", "/join/", {"Upgrade": "websocket", "Connection": "Upgrade"}, None,
+     WORKER_ONLY),
+    ("POST to the invite link page", "POST", "/join/", {}, None, False),
+    ("under the invite link page", "GET", "/join/index.html", {}, None, False),
+    ("a path that starts like join", "GET", "/joined", {}, None, False),
+    ("the invite link page in capitals", "GET", "/JOIN/", {}, None, False),
+    ("the invite link page on another host", "GET", "/join/", {"Accept": "text/html"}, OTHER_HOST, False),
 ]
 
 
@@ -894,9 +921,12 @@ def test_caddy_traefik_and_the_worker_admit_the_same_routes(build, worker, name,
     caddy = caddy_admits((build / "compose" / "Caddyfile").read_text(), host, method, path, headers)
     traefik = traefik_admits((build / "kubernetes" / "ingressroute.yaml").read_text(), host, method, path, headers)
     answer = worker.probe(method, path, headers, host)
-    assert (caddy, traefik, answer["status"] != 404) == (admitted, admitted, admitted), answer
+    expected = (False, False, True) if admitted == WORKER_ONLY else (admitted, admitted, admitted)
+    assert (caddy, traefik, answer["status"] != 404) == expected, answer
     if admitted and path == "/" and "Upgrade" in headers:
         assert answer["upgrade"] is True
+    if admitted == WORKER_ONLY:
+        assert (answer["status"], answer["upgrade"]) == (200, False), "/join is the page, never the wire"
 
 
 def test_the_worker_admin_api_is_the_only_other_route_and_needs_the_token(worker):
@@ -1045,7 +1075,9 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     assert checked.returncode == 0, checked.stderr
     for needle in ("['AUTH', proof]", "kinds: [28935], limit: 1", "28934, [['-'], ['claim', code]]",
                    "publish(9007, [['h', id]]", "kinds: [9021], '#h': [id]", "kinds: [1059, 4410, 4411], '#p'",
-                   "'wss://' + location.host", "window.nostr"):
+                   "'wss://' + location.host", "window.nostr",
+                   "history.replaceState(null, '', location.pathname + location.search);",
+                   "if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;"):
         assert needle in script, needle
     assert "innerHTML" not in script, "what the relay sends is text, never markup"
     # Full width, light and dark, like the GitHub Pages page.
@@ -1059,6 +1091,100 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     assert (status, headers["Content-Type"], body) == (200, "text/html; charset=utf-8", b"")
     status, _, body = worker.http("GET", "/", headers={"Accept": "application/nostr+json, */*"})
     assert status == 400 and b"application/nostr+json" in body
+
+
+def test_the_worker_serves_the_same_console_where_invite_links_point(worker):
+    """nostr-mailbox's `invite` and `topic invite` print a join_url of
+    https://<relay host>/join/#nm1_…: /join and /join/ answer the console, as / does."""
+    _, root_headers, root_page = worker.http("GET", "/", headers={"Accept": "text/html"})
+    for path in JOIN_PATHS:
+        status, headers, body = worker.http("GET", path, headers={"Accept": "text/html"})
+        assert (status, body) == (200, root_page), path
+        for name in ("Content-Type", "Content-Security-Policy", "Referrer-Policy", "X-Frame-Options"):
+            assert headers[name] == root_headers[name], (path, name)
+        assert worker.http("HEAD", path)[::2] == (200, b""), path
+
+
+# The invite-link reader both pages carry, between these two lines, byte for byte.
+READER = re.compile(r"^  // BEGIN invite-link reader\n.*?^  // END invite-link reader\n", re.DOTALL | re.MULTILINE)
+
+
+def invite_token(**bundle) -> str:
+    """An nm1_ token as nostr-mailbox's cli._encode_invite_token writes one: base64url,
+    unpadded, of the bundle's JSON with sorted keys."""
+    return nm1(json.dumps(bundle, sort_keys=True, separators=(",", ":")).encode())
+
+
+def nm1(raw: bytes) -> str:
+    return "nm1_" + base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def read_links(tmp_path: Path, reader: str, fragments: list[str]) -> list:
+    """The pages' own reader, run under Node on each fragment: what it returned, or
+    {"error": <message>} where it threw."""
+    program = tmp_path / "read_links.cjs"
+    program.write_text(reader + """
+const fragments = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8"));
+console.log(JSON.stringify(fragments.map((f) => {
+  try { return readInviteLink(f); } catch (err) { return { error: err.message }; }
+})));
+""")
+    cases = tmp_path / "fragments.json"
+    cases.write_text(json.dumps(fragments))
+    done = subprocess.run(["node", str(program), str(cases)], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def test_both_pages_read_nostr_mailbox_invite_links_alike(worker, build, tmp_path):
+    served = READER.search(worker.http("GET", "/join/")[2].decode())
+    pages_page = (build / "github-pages" / "index.html").read_text()
+    pages = READER.search(pages_page)
+    assert served and pages and served.group(0) == pages.group(0), "one reader on both pages"
+    # The GitHub Pages page's whole script parses, as the console's does.
+    (tmp_path / "pages.js").write_text(re.search(r"<script>(.*?)</script>", pages_page, re.DOTALL).group(1))
+    checked = subprocess.run(["node", "--check", str(tmp_path / "pages.js")], capture_output=True, text=True,
+                             check=False)
+    assert checked.returncode == 0, checked.stderr
+    trust = {"schema": "cf.transport/1", "relay": f"wss://{RELAY_HOST}", "campaign": "my-campaign",
+             "operator_pubkeys": [NIP19_NPUB]}
+    code = hashlib.sha256(b"a relay invite code").hexdigest()
+    relay_invite = invite_token(**trust, code=code, member="roland")
+    dialled = invite_token(**{**trust, "relay": "ws://127.0.0.1:7777"}, relay_auth_url=f"wss://{RELAY_HOST}",
+                           code=code)
+    topic_invite = invite_token(**trust, code=code, topic="wave-7", group_code="g" * 43, redeem="ab" * 32,
+                                epochs={"1": "cd" * 32}, current=1, owner=NIP19_HEX)
+    elsewhere = invite_token(**{**trust, "relay": "wss://relay.other.example"}, code=code)
+    got = read_links(tmp_path, served.group(0), [
+        f"#{relay_invite}",
+        f"#{relay_invite}&topic=wave-7&role=read-only&ticket=t1",
+        f"#join={relay_invite}&topic=wave-7",
+        f"#{dialled}",
+        f"#{topic_invite}",
+        f"#{elsewhere}",
+        f"#invite={code}",
+        "", "#", "#drop=npub1x/inbox",
+        "#nm1_not!base64",
+        "#" + nm1(b"not json"),
+        "#" + nm1(b"[1, 2]"),
+        "#" + nm1(json.dumps(trust).encode()),
+        "#" + nm1(json.dumps({**trust, "schema": "cf.transport/2", "code": code}).encode()),
+        "#" + nm1(json.dumps({**trust, "relay": "https://relay.example.com", "code": code}).encode()),
+    ])
+    relay_link = {"token": relay_invite, "code": code, "relay": f"wss://{RELAY_HOST}", "host": RELAY_HOST,
+                  "campaign": "my-campaign", "member": "roland", "topic": None, "role": None, "channel": False}
+    assert got[0] == relay_link
+    assert got[1] == {**relay_link, "topic": "wave-7", "role": "read-only"}
+    assert got[2] == {**relay_link, "topic": "wave-7"}
+    assert got[3] == {**relay_link, "token": dialled, "member": None}, "the public name, not the loopback dial"
+    assert got[4] == {**relay_link, "token": topic_invite, "member": None, "topic": "wave-7", "channel": True}
+    assert (got[5]["host"], got[5]["relay"]) == ("relay.other.example", "wss://relay.other.example")
+    assert got[6] == {"token": None, "code": code, "topic": None, "role": None}
+    assert got[7:10] == [None, None, None]
+    assert [g["error"] for g in got[10:]] == [
+        "the link carries no readable nm1_ token", "the nm1_ token is not base64url JSON",
+        "the nm1_ token holds no invite", "the nm1_ token carries no invite code",
+        "the nm1_ token is not a cf.transport/1 invite", "the nm1_ token names no ws:// or wss:// relay"]
 
 
 def test_nothing_before_auth_and_only_this_connections_proof_counts(worker):
@@ -1485,6 +1611,7 @@ class WorkerRelay:
 
     def __init__(self, harness: Harness):
         self.harness = harness
+        self.port = harness.port
 
     def connect(self) -> Wire:
         return Wire(self.harness.connect())
@@ -1492,8 +1619,8 @@ class WorkerRelay:
     def admin(self, *args: str) -> str:
         return run_shim(self.harness, *args).stdout
 
-    def http(self, method: str, headers: dict[str, str]):
-        return self.harness.http(method, "/", headers=headers)
+    def http(self, method: str, headers: dict[str, str], path: str = "/"):
+        return self.harness.http(method, path, headers=headers)
 
 
 class NcliRelay:
@@ -1515,8 +1642,8 @@ class NcliRelay:
             pytest.fail(f"{shlex.join(argv)} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
         return done.stdout
 
-    def http(self, method: str, headers: dict[str, str]):
-        request = urllib.request.Request(f"http://127.0.0.1:{self.port}/", method=method, headers=headers)
+    def http(self, method: str, headers: dict[str, str], path: str = "/"):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", method=method, headers=headers)
         try:
             with self.opener.open(request) as response:
                 return response.status, response.headers, response.read()
@@ -1719,6 +1846,61 @@ def test_root_answers_a_browser_and_a_nip11_client_on_both_relays(relay):
         status, headers, _ = relay.http(method, {"Accept": "application/nostr+json"})
         assert status == 200 and headers["Content-Type"] == "application/nostr+json", (method, status)
     assert relay.http("GET", {"Accept": "application/nostr+json, */*"})[0] == 400, "neither relay guesses"
+
+
+def test_only_the_worker_has_a_page_where_invite_links_point(relay):
+    """The Worker serves its console at /join and /join/; the pinned ncli answers 404 there,
+    which is why the Caddyfile and the IngressRoute keep them shut (WORKER_ONLY in the edge
+    table). Should a later ncli serve a page there, this fails: open /join on those edges."""
+    for path in JOIN_PATHS:
+        status, headers, _ = relay.http("GET", {"Accept": "text/html"}, path=path)
+        if relay.name == "worker":
+            assert status == 200 and headers["Content-Type"].startswith("text/html"), path
+        else:
+            assert status == 404, (path, status)
+
+
+def nostr_mailbox_cli(home: Path, *args: str) -> dict:
+    """nostr-mailbox's own CLI, in a home of its own. `--home` also keeps `join` from
+    installing plugins and tools on this machine, which it does for a default home."""
+    script = Path(os.environ["NOSTR_MAILBOX_SRC"]) / "scripts" / "nostr_mailbox.py"
+    done = subprocess.run([sys.executable, str(script), "--home", str(home), *args], capture_output=True,
+                          text=True, check=False)
+    if done.returncode != 0:
+        pytest.fail(f"nostr-mailbox {shlex.join(args)} exited {done.returncode}\n{done.stdout}\n{done.stderr}")
+    return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(not os.environ.get("NOSTR_MAILBOX_SRC"),
+                    reason="set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to run "
+                           "nostr-mailbox's own CLI against both relays")
+def test_a_nostr_mailbox_join_url_admits_a_newcomer(relay, tmp_path):
+    """The operator's `setup` and `invite`, then a newcomer's `join '<join_url>'` and
+    `relay check`: nostr-mailbox's own CLI, start to finish, on both relays. On the Worker
+    the join_url's page reads the very code the CLI then redeems."""
+    sys.path.insert(0, os.environ["NOSTR_MAILBOX_SRC"])
+    from nostr_mailbox import bech32  # type: ignore[import-not-found]
+
+    url = f"ws://127.0.0.1:{relay.port}"
+    setup = nostr_mailbox_cli(tmp_path / "operator", "setup", "--relay", url, "--campaign", "demo")
+    trust = Path(setup["trust_file"])
+    # The operator dials the relay on loopback; NIP-42 proofs and the join_url name the
+    # relay's public host, as for a seat that reaches the relay through a port-forward.
+    trust.write_text(trust.read_text() + f'relay_auth_url = "wss://{RELAY_HOST}"\n')
+    relay.admin("members", "add", bech32.pubkey_hex(setup["npub"]))
+    invite = nostr_mailbox_cli(tmp_path / "operator", "invite")
+    assert invite["via"] == "websocket (NIP-43 kind 28935)", "a member mints it: memberClaims is on"
+    token = invite["token"]
+    assert invite["join_url"] == f"https://{RELAY_HOST}/join/#{token}"
+    if relay.name == "worker":
+        page = relay.http("GET", {"Accept": "text/html"}, path="/join/")[2].decode()
+        [read] = read_links(tmp_path, READER.search(page).group(0), ["#" + invite["join_url"].split("#", 1)[1]])
+        assert (read["code"], read["host"], read["campaign"], read["channel"]) == (invite["code"], RELAY_HOST,
+                                                                                  "demo", False)
+    joined = nostr_mailbox_cli(tmp_path / "newcomer", "join", invite["join_url"])
+    assert (joined["joined"], joined["campaign"]) == (url, "demo")
+    check = nostr_mailbox_cli(tmp_path / "newcomer", "relay", "check")
+    assert (check["ok"], check["authenticated"], check["relay_access"]) == (True, True, True)
 
 
 # ======================================================= self-service: the Worker only

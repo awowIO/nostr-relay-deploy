@@ -469,10 +469,15 @@ export function matchesFilter(f: Filter, e: NostrEvent): boolean {
 
 // ----------------------------------------------------------------------- edge routes
 // The whole public surface. The Caddyfile (compose target) and the Traefik IngressRoute
-// (kubernetes target) admit exactly these, and tests/test_hydrate.py holds all three to
-// one table.
+// (kubernetes target) admit exactly these but `/join`, and tests/test_hydrate.py holds
+// all three to one table.
 export const BLOB_PATH = /^\/(media\/)?([0-9a-f]{64})([.][a-z0-9]{1,8})?$/;
 const NIP11_TYPE = "application/nostr+json";
+// Where nostr-mailbox's invite links point: `invite` and `topic invite` print a
+// `join_url` of https://<relay host>/join/#nm1_… The token rides in the fragment, which a
+// browser never sends, so the path alone is the route. Only the Worker serves it: the
+// pinned ncli has no page there (it answers 404), so the two ncli edges keep it shut.
+export const JOIN_PATHS = ["/join", "/join/"];
 
 // `GET`/`HEAD /` always reaches the relay; what it answers depends on the headers:
 //   wire          GET with `Upgrade: websocket` (any case, RFC 6455)
@@ -480,6 +485,7 @@ const NIP11_TYPE = "application/nostr+json";
 //   unacceptable  an Accept list that names application/nostr+json among others: 400,
 //                 as the ncli relay answers it, rather than guess which one was meant
 //   page          anything else, a browser included: the Visual Web Console
+// `GET`/`HEAD /join` and `/join/` are the console page whatever the headers.
 export type EdgeRoute = "wire" | "info" | "unacceptable" | "page" | "upload" | "blob";
 
 export function edgeRoute(method: string, path: string, headers: Headers): EdgeRoute | null {
@@ -490,6 +496,7 @@ export function edgeRoute(method: string, path: string, headers: Headers): EdgeR
     if (accept.includes(NIP11_TYPE)) return "unacceptable";
     return "page";
   }
+  if (JOIN_PATHS.includes(path) && (method === "GET" || method === "HEAD")) return "page";
   if (method === "PUT" && (path === "/upload" || path === "/media/upload")) return "upload";
   if ((method === "GET" || method === "HEAD") && BLOB_PATH.test(path)) return "blob";
   return null;

@@ -583,8 +583,12 @@ def github_pages_files(cfg: Config) -> dict[str, str]:
         "campaign": pages["campaign"],
         "nip05_section_block": section,
     }
+    page = render(_template("github-pages", "index.html"), values, source="github-pages/index.html")
     files = {
-        "index.html": render(_template("github-pages", "index.html"), values, source="github-pages/index.html"),
+        "index.html": page,
+        # The same page at /join/ (GitHub Pages sends /join there), so an invite link with
+        # this site's host, /join/#nm1_… as well as /#nm1_…, opens it with the token read.
+        "join/index.html": page,
         ".well-known/nostr.json": json.dumps(nostr_json, indent=2, sort_keys=True) + "\n",
         # GitHub Pages runs Jekyll by default, and Jekyll drops dot-directories such as
         # .well-known/. This empty file turns Jekyll off.

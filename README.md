@@ -11,10 +11,10 @@ configuration file that never enters Git. Python 3.12+, standard library only.
 | `cloudflare` | A self-contained Worker + SQLite Durable Object + R2 relay in TypeScript (`wrangler.toml`, `src/`) | `--exec "python3 scripts/cf_ncli_shim.py --url https://<host>"` |
 | `github-pages` | Static `.well-known/nostr.json` (NIP-05) and a full-width onboarding page with live NIP-11 status | none |
 
-Every relay target exposes the same routes and answers 404 to everything else. The
-Caddyfile, the IngressRoute and the Worker's edge filter are held to one table by the tests.
-`GET` and `HEAD /` are one route on every edge: the relay behind it tells the three callers
-apart.
+Every relay target exposes the same routes and answers 404 to everything else, with one
+exception: `/join`, below. The Caddyfile, the IngressRoute and the Worker's edge filter are
+held to one table by the tests. `GET` and `HEAD /` are one route on every edge: the relay
+behind it tells the three callers apart.
 
 | Route | Purpose |
 |---|---|
@@ -23,9 +23,21 @@ apart.
 | `GET`/`HEAD /`, any other `Accept` | a page for a browser: ncli's homepage, or the Worker's Visual Web Console |
 | `PUT /upload`, `PUT /media/upload` | Blossom upload, signed, members only |
 | `GET`/`HEAD /<sha256>[.ext]`, `/media/<sha256>[.ext]` | Blossom download, signed, members only |
+| `GET`/`HEAD /join`, `/join/` | Cloudflare only: the Visual Web Console, where nostr-mailbox's invite links point |
 
 An `Accept` list that names `application/nostr+json` among other types gets 400 from both
 relays.
+
+`nostr-mailbox invite` and `topic invite` print a `join_url`,
+`https://<relay_host>/join/#nm1_…`. The token rides in the URL fragment, which a browser
+never sends to a server. On every target, `nostr-mailbox join '<join_url>'` reads the token
+from the link and joins. Opened in a browser, the link works on the Cloudflare target only:
+the Worker serves its console at `/join` and `/join/`. On the Kubernetes and Compose
+targets, `/join` answers 404 at the edge. The pinned ncli has no page there (it answers 404
+itself, which the tests check against the image), and Traefik cannot serve a page of its
+own. A browser link for those targets would need a page server at the edge, which these
+templates do not include. The GitHub Pages page reads the same links
+(`https://<pages host>/#nm1_…` or `/join/#nm1_…`).
 
 ## Self-service
 
@@ -175,7 +187,12 @@ member list in SQLite. R2 holds the blobs. The Worker implements:
   connects only to this relay. It signs through a NIP-07 browser extension, so no secret
   key reaches the page. A member signs in, redeems or mints an invite, creates and runs
   groups (members, roles, pending join requests, metadata), and sees which sealed
-  envelopes are addressed to them.
+  envelopes are addressed to them. At `/join` and `/join/` it opens nostr-mailbox's invite
+  links (`#nm1_…`, `#join=nm1_…`, `#invite=<code>`). It reads the fragment once, takes it
+  off the address bar, and fills in the code of a relay invite for this relay, which
+  Redeem spends on the extension's key. It shows `nostr-mailbox join <token>` beside it.
+  A topic invite carries channel keys the console cannot keep, so it points those to the
+  CLI and does not fill them in. An invite for another relay is shown and left alone.
 
 It refuses the NIP-29 moderation kinds it does not implement (9005 delete-event, 9008
 delete-group, 9009 create-invite, 9010 pins, and the rest of 9003-9020) by name, and keeps
@@ -200,7 +217,11 @@ Publish `.build/github-pages/` as a site root. `.nojekyll` keeps `.well-known/` 
 dropped, and `domain` writes a `CNAME`. NIP-05 lookups need the domain root, so use a user
 or organization site, or a custom domain. The page shows the relay's live NIP-11 status
 and the commands members need to install nostr-mailbox, join with their `nm1_` token, and
-check access.
+check access. It is also written to `join/index.html`, so an invite link on this site,
+`/#nm1_…` or `/join/#nm1_…` (GitHub Pages sends `/join` to `/join/`), opens it with the
+token read. For an invite to this relay it shows `nostr-mailbox join <token>` ready to
+copy, then takes the fragment off the address bar. It names an invite for another relay
+and leaves it unused.
 
 ## With nostr-mailbox
 
@@ -234,11 +255,16 @@ daemon answers (`DOCKER_HOST` is honoured), it also runs the pinned ncli image i
 self-service scenarios run against as they run against the Worker. Without Docker those
 witnesses are skipped. With
 `NOSTR_MAILBOX_SRC=<checkout>/skills/nostr-mailbox`, nostr-mailbox's own relay, admin and
-Blossom clients run against the Worker too.
+Blossom clients run against the Worker too. Its CLI also runs on both relays, start to
+finish: `setup`, `invite`, then a newcomer's `join '<join_url>'` and `relay check`. The
+invite-link reader that the console and the GitHub Pages page share runs under Node on
+every link form nostr-mailbox writes, and the tests hold it byte for byte across the two
+pages.
 
 Not covered: `--apply` against a cluster, the Workers runtime itself (WebSocketPair,
-hibernation, R2), the Caddy and Traefik binaries, and the console page in a browser (Node
-checks its script parses and the tests check its CSP hashes, but no browser runs it).
+hibernation, R2), the Caddy and Traefik binaries, and both pages in a browser. Node checks
+their scripts and runs the link reader, and the tests check the console's CSP hashes, but
+no browser runs them.
 
 ## Layout
 
