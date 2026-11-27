@@ -27,9 +27,11 @@
 //                       carries a code, reaches the group's admins only.
 //
 // And the remote MCP server (src/mcp.ts, src/mailbox.ts) at /mcp, /openapi.json and
-// /tools/<name>: a ChatGPT or Claude.ai session that holds a nostr-mailbox nm1_ token
-// acts as a persona derived from it. Its events go through submit() and its reads
-// through read(), the very gates an authenticated socket meets.
+// /tools/<name>, and under a magic URL /mcp/s/<token>: a ChatGPT or Claude.ai session that
+// holds a nostr-mailbox nm1_ token acts as a persona derived from it. Its events go
+// through publish() and its reads through read(), the very gates an authenticated socket
+// meets. A client that has no token signs in with OAuth 2.1 (src/oauth.ts: /.well-known/*
+// and /oauth/*), and its user hands the token over once, on this relay's consent page.
 //
 // The relay signs its invites and group state with RELAY_SIGNING_KEY (a 64-hex secret:
 // `wrangler secret put RELAY_SIGNING_KEY`), the key NIP-11 names as `self`, as the ncli
@@ -41,8 +43,9 @@
 
 import { CONSOLE_SCRIPT, CONSOLE_STYLE, consoleHtml } from "./console.ts";
 import { RelayRefusal } from "./mailbox.ts";
-import type { RelayPort } from "./mailbox.ts";
 import { serveMcp } from "./mcp.ts";
+import { serveOauth } from "./oauth.ts";
+import type { OauthPort } from "./oauth.ts";
 import {
   AUTH_KIND,
   BLOB_PATH,
@@ -379,6 +382,10 @@ const SCHEMA = [
   // opened it by digest. DELETE /mcp ends one.
   `CREATE TABLE IF NOT EXISTS mcp_sessions (
      id TEXT PRIMARY KEY, token_digest TEXT NOT NULL, protocol TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  // OAuth authorization codes already traded for an access token (oauth.ts), so none is
+  // traded twice. A code carries everything else itself; its row goes once it expires.
+  `CREATE TABLE IF NOT EXISTS oauth_spent_codes (
+     id TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)`,
 ];
 
 // ------------------------------------------------------------------------- NIP-29
@@ -557,7 +564,7 @@ function decodeAuthorization(token: string): unknown {
   return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 }
 
-export class RelayDurableObject implements RelayPort {
+export class RelayDurableObject implements OauthPort {
   ctx: DurableObjectState;
   env: Env;
   sql: SqlStorage;
@@ -599,6 +606,12 @@ export class RelayDurableObject implements RelayPort {
       case "openapi":
       case "tool":
         return serveMcp(route, request, url, this);
+      case "protected-resource":
+      case "authorization-server":
+      case "register":
+      case "authorize":
+      case "token":
+        return serveOauth(route, request, url, this);
       default:
         return notFound();
     }
@@ -1243,6 +1256,27 @@ export class RelayDurableObject implements RelayPort {
 
   endSession(id: string): boolean {
     return this.sql.exec("DELETE FROM mcp_sessions WHERE id = ? RETURNING id", id).toArray().length > 0;
+  }
+
+  // ------------------------------------------------------- the OAuth server's port (OauthPort)
+  get relayName(): string {
+    return this.cfg.relayName;
+  }
+
+  /** RELAY_SIGNING_KEY, which readConfig checked is a secret key: the OAuth keys' root. */
+  get oauthSecret(): string {
+    return (this.env.RELAY_SIGNING_KEY as string).trim().toLowerCase();
+  }
+
+  spendCode(id: string, expiresAt: number): boolean {
+    return this.ctx.storage.transactionSync(() => {
+      // A code past its expiry is refused for that alone, so its row has done its work.
+      this.sql.exec("DELETE FROM oauth_spent_codes WHERE expires_at <= ?", nowS());
+      const spent = this.sql
+        .exec("INSERT INTO oauth_spent_codes (id, expires_at) VALUES (?, ?) ON CONFLICT (id) DO NOTHING RETURNING id", id, expiresAt)
+        .toArray();
+      return spent.length > 0;
+    });
   }
 
   /** The stored events `f` matches that `access` may see, newest first, at most `limit` of

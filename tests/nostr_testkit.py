@@ -228,6 +228,14 @@ def node_problem() -> str | None:
     return None
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect is an answer to read, not to follow: the Worker's OAuth 303s point at an
+    MCP client's redirect URI, which nothing here serves."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class Harness:
     """The hydrated Worker, running in a Node process on a loopback port."""
 
@@ -243,7 +251,7 @@ class Harness:
             raise RuntimeError(f"the Worker harness did not start:\n{self.stderr()}")
         self.port = json.loads(line)["port"]
         self.origin = f"http://127.0.0.1:{self.port}"
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
 
     def stderr(self) -> str:
         return "".join(self.log)

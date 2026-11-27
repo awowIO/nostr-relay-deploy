@@ -4,10 +4,11 @@
 //
 // Prints {"ready": true, "port": N} once it listens on 127.0.0.1:N.
 //
-// Real here: every line of worker.ts, nostr.ts and console.ts (edge filter, NIP-11, the
-// console page, NIP-42, NIP-43 invites and member-minted invites, NIP-29 groups,
-// recipient-only kinds, NIP-01 store and filters, Blossom, admin API, BIP-340 signing and
-// verification), SQLite (node:sqlite stands in for
+// Real here: every line of worker.ts, nostr.ts, console.ts, mcp.ts, mailbox.ts and
+// oauth.ts (edge filter, NIP-11, the console page, NIP-42, NIP-43 invites and
+// member-minted invites, NIP-29 groups, recipient-only kinds, NIP-01 store and filters,
+// Blossom, admin API, BIP-340 signing and verification, the MCP server, its OAuth 2.1
+// server and consent page), SQLite (node:sqlite stands in for
 // ctx.storage.sql: the same engine, json_each and RETURNING), HTTP and RFC 6455 frames over
 // loopback sockets, and WebCrypto.
 //

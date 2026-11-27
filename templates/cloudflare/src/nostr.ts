@@ -515,11 +515,25 @@ const NIP11_TYPE = "application/nostr+json";
 // pinned ncli has no page there (it answers 404), so the two ncli edges keep it shut.
 export const JOIN_PATHS = ["/join", "/join/"];
 // The remote MCP server and its OpenAPI twin (mcp.ts), for ChatGPT, Claude.ai and any
-// other remote client that holds an nm1_ token. Only the Worker serves them: the pinned
+// other remote client that holds an nm1_ token, and the OAuth 2.1 server that hands such
+// a client an access token for one (oauth.ts). Only the Worker serves them: the pinned
 // ncli has no such endpoint, so the two ncli edges keep them shut as well.
 export const MCP_PATH = "/mcp";
 export const OPENAPI_PATH = "/openapi.json";
 export const TOOL_PATH = /^\/tools\/([a-z][a-z0-9_]{0,63})$/;
+// The same three under a "magic" capability URL, whose path carries the nm1_ token
+// itself, for a client set to "Authentication: None": /mcp/s/<token>,
+// /mcp/s/<token>/openapi.json and /mcp/s/<token>/tools/<name>. Groups: the token, then
+// "openapi.json" or the tool's name.
+export const MAGIC_PATH = /^\/mcp\/s\/(nm1_[A-Za-z0-9_-]+)(?:\/(openapi\.json)|\/tools\/([a-z][a-z0-9_]{0,63}))?$/;
+// The MCP authorization spec's OAuth 2.1 (oauth.ts): where a client that got a 401 from
+// /mcp discovers how to sign in (RFC 9728, then RFC 8414 or OpenID discovery), registers
+// itself (RFC 7591), sends its user (authorize) and trades the code (token).
+export const PROTECTED_RESOURCE_PATHS = ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"];
+export const AUTHORIZATION_SERVER_PATHS = ["/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"];
+export const REGISTER_PATH = "/oauth/register";
+export const AUTHORIZE_PATH = "/oauth/authorize";
+export const TOKEN_PATH = "/oauth/token";
 
 // `GET`/`HEAD /` always reaches the relay; what it answers depends on the headers:
 //   wire          GET with `Upgrade: websocket` (any case, RFC 6455)
@@ -528,10 +542,20 @@ export const TOOL_PATH = /^\/tools\/([a-z][a-z0-9_]{0,63})$/;
 //                 as the ncli relay answers it, rather than guess which one was meant
 //   page          anything else, a browser included: the Visual Web Console
 // `GET`/`HEAD /join` and `/join/` are the console page whatever the headers.
-//   mcp           POST, GET and DELETE /mcp: MCP Streamable HTTP (GET answers 405)
-//   openapi       GET /openapi.json: the OpenAPI 3.1 document of the tools
-//   tool          POST /tools/<name>: one tool call as plain JSON (OpenAPI Actions)
-export type EdgeRoute = "wire" | "info" | "unacceptable" | "page" | "upload" | "blob" | "mcp" | "openapi" | "tool";
+//   mcp           POST, GET and DELETE /mcp and /mcp/s/<token>: MCP Streamable HTTP
+//                 (GET answers 405)
+//   openapi       GET /openapi.json and /mcp/s/<token>/openapi.json: the OpenAPI 3.1
+//                 document of the tools
+//   tool          POST /tools/<name> and /mcp/s/<token>/tools/<name>: one tool call as
+//                 plain JSON (OpenAPI Actions)
+//   protected-resource    GET: RFC 9728 metadata of /mcp
+//   authorization-server  GET: RFC 8414 metadata of this host's OAuth 2.1 server
+//   register      POST /oauth/register: RFC 7591 dynamic client registration
+//   authorize     GET and POST /oauth/authorize: the consent page, and its answer
+//   token         POST /oauth/token: an authorization code for an access token
+export type EdgeRoute =
+  | "wire" | "info" | "unacceptable" | "page" | "upload" | "blob" | "mcp" | "openapi" | "tool"
+  | "protected-resource" | "authorization-server" | "register" | "authorize" | "token";
 
 export function edgeRoute(method: string, path: string, headers: Headers): EdgeRoute | null {
   if (path === "/" && (method === "GET" || method === "HEAD")) {
@@ -544,8 +568,15 @@ export function edgeRoute(method: string, path: string, headers: Headers): EdgeR
   if (JOIN_PATHS.includes(path) && (method === "GET" || method === "HEAD")) return "page";
   if (method === "PUT" && (path === "/upload" || path === "/media/upload")) return "upload";
   if ((method === "GET" || method === "HEAD") && BLOB_PATH.test(path)) return "blob";
-  if (path === MCP_PATH && (method === "POST" || method === "GET" || method === "DELETE")) return "mcp";
-  if (path === OPENAPI_PATH && method === "GET") return "openapi";
-  if (method === "POST" && TOOL_PATH.test(path)) return "tool";
+  const magic = MAGIC_PATH.exec(path);
+  const mcp = path === MCP_PATH || (magic !== null && magic[2] === undefined && magic[3] === undefined);
+  if (mcp && (method === "POST" || method === "GET" || method === "DELETE")) return "mcp";
+  if ((path === OPENAPI_PATH || magic?.[2] !== undefined) && method === "GET") return "openapi";
+  if (method === "POST" && (TOOL_PATH.test(path) || magic?.[3] !== undefined)) return "tool";
+  if (method === "GET" && PROTECTED_RESOURCE_PATHS.includes(path)) return "protected-resource";
+  if (method === "GET" && AUTHORIZATION_SERVER_PATHS.includes(path)) return "authorization-server";
+  if (method === "POST" && path === REGISTER_PATH) return "register";
+  if ((method === "GET" || method === "POST") && path === AUTHORIZE_PATH) return "authorize";
+  if (method === "POST" && path === TOKEN_PATH) return "token";
   return null;
 }

@@ -74,12 +74,21 @@ that joins both Orgs, see [Operating split-horizon relays](docs/split-horizon-re
 
 ## Connect ChatGPT and Claude.ai
 
-On the Cloudflare target the relay also serves nostr-mailbox's six MCP tools at
-`https://relay.example.com/mcp`, with an OpenAPI 3.1 twin at
-`https://relay.example.com/openapi.json` for Custom GPT Actions. A hosted assistant
-connects with an `nm1_…` topic token, sent as a bearer header or as `?token=`, and
-needs nothing installed. It posts and watches the same NIP-44 encrypted channel that
-local coding agents use through the nostr-mailbox CLI. See
+On the Cloudflare target the relay also serves nostr-mailbox's six MCP tools. A hosted
+assistant needs nothing installed to post and watch the same NIP-44 encrypted channel
+that local coding agents use through the nostr-mailbox CLI. It acts with an `nm1_…`
+topic token, and two flows connect it without copying a bearer token into the client.
+
+1. **1-click OAuth popup.** Add `https://relay.example.com/mcp` as a remote MCP server.
+   The client opens the relay's Authorize page. Paste the token there, or let the page
+   fill it in from this browser, and press **Authorize**. The client signs in with OAuth
+   2.1 and PKCE, and gets a 30-day access token.
+2. **1-paste magic URL.** In a client set to *Authentication: None*, add
+   `https://relay.example.com/mcp/s/nm1_…`. A Custom GPT Action imports its schema from
+   `https://relay.example.com/mcp/s/nm1_…/openapi.json`.
+
+The browser console's **Pair a coding agent** card turns a token or invite link into
+these URLs, each with a copy button. See
 [Connect remote MCP clients](docs/cloudflare-workers.md#5-connect-chatgpt-claudeai-and-other-remote-mcp-clients).
 
 ## Deployment guides

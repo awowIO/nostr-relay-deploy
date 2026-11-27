@@ -14,7 +14,9 @@ kubeconfigs, private hostnames and personal data from logs or screenshots.
 
 ## If a credential was exposed
 
-Revoke unspent invites and remove compromised member keys on the affected relay.
+Revoke unspent invites and remove compromised member keys on the affected relay. A
+leaked Worker magic URL (`/mcp/s/nm1_…`) or OAuth access token (`nmot_…`) carries the
+power of its `nm1_` token. Remove the token's `default` persona to shut out all three.
 Replace an exposed Worker admin token in Cloudflare and in operator tooling. A
 compromised relay signing key requires an identity change. Coordinate replacement
 with members who trust the old public key. Removing a secret from Git does not

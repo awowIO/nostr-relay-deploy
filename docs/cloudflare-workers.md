@@ -108,19 +108,17 @@ or token is wrong. For browser onboarding and supported NIPs, see
 The Worker also serves nostr-mailbox's six MCP tools on the relay's own hostname. A
 hosted assistant joins a channel with an `nm1_…` topic token and nothing installed.
 It reads and writes the same encrypted bus that local coding agents watch with the
-nostr-mailbox CLI.
+nostr-mailbox CLI. Two flows connect it without copying a bearer token into the
+client's settings.
 
-| Endpoint | For | What it answers |
+| Flow | Add to the client | Client authentication |
 | --- | --- | --- |
-| `POST https://relay.example.com/mcp` | Remote MCP clients | MCP Streamable HTTP: `initialize`, `ping`, `tools/list`, `tools/call`, with an `Mcp-Session-Id` |
-| `DELETE https://relay.example.com/mcp` | Remote MCP clients | Ends that session |
-| `GET https://relay.example.com/openapi.json` | ChatGPT Custom GPT Actions | OpenAPI 3.1.0 for the six tools |
-| `POST https://relay.example.com/tools/<tool>` | GPT Actions and scripts | One tool call: arguments as JSON in, the result as JSON out |
+| 1-click OAuth popup | `https://relay.example.com/mcp` | OAuth |
+| 1-paste magic URL | `https://relay.example.com/mcp/s/nm1_…` | None |
+| 1-paste magic URL, Custom GPT Action | `https://relay.example.com/mcp/s/nm1_…/openapi.json` | None |
 
-Every endpoint takes the token as `Authorization: Bearer nm1_…`. A client that cannot
-set a header can put it in the URL instead, as `?token=nm1_…`. `GET /mcp` answers 405
-because the server sends nothing unprompted. Only the Worker serves these routes. The
-Caddy and Traefik edges of the ncli targets keep them shut.
+Only the Worker serves these routes. The Caddy and Traefik edges of the ncli targets
+keep them shut.
 
 ### Mint a token for the assistant
 
@@ -135,15 +133,84 @@ nostr-mailbox --home "$partner_home" --persona partner-operator \
 python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$HOME/chatgpt.invite"
 ```
 
-### Add it to the client
+The invite file also holds a `join_url` of the form `https://relay.example.com/join/#nm1_…`.
+Open it in a browser to see both flows on the console's **Pair a coding agent** card,
+which builds the URLs from the token and offers a copy button for each. The card asks
+the relay whether it honours the token, in a request header rather than a URL.
 
-- **A client that takes a remote MCP server URL**, such as a custom connector in
-  Claude.ai or ChatGPT: add `https://relay.example.com/mcp` and the token as a bearer
-  header. Where the client offers no header field, use
-  `https://relay.example.com/mcp?token=nm1_…` and no authentication.
+### 1-click OAuth popup
+
+Add `https://relay.example.com/mcp` as a remote MCP server, such as a custom connector in
+Claude.ai or ChatGPT, and choose OAuth if the client asks. The client signs in as the MCP
+authorization specification describes:
+
+1. `POST /mcp` without credentials answers 401 with
+   `WWW-Authenticate: Bearer resource_metadata="https://relay.example.com/.well-known/oauth-protected-resource"`.
+2. That document (RFC 9728, also served at `/.well-known/oauth-protected-resource/mcp`)
+   names `https://relay.example.com/mcp` as the resource and the relay as its
+   authorization server. The server's metadata (RFC 8414) is at
+   `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration`.
+3. The client registers itself at `/oauth/register` (RFC 7591) with its redirect URIs:
+   https, loopback http on any port, or a native app's own scheme. A client that asks
+   for `client_secret_post` or `client_secret_basic` receives a secret.
+4. The client opens `/oauth/authorize` in your browser, with a PKCE challenge (`S256`
+   or `plain`). The page is titled `Connect <client> to <relay name>` and leads with the
+   origin the code goes to. Any client may register under any name, so check that
+   origin. A request the page cannot accept is explained there and never redirected.
+5. Paste the token or its join link and press **Authorize**. The relay checks the token
+   as an MCP call would, and sends a single-use code to the client's redirect URI. The
+   code works for 10 minutes. **Deny** sends `access_denied` instead.
+6. The client trades the code and its PKCE verifier at `/oauth/token` for
+   `{"access_token": "nmot_…", "token_type": "Bearer", "expires_in": 2592000}` and calls
+   `/mcp` with `Authorization: Bearer nmot_…`.
+
+To skip the paste, open the token's join link in the same browser first, and tick
+**Remember the token in this browser** on the console's **Pair a coding agent** card.
+The Authorize page then fills the token in from the browser's local storage. Its own
+**Remember** box does the same. **Forget it** on the Authorize page, or unticking the
+card's box, removes the token from the browser.
+
+An access token acts as the token's own persona, exactly as a call that presents the
+token does. There are no scopes and no refresh tokens. After 30 days the client sends
+you through the Authorize page again. The relay stores only the IDs of spent codes.
+Client IDs, codes and access tokens are encrypted with AES-256-GCM under a key that HKDF
+derives from `RELAY_SIGNING_KEY`. Replacing that key invalidates all three, and every
+client must sign in again. The OAuth routes send no CORS headers, so a client that runs
+the sign-in from browser JavaScript, rather than from its own server, cannot use them.
+
+### 1-paste magic URL
+
+For a client set to *Authentication: None*, the URL itself carries the token. The
+same Streamable HTTP, OpenAPI and tool-call routes answer under it.
+
+- **A remote MCP server URL:** `https://relay.example.com/mcp/s/nm1_…`
 - **A Custom GPT Action:** import the schema from
-  `https://relay.example.com/openapi.json?token=nm1_…`. Then set authentication to an
-  API key of the Bearer type that holds the same token.
+  `https://relay.example.com/mcp/s/nm1_…/openapi.json`. Its `servers[0].url` is the magic
+  URL and its `security` is empty, so the importer sets Authentication: None. Its actions
+  post to `https://relay.example.com/mcp/s/nm1_…/tools/<tool>`.
+
+A magic URL whose token the relay does not honour answers 403 with no
+`WWW-Authenticate` challenge, because there is nothing to sign in to. A request that
+carries a token in the path and a different one in a header or `?token=` is refused
+with 400.
+
+### Bearer header
+
+Scripts, and clients that take a header, can present the token directly.
+
+| Endpoint | For | What it answers |
+| --- | --- | --- |
+| `POST https://relay.example.com/mcp` | Remote MCP clients | MCP Streamable HTTP: `initialize`, `ping`, `tools/list`, `tools/call`, with an `Mcp-Session-Id` |
+| `DELETE https://relay.example.com/mcp` | Remote MCP clients | Ends that session |
+| `GET https://relay.example.com/openapi.json` | ChatGPT Custom GPT Actions | OpenAPI 3.1.0 for the six tools |
+| `POST https://relay.example.com/tools/<tool>` | GPT Actions and scripts | One tool call: arguments as JSON in, the result as JSON out |
+
+Each takes `Authorization: Bearer nm1_…`, or an OAuth access token in the same header. A
+client that cannot set a header can put the token in the URL instead, as `?token=nm1_…`.
+Only `/mcp`'s 401 names the OAuth metadata, which describes `/mcp` alone.
+`GET /mcp` answers 405 because the server sends nothing unprompted. A session belongs to
+its token however the token arrives, so one opened over a magic URL also answers to the
+token in a header.
 
 Ask the assistant to call `mailbox_list` first. It names the campaign, the channel and
 the persona the assistant acts as. A local agent on the same topic talks back:
@@ -194,12 +261,15 @@ event. A `wait_seconds` watch is bounded only by the client's own HTTP timeout.
 
 ### Treat the token as a password
 
-Whoever holds the token can act as all of its personas. A URL with `?token=` can end
-up in client logs, and in Workers observability, which `wrangler.toml` turns on and
-which can record request URLs. Prefer the header where the client offers it. The Worker
-decrypts what it reads and writes for the persona inside the Durable Object, so this
-relay sees those messages in plaintext while it serves a call. To shut the assistant
-out, the keeper runs `topic revoke review-desk <npub>`, which also rotates the key. The
-operator can also run `relay revoke <npub>` on the token's `default` persona. Every
-request is checked against that persona, so the token and all of its personas are then
-refused with 401.
+Whoever holds the token can act as all of its personas. So can whoever holds a magic
+URL, which is the token, or an access token, until it expires. A magic URL or a URL with
+`?token=` can end up in client logs, and in Workers observability, which `wrangler.toml`
+turns on and which can record request URLs. Prefer OAuth or the header where the client
+offers them. The token a browser remembers for the Authorize page sits in that browser's
+local storage for this relay's hostname until you remove it. The Worker decrypts what it
+reads and writes for the persona inside the Durable Object, so this relay sees those
+messages in plaintext while it serves a call. To shut the assistant out, the keeper runs
+`topic revoke review-desk <npub>`, which also rotates the key. The operator can also run
+`relay revoke <npub>` on the token's `default` persona. Every request is checked against
+that persona, so the token, its magic URLs, its access tokens and all of its personas
+are then refused with 401.

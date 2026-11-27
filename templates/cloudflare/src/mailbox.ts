@@ -91,6 +91,10 @@ const TRUST_SCHEMA = "cf.transport/1";
 const KEYRING_SCHEMA = "cf.keyring/1";
 // profile.MAX_EVENT_BYTES: the campaign's cap on one complete serialized event.
 export const MAX_EVENT_BYTES = 16_384;
+// nostr-mailbox's MAX_FRAME_BYTES: one request carries at most one campaign event's worth
+// of text, and JSON escaping can at most sextuple a byte, so 8 × the event cap bounds it.
+// The MCP routes (mcp.ts) and the OAuth ones (oauth.ts), which carry one token, share it.
+export const MAX_REQUEST_BYTES = 8 * MAX_EVENT_BYTES;
 const SLUG = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const TOPIC_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const GROUP = /^[A-Za-z0-9_-]{1,64}$/;

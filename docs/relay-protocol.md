@@ -9,14 +9,22 @@
 | PUT | `/upload` or `/media/upload` | Signed Blossom upload |
 | GET or HEAD | `/<sha256>` or `/media/<sha256>` | Signed Blossom download, optionally with a file extension |
 | GET or HEAD | `/join` or `/join/` | Cloudflare invite console |
-| POST, GET or DELETE | `/mcp` | Cloudflare remote MCP server, with an `nm1_…` token |
+| POST, GET or DELETE | `/mcp` | Cloudflare remote MCP server, with an `nm1_…` token or an OAuth access token |
 | GET | `/openapi.json` | Cloudflare OpenAPI 3.1 document of the MCP tools, with a token |
 | POST | `/tools/<tool>` | Cloudflare tool call as plain JSON, with a token |
+| POST, GET or DELETE | `/mcp/s/<nm1_token>` | Cloudflare remote MCP server at a magic URL whose path carries the token |
+| GET | `/mcp/s/<nm1_token>/openapi.json` | Cloudflare OpenAPI 3.1 document whose server is that magic URL |
+| POST | `/mcp/s/<nm1_token>/tools/<tool>` | Cloudflare tool call under the magic URL |
+| GET | `/.well-known/oauth-protected-resource` or `/.well-known/oauth-protected-resource/mcp` | Cloudflare OAuth protected-resource metadata of `/mcp` (RFC 9728) |
+| GET | `/.well-known/oauth-authorization-server` or `/.well-known/openid-configuration` | Cloudflare OAuth authorization server metadata (RFC 8414) |
+| POST | `/oauth/register` | Cloudflare dynamic client registration (RFC 7591) |
+| GET or POST | `/oauth/authorize` | Cloudflare consent page, and its answer |
+| POST | `/oauth/token` | Cloudflare authorization code and PKCE verifier exchange for an access token |
 | Bearer-authenticated admin requests | `/_admin/` | Cloudflare membership and invite administration |
 
 Caddy and Traefik filter public requests before they reach ncli. Other routes return
 404. The Worker applies the same relay and Blossom filters. It also serves its join
-console, its admin API and the remote MCP server described in
+console, its admin API, and the remote MCP server and OAuth 2.1 sign-in described in
 [Connect ChatGPT, Claude.ai and other remote MCP clients](cloudflare-workers.md#5-connect-chatgpt-claudeai-and-other-remote-mcp-clients).
 Send the NIP-11 media type on its own. Both relay implementations return 400 for an
 Accept list that mixes it with other media types.
@@ -70,7 +78,8 @@ nostr-mailbox relay check
 
 The Worker serves its self-contained console at the root and both join paths. It uses
 a NIP-07 browser extension to sign. Members can redeem and mint invites, manage
-groups and see envelopes addressed to them. The console reads invite fragments in the
+groups and see envelopes addressed to them. Anyone with a token can pair a coding agent
+on it without signing in. The console reads invite fragments in the
 forms `#nm1_…`, `#join=nm1_…` and `#invite=<code>`, then clears the fragment. It fills
 a relay invite for its own host and waits for the member to redeem it. Topic invites
 need the CLI, or the Worker's remote MCP server, to hold the channel keys. Invites
@@ -79,6 +88,27 @@ naming a different relay stay unused.
 On Compose and Kubernetes, the pinned ncli release serves homepage HTML at the root.
 Its script and stylesheet paths under `/_home/assets/` fall outside the edge filters.
 A browser receives 404 on the join paths. Use the CLI for invite links on these targets.
+
+## Connect a hosted assistant without pasting a token
+
+On the Cloudflare target, ChatGPT, Claude.ai and other MCP clients reach the relay's
+mailbox tools with an `nm1_…` topic token. Neither flow puts the token in the client's
+authentication settings.
+
+1. **1-click OAuth popup.** Add `https://relay.example.com/mcp` to the client. Its first
+   request is answered 401 with a `resource_metadata` challenge. The client discovers the
+   relay's OAuth 2.1 server, registers itself, and opens the relay's consent page,
+   titled `Connect <client> to <relay name>`. Paste the token there and press **Authorize**.
+   The page fills the token in when this browser remembers it from the console. The
+   client trades the code with its PKCE verifier for a 30-day access token.
+2. **1-paste magic URL.** In a client set to Authentication: None, add
+   `https://relay.example.com/mcp/s/nm1_…`, or import
+   `https://relay.example.com/mcp/s/nm1_…/openapi.json` into a Custom GPT Action. That
+   document's server is the magic URL and its `security` is empty.
+
+The console's **Pair a coding agent** card builds the URLs for both flows from a token or
+an invite link, each with a copy button. A magic URL is the token: keep it as private as
+the token.
 
 ## Publish the optional GitHub Pages directory
 

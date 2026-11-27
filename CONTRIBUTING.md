@@ -39,8 +39,10 @@ kustomize, checks NIP-11 on loopback, runs the Worker code under Node with SQLit
 WebSockets, and starts the pinned ncli image in Docker. It runs mailbox setup, invite
 and join against both relay implementations. It also runs the Worker's remote MCP
 server against nostr-mailbox's CLI: a client posts over `/mcp` and `/tools/<tool>`, and
-the CLI decrypts the post and replies. Live Kubernetes changes, Cloudflare's
-managed runtime, the Caddy/Traefik binaries and browser rendering are outside this suite.
+the CLI decrypts the post and replies. Clients that sign in with OAuth 2.1 and PKCE,
+and clients on a `/mcp/s/<token>` magic URL, take part in the same exchange. Live
+Kubernetes changes, Cloudflare's managed runtime, the Caddy/Traefik binaries, real
+ChatGPT or Claude.ai clients and browser rendering are outside this suite.
 
 ## Submit a change
 

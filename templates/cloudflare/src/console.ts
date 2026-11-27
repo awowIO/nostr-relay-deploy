@@ -7,6 +7,13 @@
 // relay invite for this relay. A topic invite, whose keys it cannot keep, and an invite
 // for another relay are shown but never redeemed here.
 //
+// Its "Pair a coding agent" card turns an nm1_ token (the one an invite link carried, or
+// one pasted in) into the two ways a hosted assistant connects to the relay's MCP server
+// (mcp.ts, oauth.ts) without a token pasted into it: the OAuth URL, /mcp, whose consent
+// page fills the token in from this browser when the user asked the card to remember it,
+// and the magic URLs /mcp/s/<token> and /mcp/s/<token>/openapi.json. It asks the relay
+// whether it honours the token in an Authorization header, never in a URL.
+//
 // It signs with a NIP-07 browser extension (window.nostr), so no secret key reaches the
 // page. Through the relay's own wire protocol, and nothing else, a member:
 //   - signs in (NIP-42), and redeems an invite code if not yet enrolled (NIP-43 28934)
@@ -96,6 +103,36 @@ const BODY = String.raw`
     <p class="muted">The token admits one key, once. It reached this page in the link's
     fragment, which a browser never sends to a server, and the page has taken it off the
     address bar.</p>
+  </section>
+
+  <section class="card wide" id="pair-card" aria-labelledby="pair-title">
+    <h2 id="pair-title">Pair a coding agent</h2>
+    <p>Put ChatGPT, Claude.ai or any other MCP client on this relay's mailbox with an nm1_ token: the one an invite
+    link carries, or one a topic's keeper mints with <code>nostr-mailbox topic invite</code>. The client then posts
+    and watches the same encrypted channel as your local agents, as a persona of the token.</p>
+    <form id="pair-form">
+      <input type="text" id="pair-token" required autocomplete="off" spellcheck="false"
+        placeholder="nm1_… token, or …/join/#nm1_… invite link" aria-label="nm1_ token or invite link">
+      <button type="submit">Show connection URLs</button>
+    </form>
+    <p id="pair-status" aria-live="polite"></p>
+    <div id="pair-out" hidden>
+      <h3>1-click OAuth</h3>
+      <p>Add this URL as a remote MCP server (a custom connector) that signs in with OAuth. The client opens this
+      relay's Authorize page, where the token is filled in when this browser remembers it.</p>
+      <div class="row"><code id="pair-oauth"></code>
+        <button id="pair-oauth-copy" type="button" class="quiet">Copy</button></div>
+      <label><input type="checkbox" id="pair-remember"> Remember the token in this browser, for the Authorize page</label>
+      <h3>1-paste magic URL</h3>
+      <p>For a client set to Authentication: None. These URLs carry the token itself.</p>
+      <div class="row"><span class="muted">MCP server</span><code id="pair-mcp"></code>
+        <button id="pair-mcp-copy" type="button" class="quiet">Copy</button></div>
+      <div class="row"><span class="muted">OpenAPI schema, for a Custom GPT Action</span><code id="pair-openapi"></code>
+        <button id="pair-openapi-copy" type="button" class="quiet">Copy</button></div>
+      <p class="muted">The token is a password, and so is a magic URL: whoever holds either acts as the token's
+      persona. The client's first call spends the token's invite on that persona, so the same token then no longer
+      joins with <code>nostr-mailbox join</code>. Give each client a token of its own.</p>
+    </div>
   </section>
 
   <section class="card" aria-labelledby="signin-title">
@@ -214,7 +251,7 @@ export const CONSOLE_SCRIPT = String.raw`
   var RELAY_URL = 'wss://' + location.host;
   var KIND_NAMES = { 1059: 'gift wrap', 4410: 'envelope', 4411: 'receipt' };
   var state = { ws: null, me: null, member: false, relayKey: null, challenge: null,
-                pending: new Map(), subs: new Map(), seq: 0, group: null, link: null };
+                pending: new Map(), subs: new Map(), seq: 0, group: null, link: null, pairToken: null };
 
   function $(id) { return document.getElementById(id); }
   function now() { return Math.floor(Date.now() / 1000); }
@@ -356,7 +393,7 @@ export const CONSOLE_SCRIPT = String.raw`
     if (link.channel) {
       about.textContent = 'An invite into the channel ' + (link.topic || '(unnamed)') + ' of ' + where +
         (link.member ? ', for ' + link.member : '') + '. It carries the channel keys, which this console cannot keep.';
-      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below.';
+      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below, or pair a coding agent with it.';
       return;
     }
     about.textContent = 'An invite to ' + where + (link.member ? ', for ' + link.member : '') +
@@ -366,6 +403,51 @@ export const CONSOLE_SCRIPT = String.raw`
     else if (state.member) next.textContent = short(state.me) + ' is already a member; the invite was not used.';
     else next.textContent = 'Press Redeem below to admit ' + short(state.me) + '.';
   }
+
+  // ------------------------------------------------------------ pair a coding agent
+  // The consent page (oauth.ts) reads the token from the same key.
+  var TOKEN_KEY = 'nostr-relay-deploy/mcp-token';
+  function storage() {
+    try { return window.localStorage; } catch (err) { log('this browser keeps nothing for this page: ' + err.message, 'bad'); return null; }
+  }
+  // BEGIN connection URLs
+  // tests/test_hydrate.py runs this block under Node: where a client connects with token.
+  function connectionUrls(origin, token) {
+    return { oauth: origin + '/mcp', mcp: origin + '/mcp/s/' + token, openapi: origin + '/mcp/s/' + token + '/openapi.json' };
+  }
+  // END connection URLs
+  function pairStatus(text, cls) { var p = $('pair-status'); p.textContent = text; p.className = cls || ''; }
+  async function pair(token) {
+    var urls = connectionUrls(location.origin, token);
+    $('pair-oauth').textContent = urls.oauth;
+    $('pair-mcp').textContent = urls.mcp;
+    $('pair-openapi').textContent = urls.openapi;
+    $('pair-out').hidden = false;
+    state.pairToken = token;
+    var store = storage();
+    $('pair-remember').checked = !!store && store.getItem(TOKEN_KEY) === token;
+    pairStatus('Asking the relay about this token…');
+    var answer = await fetch('/openapi.json', { headers: { Authorization: 'Bearer ' + token } });
+    if (answer.ok) { pairStatus('This relay honours the token.', 'good'); return; }
+    var why = await answer.json();
+    pairStatus('This relay refuses the token: ' + why.error, 'bad');
+  }
+  async function pairGiven() {
+    var given = $('pair-token').value.trim();
+    var at = given.indexOf('#');
+    var link = readInviteLink(at < 0 ? given : given.slice(at + 1));
+    if (!link || !link.token) throw new Error('give an nm1_ token, or an invite link that carries one');
+    if (!forThisRelay(link)) throw new Error('that token is for ' + link.relay + ', not for this relay');
+    $('pair-token').value = link.token;
+    await pair(link.token);
+  }
+  function remember() {
+    var store = storage();
+    if (!store) throw new Error('this browser keeps nothing for this page');
+    if ($('pair-remember').checked) { store.setItem(TOKEN_KEY, state.pairToken); log('the token is kept in this browser', 'good'); }
+    else if (store.getItem(TOKEN_KEY) === state.pairToken) { store.removeItem(TOKEN_KEY); log('the token is no longer kept in this browser', 'good'); }
+  }
+  function copier(id) { return action(function () { return navigator.clipboard.writeText($(id).textContent); }); }
 
   // --------------------------------------------------------------------- the wire
   function send(message) {
@@ -648,6 +730,15 @@ export const CONSOLE_SCRIPT = String.raw`
 
   state.link = takeInviteLink();
   if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;
+  var kept = storage();
+  var pairWith = state.link && !state.link.error && state.link.token && forThisRelay(state.link) ? state.link.token
+    : kept && kept.getItem(TOKEN_KEY);
+  if (pairWith) { $('pair-token').value = pairWith; action(function () { return pair(pairWith); })(); }
+  $('pair-form').addEventListener('submit', action(pairGiven));
+  $('pair-remember').addEventListener('change', action(remember));
+  $('pair-oauth-copy').addEventListener('click', copier('pair-oauth'));
+  $('pair-mcp-copy').addEventListener('click', copier('pair-mcp'));
+  $('pair-openapi-copy').addEventListener('click', copier('pair-openapi'));
   $('link-copy').addEventListener('click', action(function () { return navigator.clipboard.writeText($('link-command').textContent); }));
   $('signin').addEventListener('click', action(signIn));
   $('join-form').addEventListener('submit', action(redeem));
