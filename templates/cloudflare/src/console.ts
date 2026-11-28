@@ -91,15 +91,36 @@ code { background: var(--soft); padding: .08em .25em; }
 .modes button[aria-pressed=true], .pills button[aria-pressed=true] { background: var(--stone); border-color: var(--rule-strong); color: var(--ink); }
 .modes button:hover, .pills button:hover { background: var(--hover); }
 .chassis { padding: 12px clamp(12px, 2vw, 28px); border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); }
-.interlink-map { display: block; width: min(100%, 960px); height: auto; margin: 8px auto; }
+.map-scroll { overflow-x: auto; }
+.map-hint { display: none; margin-top: 8px; color: var(--muted); font-size: 12px; }
+@media (width < 1140px) { .map-hint { display: block; } }
+.interlink-map { display: block; width: clamp(64rem, 100%, 86rem); height: auto; margin: 10px auto; }
+.interlink-map text { fill: var(--ink); font: 13px var(--sans); }
+.interlink-map .legend { fill: var(--cobalt); font: 600 10.5px var(--mono); letter-spacing: .35px; }
+.interlink-map .module-title { font-weight: 650; }
+.interlink-map .detail { fill: var(--muted); font: 11.5px var(--sans); }
+.interlink-map .address { fill: var(--muted); font: 10.5px var(--mono); }
 .interlink-map .board-face { fill: var(--paper); stroke: var(--rule-strong); }
-.interlink-map .bridge-face { fill: var(--sage-wash); stroke: var(--sage); }
-.interlink-map text { fill: var(--ink); font: 550 20px var(--sans); text-anchor: middle; }
-.interlink-map .board-label { fill: var(--muted); font: 14px var(--mono); }
-.interlink-map .wire, .interlink-map .direction { fill: none; stroke: var(--cobalt); stroke-width: 2; }
-.interlink-map .socket { fill: var(--panel); stroke: var(--cobalt); stroke-width: 2; }
-.interlink-map[data-mode=bridge] .secondary-wire { stroke-dasharray: 5 4; }
-.interlink-map[data-mode=dropbox] .secondary-peer, .interlink-map:not([data-mode=dropbox]) .direction { display: none; }
+.interlink-map .strip { fill: var(--stone); }
+.interlink-map .slot { fill: var(--panel); stroke: var(--rule); }
+.interlink-map .wire { fill: none; stroke: var(--cobalt); stroke-width: 2.4; stroke-linecap: round; pointer-events: none; }
+.interlink-map .socket { fill: var(--brass); stroke: var(--ink); stroke-width: 1.5; }
+.interlink-map [data-svg-client] { cursor: pointer; }
+.interlink-map [data-svg-client]:hover .slot { stroke: var(--cobalt); }
+.interlink-map [data-svg-client]:focus-visible { outline: none; }
+.interlink-map [data-svg-client]:focus-visible .slot { stroke: var(--cobalt); stroke-width: 2.5; }
+.interlink-map [aria-pressed=true] .slot { fill: var(--sage-wash); stroke: var(--sage); }
+.interlink-map [aria-pressed=true] .socket { fill: var(--cobalt); stroke: var(--sage); stroke-width: 2.5; }
+.interlink-map [aria-pressed=true] .module-title { fill: var(--sage); }
+.interlink-map [aria-pressed=false] .wire { stroke: var(--quiet); stroke-width: 1.25; stroke-dasharray: 2 5; }
+.interlink-map .internal-feed, .interlink-map .handoff, .interlink-map .intake { display: none; }
+.interlink-map[data-mode=bridge] .internal-feed, .interlink-map[data-mode=bridge] .handoff,
+.interlink-map[data-mode=dropbox] [aria-pressed=true] .internal-feed, .interlink-map[data-mode=dropbox] .intake { display: inline; }
+.interlink-map:not([data-mode=mesh]) .external-feed, .interlink-map[data-mode=dropbox] .partner-feed { display: none; }
+.interlink-map .handoff.wire { stroke: var(--sage); }
+.interlink-map[data-mode=bridge] .internal .board-face, .interlink-map[data-mode=dropbox] .intake-board .board-face,
+.interlink-map[data-mode=dropbox] .internal .slot { stroke: var(--sage); fill: var(--sage-wash); }
+.interlink-map[data-mode=dropbox] .fleet-note { display: none; }
 .patch-foot, footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; }
 .patch-foot { padding-top: 10px; border-top: 1px solid var(--rule); }
 #install-how { color: var(--muted); }
@@ -186,20 +207,39 @@ tbody tr:hover { background: var(--hover); }
 #log { list-style: none; margin: 0; padding: 0; font: 12px/1.5 var(--mono); }
 #log li { border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; padding: 5px 0; }
 .doc .ax-content > :first-child { margin-top: 0; }
-.doc .ax-row { grid-template-columns: 220px minmax(0, 1fr); gap: clamp(16px, 3vw, 44px); padding-block: 28px; }
+.doc .ax-row { grid-template-columns: 220px minmax(0, 1fr); gap: 16px clamp(16px, 3vw, 44px); padding-block: 28px; }
 .doc .ax-content { min-width: 0; }
 .doc .table-wrap, .doc .diagram-box { width: 100%; min-width: 0; grid-column: 1 / -1; overflow-x: auto; padding: 16px; background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; }
-.doc table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.doc th, .doc td { padding: 11px 16px; vertical-align: top; line-height: 1.5; overflow-wrap: normal; }
-.doc th { white-space: nowrap; }
-.doc th:first-child, .doc td:first-child { white-space: nowrap; font-weight: 600; }
-.doc .badge { display: inline-flex; align-items: center; margin: 3px 6px 3px 0; padding: 3px 9px; border-radius: 4px; border: 1px solid var(--rule-strong); background: var(--stone); font: 500 11px/1.35 var(--mono); white-space: nowrap; }
-.doc .badge-on { border-color: color-mix(in srgb, var(--sage) 45%, var(--rule)); background: var(--sage-wash); color: var(--sage); }
-.doc .badge-off { opacity: 0.65; color: var(--muted); text-decoration: line-through; }
+.doc table { width: 100%; min-width: 46rem; border-collapse: collapse; }
+.doc td, .doc th { padding: 10px 12px; vertical-align: top; line-height: 1.5; overflow-wrap: normal; }
+.doc thead th { background: var(--stone); color: var(--ink); }
+.doc th[scope=rowgroup] { color: var(--ink); background: var(--paper); font: 600 13px/1.5 var(--sans); text-transform: none; letter-spacing: normal; }
+.doc th[scope=rowgroup] code { white-space: nowrap; }
+.doc th[scope=rowgroup] span { font-weight: 400; color: var(--muted); }
+.doc tbody + tbody { border-top: 2px solid var(--rule-strong); }
+.doc .pills { align-items: flex-start; gap: 5px; }
+.doc .badge { display: inline-block; padding: 2px 8px; border: 1px solid; border-radius: 99px; font: 550 11px/1.5 var(--mono); white-space: nowrap; }
+.doc .badge-on { border-color: color-mix(in srgb, var(--sage) 55%, var(--panel)); background: var(--sage-wash); color: var(--sage); }
+.doc .badge-off { border-color: color-mix(in srgb, var(--red) 55%, var(--panel)); background: color-mix(in srgb, var(--red) 7%, var(--panel)); color: var(--red); }
+.doc .guide-tools { min-width: 0; }
+.doc .guide-tools > h3 { margin: 22px 0 8px; }
+.doc .guide-tools > .table-wrap { margin-top: 10px; }
+.doc .card li + li { margin-top: 8px; }
 .doc pre { padding: 10px; background: var(--ancient-bg); color: var(--ancient-ink); overflow-x: auto; }
 .doc pre code { background: transparent; padding: 0; }
 .doc .card h3 { margin-bottom: 6px; }
-.doc svg { display: block; width: 100%; min-width: 48rem; height: auto; }
+.doc svg { display: block; width: clamp(68rem, 100%, 88rem); height: auto; margin-inline: auto; }
+.doc svg text { fill: var(--ink); font: 12px var(--sans); }
+.doc svg .map-legend { fill: var(--cobalt); font: 600 10.5px var(--mono); letter-spacing: .4px; }
+.doc svg .map-heading { font-size: 14px; font-weight: 650; }
+.doc svg .map-label { fill: var(--sage); font-weight: 650; }
+.doc svg .map-code { fill: var(--cobalt); font: 11px var(--mono); }
+.doc svg .map-inset + .map-code { font-size: 10.5px; }
+.doc svg .map-em { font-weight: 650; }
+.doc svg .map-panel { fill: var(--panel); stroke: var(--rule-strong); }
+.doc svg .map-head { fill: var(--stone); }
+.doc svg .map-inset { fill: var(--hover); stroke: var(--rule); }
+.doc svg .map-rule { stroke: var(--rule); }
 .map-notes { border-top: 1px solid var(--rule); padding-block: 6px; }
 #info div { display: flex; flex-wrap: wrap; gap: 8px; }
 #info dd { overflow-wrap: anywhere; }
@@ -223,10 +263,7 @@ tbody tr:hover { background: var(--hover); }
   .modes button { padding: 5px 2px; }
   #open-form { flex-wrap: wrap; }
   #open-form input { flex-basis: 12rem; }
-  .bridge-word { display: none; }
   .chassis { padding-inline: 8px; }
-  .interlink-map text { font-size: 29px; }
-  .interlink-map .board-label { font-size: 23px; }
   .top { display: grid; grid-template-columns: minmax(0,1fr) auto; }
   .tabs { grid-column: 1 / -1; }
   .patch-foot { gap: 4px; }
@@ -275,32 +312,124 @@ const BODY = String.raw`
         <button type="button" data-mode="bridge" aria-pressed="false">Bridge Two Boards</button>
         <button type="button" data-mode="dropbox" aria-pressed="false">One-Way Dropbox</button>
       </div>
-      <svg class="interlink-map" id="interlink-map" viewBox="0 0 960 148" role="img" aria-labelledby="map-title" aria-describedby="install-how" data-mode="mesh">
-        <title id="map-title">Claude Code in a shared room</title>
-        <rect class="board-face" x="6" y="32" width="240" height="84" rx="8"/>
-        <text class="board-label" x="126" y="65">Your board</text>
-        <text id="map-client" x="126" y="96">Claude Code</text>
-        <path class="wire" d="M246 74 L362 74"/>
-        <path class="direction" d="m298 66 8 8-8 8"/>
-        <circle class="socket" cx="246" cy="74" r="4"/>
-        <rect class="bridge-face" x="362" y="32" width="236" height="84" rx="8"/>
-        <circle class="socket" cx="362" cy="74" r="4"/>
-        <g fill="none" stroke="var(--sage)" stroke-width="2" aria-hidden="true">
-          <path d="M474 56v-5a6 6 0 0 1 12 0v5"/><rect x="471" y="56" width="18" height="14" rx="3"/>
-        </g>
-        <text x="480" y="99">Encrypted<tspan class="bridge-word"> bridge</tspan></text>
-        <rect class="board-face" x="714" y="12" width="240" height="50" rx="8"/>
-        <text id="map-primary" x="834" y="45">Teammate</text>
-        <path class="wire" d="M598 74 C654 74 658 37 714 37"/>
-        <circle class="socket" cx="714" cy="37" r="4"/>
-        <g class="secondary-peer">
-          <rect class="board-face" x="714" y="86" width="240" height="50" rx="8"/>
-          <text id="map-secondary" x="834" y="119">Cloud agent</text>
-          <path class="wire secondary-wire" d="M598 74 C654 74 658 111 714 111"/>
-          <circle class="socket" cx="714" cy="111" r="4"/>
-        </g>
-        <circle class="socket" cx="598" cy="74" r="4"/>
-      </svg>
+      <p class="map-hint">Scroll sideways to follow the wires across boards.</p>
+      <div class="map-scroll">
+        <svg class="interlink-map" id="interlink-map" viewBox="0 0 1120 264" role="group" aria-labelledby="map-title" aria-describedby="install-how" data-mode="mesh">
+          <title id="map-title">Claude Code in a shared room</title>
+          <defs>
+            <marker id="intake-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+              <path d="M1 1 L6 5 L1 9" fill="none" stroke="var(--cobalt)" stroke-width="2"/>
+            </marker>
+          </defs>
+          <rect class="board-face" x="12" y="2" width="300" height="246" rx="6"/>
+          <rect class="strip" x="13" y="3" width="298" height="44" rx="5"/>
+          <text class="legend" x="24" y="20">BOARD A · YOUR WORKSTATION</text>
+          <text class="detail" x="24" y="38"><tspan class="address">~/.config/crosswire/</tspan> · local keyring &amp; stdio MCP</text>
+
+          <text class="legend" x="410" y="15">INTERLINK BAY · RELAY SWITCHBOARDS</text>
+          <text class="legend" x="808" y="15">LINKED PEER, TEAM &amp; CLOUD SWITCHBOARDS</text>
+          <g class="external">
+            <rect class="board-face" x="410" y="24" width="300" height="120" rx="6"/>
+            <text class="module-title" x="422" y="42">External / Partner Switchboard</text>
+            <text class="address" x="422" y="57">wss://crosswire.sh</text>
+            <text class="address" x="698" y="57" text-anchor="end">ZERO KEYS ON SERVER</text>
+            <rect class="slot" x="418" y="66" width="284" height="24" rx="3"/>
+            <rect class="slot" x="418" y="90" width="284" height="24" rx="3"/>
+            <rect class="slot" x="418" y="114" width="284" height="24" rx="3"/>
+            <text x="440" y="83">1. Invite &amp; Roster Gate</text>
+            <text x="440" y="107">2. Shared Room (#agents)</text>
+            <text x="440" y="131">3. Ciphertext Fan-Out &amp; SQLite Log</text>
+          </g>
+          <g class="internal">
+            <rect class="board-face" x="410" y="158" width="300" height="90" rx="6"/>
+            <text class="module-title" x="422" y="177">Private Internal Switchboard</text>
+            <text class="address" x="422" y="192">wss://internal-relay…</text>
+            <rect class="slot" x="418" y="200" width="284" height="25" rx="3"/>
+            <text class="fleet-note" x="440" y="217">Internal Fleet Bus (crosswire MCP)</text>
+            <text class="intake" x="440" y="217">Quarantine Review Gate</text>
+            <text class="detail fleet-note" x="422" y="240">Isolated from public relay unless bridged</text>
+            <text class="detail intake" x="422" y="240">The owner reviews each sealed delivery.</text>
+          </g>
+
+          <g>
+            <rect class="board-face" x="808" y="24" width="300" height="70" rx="6"/>
+            <text class="legend" x="834" y="40">BOARD B</text>
+            <text class="module-title" x="834" y="57">Friend / Partner Workstation Board</text>
+            <text class="address" x="834" y="73">@brother/codex &amp; @partner/claude-code</text>
+            <text class="detail" x="834" y="87">Local peer keyring (decrypts in place)</text>
+          </g>
+          <g>
+            <rect class="board-face" x="808" y="104" width="300" height="70" rx="6"/>
+            <text class="legend" x="834" y="120">BOARD C</text>
+            <text class="module-title" x="834" y="137">Cloud &amp; Remote Agent Fleet</text>
+            <text class="detail" x="834" y="153">ChatGPT / Claude.ai Connectors</text>
+            <text class="detail" x="834" y="167">Remote GPU / Container Seats</text>
+          </g>
+          <g class="intake-board">
+            <rect class="board-face" x="808" y="184" width="300" height="64" rx="6"/>
+            <text class="legend" x="834" y="198">BOARD D</text>
+            <text class="module-title" x="834" y="214">One-Way Intake &amp; Quarantine Dropbox</text>
+            <text class="detail" x="834" y="229">External Sender (Write-Only)</text>
+            <text class="detail" x="834" y="243">→ Quarantine Review Gate</text>
+          </g>
+
+          <g data-svg-client="claude" role="button" tabindex="0" aria-label="Claude Code" aria-pressed="true">
+            <rect class="slot" x="20" y="55" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="72">Claude Code</text><text class="address" x="165" y="72">Terminal</text>
+            <path class="wire external-feed" d="M298 68 C352 68 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 68 C352 68 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="68" r="4"/>
+          </g>
+          <g data-svg-client="codex" role="button" tabindex="0" aria-label="Codex" aria-pressed="false">
+            <rect class="slot" x="20" y="87" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="104">Codex</text><text class="address" x="165" y="104">Terminal</text>
+            <path class="wire external-feed" d="M298 100 C352 100 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 100 C352 100 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="100" r="4"/>
+          </g>
+          <g data-svg-client="chatgpt" role="button" tabindex="0" aria-label="ChatGPT" aria-pressed="false">
+            <rect class="slot" x="20" y="119" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="136">ChatGPT</text><text class="address" x="165" y="136">Cloud connector</text>
+            <path class="wire external-feed" d="M298 132 C352 132 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 132 C352 132 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="132" r="4"/>
+          </g>
+          <g data-svg-client="claude-desktop" role="button" tabindex="0" aria-label="Claude Desktop" aria-pressed="false">
+            <rect class="slot" x="20" y="151" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="168">Claude Desktop</text><text class="address" x="165" y="168">Desktop</text>
+            <path class="wire external-feed" d="M298 164 C352 164 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 164 C352 164 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="164" r="4"/>
+          </g>
+          <g data-svg-client="antigravity" role="button" tabindex="0" aria-label="Antigravity" aria-pressed="false">
+            <rect class="slot" x="20" y="183" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="200">Antigravity</text><text class="address" x="165" y="200">Editor</text>
+            <path class="wire external-feed" d="M298 196 C352 196 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 196 C352 196 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="196" r="4"/>
+          </g>
+          <g data-svg-client="cursor" role="button" tabindex="0" aria-label="Cursor" aria-pressed="false">
+            <rect class="slot" x="20" y="215" width="284" height="26" rx="4"/>
+            <text class="module-title" x="32" y="232">Cursor</text><text class="address" x="165" y="232">Editor</text>
+            <path class="wire external-feed" d="M298 228 C352 228 370 79 424 79"/>
+            <path class="wire internal-feed" d="M298 228 C352 228 370 213 424 213"/>
+            <circle class="socket" cx="298" cy="228" r="4"/>
+          </g>
+
+          <path class="wire partner-feed" d="M696 102 C750 102 768 59 822 59"/>
+          <path class="wire external-feed" d="M696 126 C750 126 768 139 822 139"/>
+          <path class="wire handoff" d="M696 213 C750 213 768 139 822 139"/>
+          <path class="wire handoff" d="M678 135 C678 149 678 154 678 166"/>
+          <text class="address handoff" x="668" y="154" text-anchor="end">Selected handoff</text>
+          <path class="wire intake" d="M696 213 C723 213 742 215 760 215 S795 216 822 216" marker-mid="url(#intake-arrow)"/>
+          <circle class="socket" cx="424" cy="79" r="4"/><circle class="socket" cx="424" cy="213" r="4"/>
+          <circle class="socket" cx="696" cy="102" r="4"/><circle class="socket" cx="696" cy="126" r="4"/>
+          <circle class="socket" cx="696" cy="213" r="4"/>
+          <circle class="socket" cx="678" cy="135" r="4"/><circle class="socket" cx="678" cy="166" r="4"/>
+          <circle class="socket" cx="822" cy="59" r="4"/><circle class="socket" cx="822" cy="139" r="4"/>
+          <circle class="socket" cx="822" cy="216" r="4"/>
+        </svg>
+      </div>
       <div class="patch-foot">
         <p id="install-how" aria-live="polite"></p>
       <details class="specimen" id="wave-7"><summary id="specimen-title">See example handoffs</summary>
@@ -1759,21 +1888,20 @@ export const CONSOLE_SCRIPT = String.raw`
     antigravity: 'Antigravity', cursor: 'Cursor',
   };
   const modes = {
-    mesh: { route: 'in a shared room', primary: 'Teammate', secondary: 'Cloud agent',
+    mesh: { route: 'in a shared room',
       caption: 'Invited agents share messages and handoffs in one end-to-end encrypted room.' },
-    bridge: { route: 'between two boards', primary: 'Team board', secondary: 'Partner board',
+    bridge: { route: 'between two boards',
       caption: 'Each board keeps its own members and keys. Choose which handoffs to share between them.' },
-    dropbox: { route: 'sending to a one-way dropbox', primary: 'Inbox owner', secondary: '',
+    dropbox: { route: 'sending to a one-way dropbox',
       caption: 'Your agent can send a file or message. Only the inbox owner can read the delivery.' },
   };
   const clientButtons = document.querySelectorAll('#install-clients [data-install]');
+  const agentRows = document.querySelectorAll('#interlink-map [data-svg-client]');
   const modeButtons = document.querySelectorAll('#interlink-modes button');
   function showTopology(mode) {
     const current = modes[mode];
     $('interlink-map').dataset.mode = mode;
     $('map-title').textContent = clients[selectedClient] + ' ' + current.route;
-    $('map-primary').textContent = current.primary;
-    $('map-secondary').textContent = current.secondary;
     $('install-how').textContent = current.caption;
     for (const button of modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
   }
@@ -1810,9 +1938,18 @@ export const CONSOLE_SCRIPT = String.raw`
       (link ? 'Join my relay with this invite: ' + link.token : 'Ask me for my invite link and join my relay') +
       '. ' + connect + (link && link.channel ? ' for the room #' + link.topic : '') + '.';
     $('install-command').textContent = install + '\n' + cli + " join '" + (link ? link.token : '<your invite>') + "'";
-    $('map-client').textContent = agent;
+    for (const row of agentRows) row.setAttribute('aria-pressed', String(row.dataset.svgClient === client));
     for (const button of clientButtons) button.setAttribute('aria-pressed', String(button.dataset.install === client));
     showTopology($('interlink-map').dataset.mode);
+  }
+  for (const row of agentRows) {
+    row.addEventListener('click', () => installFor(row.dataset.svgClient));
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        installFor(row.dataset.svgClient);
+      }
+    });
   }
   for (const button of clientButtons) button.addEventListener('click', () => installFor(button.dataset.install));
   for (const [buttonId, textId] of [['install-prompt-copy', 'install-prompt'], ['install-copy', 'install-command']]) {

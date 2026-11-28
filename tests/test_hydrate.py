@@ -64,6 +64,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -1057,11 +1058,23 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert order == sorted(order)
     assert [a["data-mode"] for t, a in parsed.tags if t == "button" and "data-mode" in a] == ["mesh", "bridge", "dropbox"]
     diagram = re.search(r'<svg class="interlink-map".*?</svg>', page, re.DOTALL)[0]
-    tags = _parsed(diagram).tags
-    assert [a["viewbox"] for t, a in tags if t == "svg"] == ["0 0 960 148"]
-    sockets = {(a["cx"], a["cy"]) for t, a in tags if t == "circle" and a.get("class") == "socket"}
-    wires = [a["d"] for t, a in tags if t == "path" and "wire" in a.get("class", "").split()]
-    assert len(wires) == 3 and len(sockets) == 5
+    svg = ElementTree.fromstring(diagram)
+    assert svg.get("viewBox") == "0 0 1120 264" and not svg.findall(".//svg")
+    pins = svg.findall(".//circle[@class='socket']")
+    sockets = {(pin.attrib["cx"], pin.attrib["cy"]) for pin in pins}
+    assert all(pin.get("r") == "4" for pin in pins)
+    assert sum(x == "298" for x, _ in sockets) == 6 and sum(x == "822" for x, _ in sockets) == 3
+    rows = svg.findall(".//g[@data-svg-client]")
+    assert [row.get("data-svg-client") for row in rows] == [a["data-install"] for a in choices]
+    assert [row.get("aria-pressed") for row in rows] == [a["aria-pressed"] for a in choices]
+    for row in rows:
+        assert row.get("role") == "button" and row.get("tabindex") == "0"
+        pin = row.find("circle[@class='socket']")
+        assert pin is not None and pin.get("cx") == "298"
+        feeds = row.findall("path")
+        assert {feed.get("class") for feed in feeds} == {"wire internal-feed", "wire external-feed"}
+        assert all(feed.attrib["d"].startswith(f"M298 {pin.attrib['cy']} ") for feed in feeds)
+    wires = [p.attrib["d"] for p in svg.iter("path") if "wire" in p.get("class", "").split()]
     endpoints = set()
     for wire in wires:
         coordinates = re.findall(r"-?\d+(?:\.\d+)?", wire)
@@ -1075,7 +1088,7 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     switchboard = page[page.index('<section class="patchbay"'):page.index('id="maywe-card"')]
     for term in ("nm1_", "NIP-44", "NIP-42", "NIP-43", "BIP-340", "nostr-mailbox", "CLI (uv)"):
         assert term not in switchboard
-    assert "Have an invite link?" in switchboard
+    assert "Have an invite link?" in switchboard and "Need an invite?" in page
     for button in ("install-copy", "install-prompt-copy"):
         assert any(t == "button" and a.get("id") == button and a["type"] == "button" for t, a in parsed.tags)
     if console_page:
@@ -3606,8 +3619,8 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   await settle();
   for (const [verb, id, value] of scenario.steps) {
     if (verb === 'set') element(id).value = value;
-    if (verb === 'submit' || verb === 'click' || verb === 'input') {
-      for (const fn of element(id).listeners[verb] || []) await fn({ preventDefault() {} });
+    if (['submit', 'click', 'input', 'keydown'].includes(verb)) {
+      for (const fn of element(id).listeners[verb] || []) await fn({ key: value, preventDefault() {} });
     }
     if (verb === 'mark') requests.push({ mark: id });
     await settle();
@@ -3630,6 +3643,8 @@ def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = 
     selectors = {"install": "#install-clients [data-install]", "mode": "#interlink-modes button"}
     controls = [(selector, key, [a["data-" + key] for t, a in tags if t == "button" and "data-" + key in a])
                 for key, selector in selectors.items()]
+    controls.append(("#interlink-map [data-svg-client]", "svgClient",
+                     [a["data-svg-client"] for t, a in tags if t == "g" and "data-svg-client" in a]))
     (tmp_path / "page.js").write_text(script)
     (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
     (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
@@ -3707,25 +3722,25 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
     assert [r["navigate"] for r in seen["requests"] if "navigate" in r] == [f"https://{RELAY_HOST}/join/#{token}"]
 
 
-def test_switchboard_selects_topologies_and_copies_agent_prompts_locally(worker, build, tmp_path):
+def test_console_and_github_pages_switchboard_select_topologies_and_copy_agent_prompts_locally(worker, build, tmp_path):
     pages = (worker.http("GET", "/")[2].decode(), (build / "github-pages/index.html").read_text())
     for page in pages:
-        for client, agent, mode, primary, secondary in (
-                ("claude", "Claude Code", "mesh", "Teammate", "Cloud agent"),
-                ("codex", "Codex", "bridge", "Team board", "Partner board"),
-                ("chatgpt", "ChatGPT", "dropbox", "Inbox owner", ""),
-                ("claude-desktop", "Claude Desktop", "mesh", "Teammate", "Cloud agent"),
-                ("antigravity", "Antigravity", "bridge", "Team board", "Partner board"),
-                ("cursor", "Cursor", "dropbox", "Inbox owner", "")):
-            steps = [["click", "mode=" + mode], ["click", "install=" + client], ["click", "install-prompt-copy"]]
+        for client, agent, mode, control, event in (
+                ("claude", "Claude Code", "mesh", "install", "click"),
+                ("codex", "Codex", "bridge", "svgClient", "click"),
+                ("chatgpt", "ChatGPT", "dropbox", "svgClient", "Enter"),
+                ("claude-desktop", "Claude Desktop", "mesh", "svgClient", " "),
+                ("antigravity", "Antigravity", "bridge", "install", "click"),
+                ("cursor", "Cursor", "dropbox", "install", "click")):
+            select = ["click" if event == "click" else "keydown", control + "=" + client, event]
+            steps = [["click", "mode=" + mode], select, ["click", "install-prompt-copy"]]
             seen = run_page(tmp_path, page, steps=steps)
             els = seen["elements"]
-            for prefix, selected in (("install=", client), ("mode=", mode)):
+            for prefix, selected in (("install=", client), ("svgClient=", client), ("mode=", mode)):
                 assert [k for k, v in els.items() if k.startswith(prefix)
                         and v["attrs"]["aria-pressed"] == "true"] == [prefix + selected]
             assert els["interlink-map"]["dataset"]["mode"] == mode
-            assert (els["map-primary"]["text"], els["map-secondary"]["text"]) == (primary, secondary)
-            assert els["map-client"]["text"] == els["setup-client"]["text"] == agent
+            assert els["setup-client"]["text"] == agent
             assert els["map-title"]["text"].startswith(agent) and els["install-how"]["text"]
             prompt = els["install-prompt"]["text"]
             assert agent in prompt and "invite link" in prompt
@@ -3838,6 +3853,32 @@ def test_console_documentation_deep_links(worker, tmp_path, path, fragment, acti
     assert re.findall(r'<svg role="img".*?viewBox="([^"]+)"', page) == ["0 0 1120 320"] * 2
     for svg in re.findall(r'<svg role="img".*?</svg>', page, re.DOTALL):
         assert 'var(--' in svg and not re.search(r'(?:fill|stroke)="#', svg)
+
+
+def test_console_field_guide_keeps_the_full_maps_and_scope_tables(worker):
+    page = worker.http("GET", "/docs/")[2].decode()
+    for tab, numbers in (("docs", [1, 2]), ("acls", [3, 4]), ("architecture", [5, 6, 7, 8])):
+        article = re.search(rf'<article class="doc" id="{tab}".*?</article>', page, re.DOTALL)[0]
+        assert re.findall(r'<h2 id="chapter-(\d+)">', article) == [str(n) for n in numbers]
+        assert "nostr-mailbox" not in article
+        assert article.count("<table ") == 2
+    chapters = dict(re.findall(r'<section class="ax-row" aria-labelledby="chapter-(\d+)">(.*?)</section>',
+                               page, re.DOTALL))
+    for chapter, counts in (("1", [4]), ("2", [3]), ("3", [6]), ("4", [12]), ("7", [4, 6])):
+        tables = re.findall(r"<table .*?</table>", chapters[chapter], re.DOTALL)
+        assert [table.count("<tr>") - 1 for table in tables] == counts
+    assert chapters["4"].count('scope="rowgroup"') == 5
+    for value in ("Allowed", "Blocked", "Org: acme-lab", "#wave-7-auth", "#partners-only",
+                  "#external-intake", "@alice-personal &lt;-&gt; @dave"):
+        assert value in chapters["4"]
+    enrollment, physical = (re.search(r"<svg .*?</svg>", chapters[n], re.DOTALL)[0] for n in ("5", "6"))
+    for value in ("crosswire topic create wave-7", "crosswire join &lt;invite_link&gt;", "alice-seat-1..4",
+                  "bob-seat-1..4", "crosswire topic revoke wave-7 &lt;npub&gt;", "K_wave7_v2"):
+        assert value in enrollment
+    for value in ("Developer Laptops", "Remote Agent Pools", "Sealed Keyring Delivery",
+                  "In-Memory Auth &amp; ACL Router", "SQLite WAL", "Encrypted Blob Store"):
+        assert value in physical
+    assert chapters["8"].count('class="card"') == 2
 
 
 INVITE_ANSWERS = [
