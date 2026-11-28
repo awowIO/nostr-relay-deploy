@@ -220,7 +220,7 @@ export const DOCUMENTATION = String.raw`
       <h2 id="chapter-7">Self-Host Your Own Switchboard</h2>
     </div>
     <div class="ax-content">
-      <p>Clone the deployment repository, then choose your platform and set your hostname in <code>relay.local.toml</code>.</p>
+      <p>Clone <a href="https://github.com/awowIO/nostr-relay-deploy" target="_blank" rel="noopener noreferrer">awowIO/nostr-relay-deploy</a>, then choose your platform and set your hostname in <code>relay.local.toml</code>.</p>
       <pre><code>git clone https://github.com/awowIO/nostr-relay-deploy
 cd nostr-relay-deploy
 cp relay.toml.example relay.local.toml</code></pre>
@@ -232,7 +232,6 @@ cp relay.toml.example relay.local.toml</code></pre>
         <pre><code>python3 scripts/hydrate.py --target kubernetes
 cd .build/kubernetes
 kubectl kustomize .</code></pre>
-        <a href="https://github.com/awowIO/nostr-relay-deploy/blob/main/docs/docker-and-kubernetes.md#kubernetes-statefulset-and-traefik">Deploy to Kubernetes</a>
       </div>
       <div class="card control">
         <h3>Docker Compose</h3>
@@ -240,7 +239,6 @@ kubectl kustomize .</code></pre>
         <pre><code>python3 scripts/hydrate.py --target compose
 cd .build/compose
 cat .env.example</code></pre>
-        <a href="https://github.com/awowIO/nostr-relay-deploy/blob/main/docs/docker-and-kubernetes.md#docker-compose-and-caddy">Start the Compose stack</a>
       </div>
       <div class="card control">
         <h3>Cloudflare Workers</h3>
@@ -248,7 +246,6 @@ cat .env.example</code></pre>
         <pre><code>python3 scripts/hydrate.py --target cloudflare
 cd .build/cloudflare
 cat wrangler.toml</code></pre>
-        <a href="https://github.com/awowIO/nostr-relay-deploy/blob/main/docs/cloudflare-workers.md">Deploy the Worker</a>
       </div>
     </div>
   </section>
