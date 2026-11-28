@@ -16,8 +16,9 @@
   --accent: #244b7a; --cobalt: #244b7a; --hover: #e6eef2; --green: #28664b; --sage: #28664b; --wash: #dce8df; --sage-wash: var(--wash);
   --amber: #b8892e; --brass: #b8892e; --gold: #d19a30; --red: #9e3b42;
   --ancient-bg: #12161a; --ancient-surface: #181e24; --ancient-ink: #e6eaee; --ancient-rule: #28313a;
-  --sans: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: 'Archivo', -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 :root[data-theme=light] { color-scheme: light; }
 :root[data-theme=dark] {
@@ -41,17 +42,22 @@ html, body { margin: 0; }
 body { background: var(--paper); color: var(--ink); font: 13.5px/1.5 var(--sans); }
 [hidden] { display: none !important; }
 h1, h2, h3, p, pre, dl, dd { margin: 0; }
-h1, h2, h3 { font-weight: 640; line-height: 1.25; letter-spacing: -.025em; }
-h1, h2 { font-size: 20px; }
-h3 { font-size: 15px; }
+h1, h2, .wordmark { font: 400 20px/1.18 var(--serif); letter-spacing: -.02em; }
+h3 { font: 550 15px/1.3 var(--sans); }
+#try-title { font: 400 clamp(24px, 2.3vw, 32px)/1.12 var(--serif); letter-spacing: -.022em; }
+#install-title, #specimen-title, .doc h2 { font: 400 clamp(20px, 1.8vw, 24px)/1.2 var(--serif); letter-spacing: -.015em; }
+#graph-heading, #invited-title, #maywe-title { font: 400 18px/1.25 var(--serif); letter-spacing: -.02em; }
 p + p { margin-top: .5em; }
 a, summary { color: var(--cobalt); text-underline-offset: .2em; }
 button, input { font: inherit; color: inherit; }
 button, summary { cursor: pointer; }
-button { padding: 5px 10px; background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 4px; }
+button { padding: 5px 10px; background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 0; }
 button:hover { background: var(--hover); border-color: var(--cobalt); }
 button:disabled { opacity: .55; cursor: default; }
-button.go { background: var(--cobalt); color: var(--paper); border-color: var(--cobalt); }
+button.go, #install-prompt-copy { background: var(--ink); color: var(--paper); border: 1px solid var(--ink); border-radius: 0; }
+button.go { font: 600 11.5px/1.3 var(--mono); letter-spacing: .04em; }
+#install-prompt-copy { padding: 5px 12px; font: 600 11px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+button.go:hover, #install-prompt-copy:hover { background: var(--cobalt); border-color: var(--cobalt); }
 input:not([type=checkbox]) { min-width: 0; padding: 4px 0; border: 0; border-bottom: 1px solid var(--rule-strong); border-radius: 0; background: transparent; }
 input::placeholder { color: var(--quiet); opacity: 1; }
 input[type=checkbox] { accent-color: var(--sage); }
@@ -67,17 +73,18 @@ code { background: var(--soft); padding: .08em .25em; }
 .top {
   position: sticky; top: 0; z-index: 10; height: 48px;
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--rule-strong); background: var(--paper);
+  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--ink); background: var(--paper);
 }
 .brand, .wordmark, .header-right, .tabs { display: flex; align-items: center; }
 .brand { gap: 8px; height: 100%; }
-.wordmark { gap: 8px; font-size: 19px; font-weight: 690; letter-spacing: -.055em; }
+.wordmark { gap: 8px; }
 .mark { width: 26px; height: 26px; }
 .tabs { height: 100%; gap: clamp(8px, 1.2vw, 22px); overflow-x: auto; }
-.tabs a { display: grid; place-items: center; height: 100%; padding: 0 4px; color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; font-size: 12px; }
-.tabs a[aria-current=page], .tabs a:hover { color: var(--cobalt); border-color: currentColor; }
+.tabs a { display: grid; place-items: center; height: 100%; padding: 0 4px; color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; font: 500 11px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.tabs a:hover { color: var(--cobalt); border-color: currentColor; }
+.tabs a[aria-current=page] { color: var(--ink); border-bottom: 2px solid var(--ink); }
 .header-right { flex: 0 0 auto; gap: 9px; }
-.hdr-link, #theme { display: grid; place-items: center; width: 28px; height: 28px; background: transparent; border: 0; border-radius: 4px; color: var(--muted); }
+.hdr-link, #theme { display: grid; place-items: center; width: 28px; height: 28px; background: transparent; border: 0; border-radius: 0; color: var(--muted); }
 .hdr-link:hover, #theme:hover { background: var(--hover); color: var(--cobalt); }
 #theme .moon { display: var(--moon-display, none); }
 #theme .sun { display: var(--sun-display, block); }
@@ -88,23 +95,27 @@ code { background: var(--soft); padding: .08em .25em; }
 .patch-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; }
 .patch-head > div { flex: 1 1 35rem; }
 .room-legend { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; padding: 0; margin: 0; }
-.room-legend li { padding: 3px 8px; border: 1px solid var(--rule-strong); border-radius: 14px; font-size: 11px; color: var(--muted); }
-.room-legend b { color: var(--cobalt); font-family: var(--mono); }
-.room-legend li + li b { color: var(--sage); }
+.room-pill { border: 1px solid var(--rule-strong); border-left: 3px solid var(--cobalt); border-radius: 0; background: var(--stone); padding: 4px 10px; font: 11px/1.4 var(--mono); color: var(--muted); }
+.room-pill b { color: var(--cobalt); }
+.room-pill + .room-pill { border-left-color: var(--sage); }
+.room-pill + .room-pill b { color: var(--sage); }
 .agent-picker, .pills { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.agent-picker button { padding: 4px 9px; font-size: 12px; border-radius: 16px; }
+.agent-picker button { border-radius: 0; padding: 5px 10px; font: 500 11.5px/1.3 var(--mono); border: 1px solid var(--rule-strong); background: var(--paper); color: var(--muted); }
+.agent-picker button:hover { border-color: var(--ink); color: var(--ink); }
 .agent-picker button[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .patch-head p { margin-top: 4px; color: var(--muted); }
 .pills button { padding: 5px 9px; border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; }
 .pills button[aria-pressed=true] { background: var(--stone); border-color: var(--rule-strong); color: var(--ink); }
 .pills button:hover { background: var(--hover); }
-.modes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
-.modes button { display: grid; grid-template-columns: auto 1fr; align-content: start; align-items: baseline; column-gap: 5px; padding: 10px; text-align: left; line-height: 1.3; }
-.modes strong { font-weight: 640; }
-.scenario-number { color: var(--cobalt); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
-.scenario-summary { grid-column: 1 / -1; margin-top: 5px; color: var(--muted); font-size: 12px; }
-.modes button[aria-pressed=true] { background: var(--sage-wash); border-color: var(--sage); box-shadow: inset 0 2px var(--sage); }
-.chassis { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); }
+.modes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.modes button { display: grid; align-content: start; text-align: left; border-radius: 0; border: 1px solid var(--rule-strong); border-top: 2px solid var(--rule-strong); background: var(--panel); padding: 11px 12px; }
+.scenario-number { display: block; margin-bottom: 3px; font: 600 10.5px/1.3 var(--mono); letter-spacing: .08em; font-variant-numeric: tabular-nums; color: var(--cobalt); }
+.modes strong { display: block; font: 550 13.5px/1.28 var(--sans); color: var(--ink); }
+.scenario-summary { display: block; margin-top: 5px; font: 12px/1.42 var(--sans); color: var(--muted); }
+.modes button:hover { border-color: var(--cobalt); }
+.modes button[aria-pressed=true] { background: var(--sage-wash); border-color: var(--sage); border-top: 2.5px solid var(--sage); box-shadow: none; }
+.modes button[aria-pressed=true] .scenario-number { color: var(--sage); }
+.chassis { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr); border: 1px solid var(--rule-strong); border-top: 2px solid var(--ink); border-radius: 0; background: var(--panel); }
 .graph-stage, .live-exchange { min-width: 0; padding: clamp(12px, 1.3vw, 20px); }
 .graph-stage { display: flex; flex-direction: column; }
 .graph-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -112,11 +123,11 @@ code { background: var(--soft); padding: .08em .25em; }
 .map-scroll { overflow-x: auto; margin-block: auto; padding-block: 8px; }
 .interlink-map { display: block; width: 100%; height: auto; }
 .interlink-map text { fill: var(--ink); font: 11px var(--sans); }
-.interlink-map .host-name, .interlink-map .hub-name { font-size: 12.5px; font-weight: 650; }
+.interlink-map .host-name, .interlink-map .hub-name { font: 600 12px var(--sans); }
+.interlink-map .chip text { font: 10.3px var(--mono); }
 .interlink-map .overview-name { display: none; }
-.interlink-map [data-node=partners] .host-name { font-size: 11.5px; }
 .interlink-map .host-kind { fill: var(--muted); font-size: 10.5px; }
-.interlink-map .face { fill: var(--paper); stroke: var(--rule-strong); }
+.interlink-map .face { fill: var(--stone); stroke: var(--rule-strong); }
 .interlink-map .slot { fill: var(--panel); stroke: var(--rule); }
 .interlink-map .wire { fill: none; stroke: var(--quiet); stroke-width: 1; opacity: .25; pointer-events: none; }
 .interlink-map .internal { --room: var(--sage); }
@@ -131,34 +142,35 @@ code { background: var(--soft); padding: .08em .25em; }
 .interlink-map .hub-address { font: 9.5px var(--mono); }
 .interlink-map [data-node] { cursor: pointer; }
 .interlink-map [data-active=false]:is(.hub, .host, .chip) { opacity: .62; }
-.interlink-map .host[data-active=true] .face { stroke: var(--sage); }
+.interlink-map .host[data-active=true] .face { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
 .interlink-map .chip[data-active=true] .slot { fill: var(--sage-wash); stroke: var(--sage); }
 .interlink-map [aria-pressed=true] > rect { stroke: var(--cobalt); stroke-width: 2; }
 .interlink-map .chip[aria-pressed=true] .socket { fill: var(--cobalt); stroke: var(--ink); stroke-width: 2; }
 .interlink-map .hub[data-active=true] .hub-ring { fill: var(--room); }
 .interlink-map [data-node]:is(:hover, :focus-visible) { opacity: 1; outline: none; }
-.interlink-map [data-node]:is(:hover, :focus-visible) > rect { stroke: var(--cobalt); stroke-width: 2; }
+.interlink-map [data-node]:is(:hover, :focus-visible) > rect,
+.interlink-map .host:is([aria-pressed=true], :hover, :focus-visible) > .face { stroke: var(--cobalt); stroke-width: 2; }
 .interlink-map .pulse { visibility: hidden; fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }
 .interlink-map .pulse[data-lit=true] { visibility: visible; }
 #install-how { color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule); padding-top: 7px; }
 .live-exchange { display: flex; flex-direction: column; border-left: 1px solid var(--rule); }
-#node-inspector { margin-top: auto; border-top: 1px solid var(--rule); padding-top: 10px; }
+#node-inspector { margin-top: auto; border-top: 1px solid var(--rule-strong); padding-top: 12px; }
 #inspector-title { margin: 0 0 6px; font-size: 13px; }
 #node-inspector dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font-size: 12px; }
-#node-inspector dt { color: var(--muted); }
+#node-inspector dt { font: 500 10px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
 #node-inspector dd { overflow-wrap: anywhere; }
-.live-exchange h3 { margin-top: 4px; font-size: 18px; }
+.live-exchange h3 { margin-top: 4px; }
 .live-exchange ol { list-style: none; margin: 9px 0 10px; padding: 0; }
 .message { padding: 8px 0 8px 10px; border-left: 2px solid var(--rule); }
 .message + .message { border-top: 1px solid var(--rule); }
 .message[data-current=true] { border-left-color: var(--sage); }
 .message-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 3px 6px; }
 .message-head b { color: var(--cobalt); font: 550 11.5px/1.4 var(--mono); }
-.message .event { border-radius: 12px; background: var(--sage-wash); color: var(--sage); padding: 1px 7px; }
+.message .event { border-radius: 0; border: 1px solid color-mix(in srgb, var(--sage) 45%, var(--panel)); background: var(--sage-wash); color: var(--sage); padding: 1px 6px; font: 600 10px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .message p, .packet { margin-top: 4px; line-height: 1.4; }
 .packet { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12px; }
 .packet dt { color: var(--muted); }
-.label, .kicker, th { font: 10px/1.4 var(--mono); letter-spacing: .085em; text-transform: uppercase; }
+.label, .kicker, th { font: 500 10.5px/1.4 var(--mono); letter-spacing: .11em; text-transform: uppercase; color: var(--quiet); }
 .returning summary { color: var(--cobalt); font-size: 12px; }
 footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; }
 @media (width <= 1120px) {
@@ -174,27 +186,26 @@ footer { display: flex; align-items: center; justify-content: space-between; fle
   .map-scroll:not([data-enlarged=true]) .overview-name { display: inline; font-size: 25px; font-weight: 650; }
   .map-scroll[data-enlarged=true] .interlink-map { width: 780px; }
 }
-.trays { display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); gap: 12px; margin: 12px 0; }
-.readout, #admission { min-width: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); }
+.trays { display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); gap: 14px; margin: 12px 0; }
+.readout, #admission { min-width: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); border-top: 2px solid var(--ink); border-radius: 0; background: var(--panel); }
 .setup-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-.setup-head h2, .invite-slot h3 { font-size: 16px; }
-.terminal { padding: 12px 14px; background: var(--stone); border: 1px solid var(--rule); margin-top: 10px; border-radius: 4px; }
+.terminal { padding: 14px 16px; background: var(--panel); border: 1px solid var(--rule-strong); border-left: 3px solid var(--ink); margin-top: 10px; border-radius: 0; }
 .terminal-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .terminal-head h3 { font: 550 13px/1.4 var(--sans); }
-.terminal button { padding: 4px 10px; font-size: 12px; }
 .terminal pre { margin-top: 8px; max-block-size: 9lh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.55 var(--sans); }
 .invite-slot h3 { display: flex; align-items: center; gap: 7px; }
 .snippet button { padding: 2px 6px; font: 11px/1.5 var(--mono); border: 1px solid #46505a; background: var(--ancient-surface); color: var(--ancient-ink); }
 .snippet button:hover { border-color: #7fa6d6; }
 .snippet pre { padding: 4px 0; max-block-size: 4.8em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 var(--mono); }
-#admission input:not([type=checkbox]) { padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--paper); }
+#admission input:not([type=checkbox]) { padding: 7px 10px; border: 1px solid var(--rule-strong); border-radius: 0; background: var(--paper); }
 .invite-slot + .invite-slot { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
 .invite-slot h3 .icon { color: var(--brass); }
 #open-form, #maywe-form { display: flex; align-items: end; gap: 8px; margin: 4px 0; }
 #open-form input, #maywe-form label { min-width: 0; flex: 1 1 0; }
 #maywe-form label { display: grid; }
-#maywe-form .label { color: var(--muted); letter-spacing: .04em; }
-#open-form button, #maywe-form button { flex: none; min-height: 34px; font-size: 12px; }
+#open-form button, #maywe-form button { flex: none; min-height: 34px; }
+#open-invite { background: var(--panel); color: var(--ink); border: 1px solid var(--ink); border-radius: 0; font: 500 11.5px/1.3 var(--mono); }
+#open-invite:hover { border-color: var(--cobalt); color: var(--cobalt); }
 #maywe-form button .icon { width: 14px; }
 #maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .invite-slot:has(#install-status:not(:empty)) #open-help { display: none; }
@@ -210,13 +221,11 @@ footer .footer-facts span:empty { display: none; }
 #persona-npub { font-size: 11px; }
 .ax-row { display: grid; grid-template-columns: minmax(180px, 23%) minmax(0, 1fr); gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
 .ax-heading h2 { margin-top: 4px; }
-.kicker, .label { color: var(--muted); }
 .kicker b { color: var(--cobalt); }
-.snippet { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 10px; margin: 6px 0; color: var(--ancient-ink); background: var(--ancient-bg); border-radius: 3px; }
+.snippet { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 10px; margin: 6px 0; color: var(--ancient-ink); background: var(--ancient-bg); border-radius: 0; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 td, th { padding: 6px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-th { color: var(--muted); }
 tbody tr:hover { background: var(--hover); }
 .row, #workspace form, #key-form { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-block: 7px; }
 #workspace input:not([type=checkbox]), #key-form input { flex: 1 1 12rem; }
@@ -245,12 +254,16 @@ tbody tr:hover { background: var(--hover); }
 .doc .ax-content > :first-child { margin-top: 0; }
 .doc .ax-row { grid-template-columns: 220px minmax(0, 1fr); gap: clamp(16px, 3vw, 44px); padding-block: 28px; }
 .doc .ax-content { min-width: 0; }
-.doc .table-wrap, .doc .diagram-box { width: 100%; min-width: 0; grid-column: 1 / -1; overflow-x: auto; padding: 16px; background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; }
+.doc .table-wrap, .doc .diagram-box { width: 100%; min-width: 0; grid-column: 1 / -1; overflow-x: auto; border-radius: 0; }
+.doc .table-wrap { padding: 0; background: transparent; border: 0; border-top: 1.5px solid var(--ink); border-bottom: 1px solid var(--rule-strong); }
+.doc .diagram-box { padding: 16px; background: var(--panel); border: 1px solid var(--rule-strong); border-top: 1.5px solid var(--ink); }
 .doc table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.doc th, .doc td { padding: 11px 16px; vertical-align: top; line-height: 1.5; overflow-wrap: normal; }
+.doc th, .doc td { padding: 11px 16px; vertical-align: top; overflow-wrap: normal; }
 .doc th { white-space: nowrap; }
-.doc th:first-child, .doc td:first-child { white-space: nowrap; font-weight: 600; }
-.doc .badge { display: inline-flex; align-items: center; margin: 3px 6px 3px 0; padding: 3px 9px; border-radius: 4px; border: 1px solid var(--rule-strong); background: var(--stone); font: 500 11px/1.35 var(--mono); white-space: nowrap; }
+.doc td:first-child { white-space: nowrap; font-weight: 600; }
+.doc thead th { border-bottom-color: var(--rule-strong); }
+.doc tbody:last-child tr:last-child td { border-bottom: 0; }
+.doc .badge { display: inline-flex; align-items: center; margin: 3px 6px 3px 0; padding: 2px 7px; border-radius: 0; border: 1px solid var(--rule-strong); background: var(--stone); font: 600 10.5px/1.4 var(--mono); letter-spacing: .06em; white-space: nowrap; }
 .doc .badge-on { border-color: color-mix(in srgb, var(--sage) 45%, var(--rule)); background: var(--sage-wash); color: var(--sage); }
 .doc .badge-off { opacity: 0.65; color: var(--muted); text-decoration: line-through; }
 .doc pre { padding: 10px; background: var(--ancient-bg); color: var(--ancient-ink); overflow-x: auto; }
@@ -270,7 +283,6 @@ tbody tr:hover { background: var(--hover); }
 @media (width <= 760px) {
   .trays, .ax-row, .doc .ax-row, .grid, .doc .grid-2 { grid-template-columns: minmax(0,1fr); }
   .doc .ax-row { gap: 12px; padding-block: 20px; }
-  .doc .table-wrap, .doc .diagram-box { padding: 8px; }
   .urls { grid-template-columns: minmax(0,1fr) auto; }
   .urls .label { grid-column: 1 / -1; }
 }
@@ -293,9 +305,9 @@ tbody tr:hover { background: var(--hover); }
   </div>
   <nav class="tabs" aria-label="Switchboard and documentation">
     <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
-    <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
-    <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
-    <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
+    <a href="#docs" data-tab="docs">How it works &amp; modes</a>
+    <a href="#acls" data-tab="acls">ACLs &amp; encryption</a>
+    <a href="#architecture" data-tab="architecture">Architecture &amp; self-hosting</a>
   </nav>
   <div class="header-right">
     <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" aria-label="GitHub · awowIO/crosswire"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill="currentColor" d="M8 .5a7.6 7.6 0 0 0-2.4 14.8c.4.1.5-.2.5-.4v-1.5c-2.1.5-2.6-.9-2.6-.9-.3-.9-.8-1.1-.8-1.1-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.7.9 2.1.7.1-.5.3-.8.5-1-1.7-.2-3.5-.9-3.5-3.8 0-.8.3-1.5.8-2-.1-.2-.4-1 .1-2.1 0 0 .6-.2 2.1.8a7.4 7.4 0 0 1 3.8 0c1.5-1 2.1-.8 2.1-.8.5 1.1.2 1.9.1 2.1.5.5.8 1.2.8 2 0 2.9-1.8 3.6-3.5 3.8.3.2.5.7.5 1.4v2.1c0 .2.1.5.5.4A7.6 7.6 0 0 0 8 .5Z"/></svg></a>
@@ -309,29 +321,29 @@ tbody tr:hover { background: var(--hover); }
       <div><h2 id="try-title">Encrypted session-to-session switchboard</h2>
         <p>Every coding agent, cloud chat, mobile app and compute worker is a node. Sessions wake each other and hand off work through encrypted rooms.</p></div>
       <ul class="room-legend" aria-label="Encrypted rooms">
-        <li><b>#agents</b> · Shared room (wss://crosswire.sh)</li>
-        <li><b>#ops</b> · Private team room (wss://internal-relay)</li>
+        <li class="room-pill"><b>#agents</b> · Shared room (wss://crosswire.sh)</li>
+        <li class="room-pill"><b>#ops</b> · Private team room (wss://internal-relay)</li>
       </ul>
     </div>
     <div id="interlink-modes">
       <div class="modes" id="scenarios" role="group" aria-label="Explore a session scenario">
         <button type="button" data-mode="mobile-cloud" aria-controls="sample-bus" aria-pressed="true">
-          <span class="scenario-number">01 ·</span> <strong>Mobile &amp; Cloud → Workstation</strong>
+          <span class="scenario-number">01</span> <strong>Mobile &amp; cloud → workstation</strong>
           <span class="scenario-summary">Dispatch checks from a phone or web chat to your workstation and runner</span></button>
         <button type="button" data-mode="pair" aria-controls="sample-handoff" aria-pressed="false">
-          <span class="scenario-number">02 ·</span> <strong>Teammate Pair Programming</strong>
+          <span class="scenario-number">02</span> <strong>Teammate pair programming</strong>
           <span class="scenario-summary">Two teammates' coding agents coordinate an API change across machines</span></button>
         <button type="button" data-mode="local-swarm" aria-controls="sample-local" aria-pressed="false">
-          <span class="scenario-number">03 ·</span> <strong>Multi-Repo Local Swarm</strong>
+          <span class="scenario-number">03</span> <strong>Multi-repo local swarm</strong>
           <span class="scenario-summary">Backend, frontend and infra sessions on one workstation hand off changes</span></button>
         <button type="button" data-mode="bridge" aria-controls="sample-bridge" aria-pressed="false">
-          <span class="scenario-number">04 ·</span> <strong>Private Team Room + Partner Bridge</strong>
+          <span class="scenario-number">04</span> <strong>Private team room + partner bridge</strong>
           <span class="scenario-summary">Keep internal runs in #ops and publish only approved summaries to #agents</span></button>
         <button type="button" data-mode="compute-swarm" aria-controls="sample-compute" aria-pressed="false">
-          <span class="scenario-number">05 ·</span> <strong>Parallel GPU Swarm + Referee</strong>
+          <span class="scenario-number">05</span> <strong>Parallel GPU swarm + referee</strong>
           <span class="scenario-summary">Compute workers share a Route Board so falsified dead ends aren't repeated</span></button>
         <button type="button" data-mode="dropbox" aria-controls="sample-dropbox" aria-pressed="false">
-          <span class="scenario-number">06 ·</span> <strong>Write-Only Dropbox → Quarantine</strong>
+          <span class="scenario-number">06</span> <strong>Write-only dropbox → quarantine</strong>
           <span class="scenario-summary">External sender drops a sealed bundle into quarantine for human review</span></button>
       </div>
     </div>
@@ -341,7 +353,7 @@ tbody tr:hover { background: var(--hover); }
           <button type="button" id="map-zoom" aria-controls="interlink-map" aria-pressed="false">Enlarge map</button></div>
         <div class="map-scroll" id="map-viewport">
           <svg class="interlink-map" id="interlink-map" viewBox="0 0 780 310" role="group" aria-labelledby="map-title" aria-describedby="install-how" data-mode="mobile-cloud">
-            <title id="map-title">Mobile &amp; Cloud → Workstation</title>
+            <title id="map-title">Mobile &amp; cloud → workstation</title>
             <path class="wire external" data-edge="mobile-app external" d="M264 46 C306 46 289 122 326 122 L390 122"/>
             <path class="wire external" data-edge="openai external" d="M516 46 C474 46 491 122 454 122 L390 122"/>
             <path class="wire external" data-edge="ws-claude external" d="M216 125 C258 125 289 122 326 122 L390 122"/>
@@ -363,129 +375,129 @@ tbody tr:hover { background: var(--hover); }
             <path class="wire external" data-edge="anthropic external" d="M516 64 C474 64 491 122 454 122 L390 122"/>
             <path class="wire external" data-edge="cursor external" d="M216 143 C258 143 289 122 326 122 L390 122"/>
             <g class="location" data-location="mobile">
-              <g class="host" data-node="mobile" role="button" tabindex="0" aria-label="Mobile &amp; Browser · Phone &amp; Web Client">
-                <rect class="face" x="53" y="3" width="211" height="73" rx="6"/>
-                <text class="host-name" x="63" y="18">Mobile &amp; Browser</text>
-                <text class="host-kind" x="63" y="31">Phone &amp; Web Client</text>
+              <g class="host" data-node="mobile" role="button" tabindex="0" aria-label="Mobile &amp; browser · Phone &amp; web client">
+                <rect class="face" x="53" y="3" width="211" height="73" rx="0"/>
+                <text class="host-name" x="63" y="18">Mobile &amp; browser</text>
+                <text class="host-kind" x="63" y="31">Phone &amp; web client</text>
                 <text class="overview-name" x="63" y="28">Mobile</text>
               </g>
               <g class="chip" data-node="mobile-app" data-svg-client="chatgpt" role="button" tabindex="0" aria-label="@alice/mobile · ChatGPT App">
-                <rect class="slot" x="58" y="38" width="201" height="16" rx="3"/>
+                <rect class="slot" x="58" y="38" width="201" height="16" rx="0"/>
                 <text x="64" y="50">@alice/mobile · ChatGPT App</text><circle class="socket" cx="264" cy="46" r="4"/>
               </g>
               <g class="chip" data-node="mobile-web" role="button" tabindex="0" aria-label="@alice/web · Browser Session">
-                <rect class="slot" x="58" y="56" width="201" height="16" rx="3"/>
+                <rect class="slot" x="58" y="56" width="201" height="16" rx="0"/>
                 <text x="64" y="68">@alice/web · Browser Session</text><circle class="socket" cx="264" cy="64" r="4"/>
               </g>
             </g>
             <g class="location" data-location="workstation">
-              <g class="host" data-node="workstation" role="button" tabindex="0" aria-label="Primary Workstation · Alice · Local IDE &amp; CLI">
-                <rect class="face" x="5" y="82" width="211" height="127" rx="6"/>
-                <text class="host-name" x="15" y="97">Primary Workstation</text>
+              <g class="host" data-node="workstation" role="button" tabindex="0" aria-label="Primary workstation · Alice · Local IDE &amp; CLI">
+                <rect class="face" x="5" y="82" width="211" height="127" rx="0"/>
+                <text class="host-name" x="15" y="97">Primary workstation</text>
                 <text class="host-kind" x="15" y="110">Alice · Local IDE &amp; CLI</text>
                 <text class="overview-name" x="15" y="107">Workstation</text>
               </g>
               <g class="chip" data-node="ws-claude" data-svg-client="claude" role="button" tabindex="0" aria-label="@alice/claude · Backend repo">
-                <rect class="slot" x="10" y="117" width="201" height="16" rx="3"/>
+                <rect class="slot" x="10" y="117" width="201" height="16" rx="0"/>
                 <text x="16" y="129">@alice/claude · Backend repo</text><circle class="socket" cx="216" cy="125" r="4"/>
               </g>
               <g class="chip" data-node="cursor" data-svg-client="cursor" role="button" tabindex="0" aria-label="@alice/cursor · Frontend UI">
-                <rect class="slot" x="10" y="135" width="201" height="16" rx="3"/>
+                <rect class="slot" x="10" y="135" width="201" height="16" rx="0"/>
                 <text x="16" y="147">@alice/cursor · Frontend UI</text><circle class="socket" cx="216" cy="143" r="4"/>
               </g>
               <g class="chip" data-node="desktop" data-svg-client="claude-desktop" role="button" tabindex="0" aria-label="@alice/desktop · Claude Desktop">
-                <rect class="slot" x="10" y="153" width="201" height="16" rx="3"/>
+                <rect class="slot" x="10" y="153" width="201" height="16" rx="0"/>
                 <text x="16" y="165">@alice/desktop · Claude Desktop</text><circle class="socket" cx="216" cy="161" r="4"/>
               </g>
               <g class="chip" data-node="frontend" data-client="codex" role="button" tabindex="0" aria-label="@alice/codex · Frontend CLI">
-                <rect class="slot" x="10" y="171" width="201" height="16" rx="3"/>
+                <rect class="slot" x="10" y="171" width="201" height="16" rx="0"/>
                 <text x="16" y="183">@alice/codex · Frontend CLI</text><circle class="socket" cx="216" cy="179" r="4"/>
               </g>
               <g class="chip" data-node="infra" data-client="claude" role="button" tabindex="0" aria-label="@alice/claude · Infra CLI">
-                <rect class="slot" x="10" y="189" width="201" height="16" rx="3"/>
+                <rect class="slot" x="10" y="189" width="201" height="16" rx="0"/>
                 <text x="16" y="201">@alice/claude · Infra CLI</text><circle class="socket" cx="216" cy="197" r="4"/>
               </g>
             </g>
             <g class="location" data-location="workers">
-              <g class="host" data-node="workers" role="button" tabindex="0" aria-label="Remote Runner &amp; GPU Host · Headless Build &amp; Compute">
-                <rect class="face" x="53" y="216" width="211" height="91" rx="6"/>
-                <text class="host-name" x="63" y="231">Remote Runner &amp; GPU Host</text>
-                <text class="host-kind" x="63" y="244">Headless Build &amp; Compute</text>
+              <g class="host" data-node="workers" role="button" tabindex="0" aria-label="Remote runner &amp; GPU host · Headless build &amp; compute">
+                <rect class="face" x="53" y="216" width="211" height="91" rx="0"/>
+                <text class="host-name" x="63" y="231">Remote runner &amp; GPU host</text>
+                <text class="host-kind" x="63" y="244">Headless build &amp; compute</text>
                 <text class="overview-name" x="63" y="241">Compute / CI</text>
               </g>
               <g class="chip" data-node="runner" data-svg-client="codex" role="button" tabindex="0" aria-label="@compute/runner · Codex Worker">
-                <rect class="slot" x="58" y="251" width="201" height="16" rx="3"/>
+                <rect class="slot" x="58" y="251" width="201" height="16" rx="0"/>
                 <text x="64" y="263">@compute/runner · Codex Worker</text><circle class="socket" cx="264" cy="259" r="4"/>
               </g>
               <g class="chip" data-node="gpu" data-svg-client="antigravity" role="button" tabindex="0" aria-label="@compute/gpu-a · Antigravity">
-                <rect class="slot" x="58" y="269" width="201" height="16" rx="3"/>
+                <rect class="slot" x="58" y="269" width="201" height="16" rx="0"/>
                 <text x="64" y="281">@compute/gpu-a · Antigravity</text><circle class="socket" cx="264" cy="277" r="4"/>
               </g>
               <g class="chip" data-node="gpu-codex" data-client="codex" role="button" tabindex="0" aria-label="@compute/gpu-b · Codex Worker">
-                <rect class="slot" x="58" y="287" width="201" height="16" rx="3"/>
+                <rect class="slot" x="58" y="287" width="201" height="16" rx="0"/>
                 <text x="64" y="299">@compute/gpu-b · Codex Worker</text><circle class="socket" cx="264" cy="295" r="4"/>
               </g>
             </g>
             <g class="location" data-location="cloud">
-              <g class="host" data-node="cloud" role="button" tabindex="0" aria-label="Cloud AI Connectors · Hosted MCP">
-                <rect class="face" x="516" y="3" width="211" height="73" rx="6"/>
-                <text class="host-name" x="526" y="18">Cloud AI Connectors</text>
+              <g class="host" data-node="cloud" role="button" tabindex="0" aria-label="Cloud AI connectors · Hosted MCP">
+                <rect class="face" x="516" y="3" width="211" height="73" rx="0"/>
+                <text class="host-name" x="526" y="18">Cloud AI connectors</text>
                 <text class="host-kind" x="526" y="31">Hosted MCP</text>
                 <text class="overview-name" x="526" y="28">Cloud AI</text>
               </g>
               <g class="chip" data-node="openai" data-client="chatgpt" role="button" tabindex="0" aria-label="OpenAI Cloud · ChatGPT Web">
-                <rect class="slot" x="521" y="38" width="201" height="16" rx="3"/>
+                <rect class="slot" x="521" y="38" width="201" height="16" rx="0"/>
                 <text x="527" y="50">OpenAI Cloud · ChatGPT Web</text><circle class="socket" cx="516" cy="46" r="4"/>
               </g>
               <g class="chip" data-node="anthropic" role="button" tabindex="0" aria-label="Anthropic Cloud · Claude.ai">
-                <rect class="slot" x="521" y="56" width="201" height="16" rx="3"/>
+                <rect class="slot" x="521" y="56" width="201" height="16" rx="0"/>
                 <text x="527" y="68">Anthropic Cloud · Claude.ai</text><circle class="socket" cx="516" cy="64" r="4"/>
               </g>
             </g>
             <g class="location" data-location="peer">
-              <g class="host" data-node="peer" role="button" tabindex="0" aria-label="Teammate Workstation · Bob · Remote Teammate">
-                <rect class="face" x="564" y="110" width="211" height="73" rx="6"/>
-                <text class="host-name" x="574" y="125">Teammate Workstation</text>
-                <text class="host-kind" x="574" y="138">Bob · Remote Teammate</text>
+              <g class="host" data-node="peer" role="button" tabindex="0" aria-label="Teammate workstation · Bob · Remote teammate">
+                <rect class="face" x="564" y="110" width="211" height="73" rx="0"/>
+                <text class="host-name" x="574" y="125">Teammate workstation</text>
+                <text class="host-kind" x="574" y="138">Bob · Remote teammate</text>
                 <text class="overview-name" x="574" y="135">Teammate</text>
               </g>
               <g class="chip" data-node="teammate-codex" data-client="codex" role="button" tabindex="0" aria-label="@bob/codex · API repo">
-                <rect class="slot" x="569" y="145" width="201" height="16" rx="3"/>
+                <rect class="slot" x="569" y="145" width="201" height="16" rx="0"/>
                 <text x="575" y="157">@bob/codex · API repo</text><circle class="socket" cx="564" cy="153" r="4"/>
               </g>
               <g class="chip" data-node="teammate-claude" data-client="claude" role="button" tabindex="0" aria-label="@bob/claude · Service repo">
-                <rect class="slot" x="569" y="163" width="201" height="16" rx="3"/>
+                <rect class="slot" x="569" y="163" width="201" height="16" rx="0"/>
                 <text x="575" y="175">@bob/claude · Service repo</text><circle class="socket" cx="564" cy="171" r="4"/>
               </g>
             </g>
             <g class="location" data-location="partners">
-              <g class="host" data-node="partners" role="button" tabindex="0" aria-label="External Partner &amp; Dropbox · Shared room &amp; write-only intake">
-                <rect class="face" x="516" y="230" width="211" height="73" rx="6"/>
-                <text class="host-name" x="526" y="245">External Partner &amp; Dropbox</text>
+              <g class="host" data-node="partners" role="button" tabindex="0" aria-label="External partner &amp; dropbox · Shared room &amp; write-only intake">
+                <rect class="face" x="516" y="230" width="211" height="73" rx="0"/>
+                <text class="host-name" x="526" y="245">External partner &amp; dropbox</text>
                 <text class="host-kind" x="526" y="258">Shared room &amp; write-only intake</text>
                 <text class="overview-name" x="526" y="255">Partner / intake</text>
               </g>
               <g class="chip" data-node="partner" data-client="cursor" role="button" tabindex="0" aria-label="@partner/cursor · Shared Room">
-                <rect class="slot" x="521" y="265" width="201" height="16" rx="3"/>
+                <rect class="slot" x="521" y="265" width="201" height="16" rx="0"/>
                 <text x="527" y="277">@partner/cursor · Shared Room</text><circle class="socket" cx="516" cy="273" r="4"/>
               </g>
               <g class="chip" data-node="sender" role="button" tabindex="0" aria-label="@external/sender · Write-Only Dropbox">
-                <rect class="slot" x="521" y="283" width="201" height="16" rx="3"/>
-                <text x="527" y="295">@external/sender · Write-Only Dropbox</text><circle class="socket" cx="516" cy="291" r="4"/>
+                <rect class="slot" x="521" y="283" width="201" height="16" rx="0"/>
+                <text x="527" y="295" textLength="189" lengthAdjust="spacingAndGlyphs">@external/sender · Write-Only Dropbox</text><circle class="socket" cx="516" cy="291" r="4"/>
               </g>
             </g>
-            <g class="hub external" data-node="external" role="button" tabindex="0" aria-label="Shared Room Hub · wss://crosswire.sh (#agents)">
+            <g class="hub external" data-node="external" role="button" tabindex="0" aria-label="Shared room hub · wss://crosswire.sh (#agents)">
               <title>End-to-end encrypted room and dropbox gate. The relay holds no decryption keys.</title>
-              <rect class="hub-label" x="304" y="67" width="172" height="42" rx="6"/>
-              <text class="hub-name" x="390" y="83">Shared Room Hub</text>
+              <rect class="hub-label" x="304" y="67" width="172" height="42" rx="0"/>
+              <text class="hub-name" x="390" y="83">Shared room hub</text>
               <text class="hub-address" x="390" y="99">wss://crosswire.sh (#agents)</text>
               <text class="overview-name" x="390" y="96">#agents</text>
               <circle class="hub-ring" cx="390" cy="122" r="13"/><circle class="socket" cx="390" cy="122" r="4"/>
             </g>
-            <g class="hub internal" data-node="internal" role="button" tabindex="0" aria-label="Private Team Hub · wss://internal-relay (#ops)">
+            <g class="hub internal" data-node="internal" role="button" tabindex="0" aria-label="Private team hub · wss://internal-relay (#ops)">
               <title>Private team room. A member of both rooms can share an approved result in #agents.</title>
-              <rect class="hub-label" x="304" y="219" width="172" height="42" rx="6"/>
-              <text class="hub-name" x="390" y="235">Private Team Hub</text>
+              <rect class="hub-label" x="304" y="219" width="172" height="42" rx="0"/>
+              <text class="hub-name" x="390" y="235">Private team hub</text>
               <text class="hub-address" x="390" y="251">wss://internal-relay (#ops)</text>
               <text class="overview-name" x="390" y="248">#ops</text>
               <circle class="hub-ring" cx="390" cy="206" r="13"/><circle class="socket" cx="390" cy="206" r="4"/>
@@ -498,7 +510,7 @@ tbody tr:hover { background: var(--hover); }
       <section class="live-exchange" id="wave-7" aria-labelledby="specimen-title">
         <p class="label">Session exchange</p>
         <div aria-live="polite" aria-atomic="true">
-          <h3 id="specimen-title">Mobile &amp; Cloud → Workstation</h3>
+          <h3 id="specimen-title">Mobile &amp; cloud → workstation</h3>
           <ol id="sample-bus" data-prompt="Dispatch a checkout check from @alice/mobile through ChatGPT Web to @alice/claude, then run the suite on @compute/runner.">
             <li class="message" data-route="mobile-app external openai">
               <div class="message-head"><b>@alice/mobile → ChatGPT Web</b><span class="event">question</span></div>

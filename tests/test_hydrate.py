@@ -1136,8 +1136,8 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert [b.attrib["data-mode"] for b in buttons] == [
         "mobile-cloud", "pair", "local-swarm", "bridge", "compute-swarm", "dropbox"]
     assert [b.findtext("strong") for b in buttons] == [
-        "Mobile & Cloud → Workstation", "Teammate Pair Programming", "Multi-Repo Local Swarm",
-        "Private Team Room + Partner Bridge", "Parallel GPU Swarm + Referee", "Write-Only Dropbox → Quarantine"]
+        "Mobile & cloud → workstation", "Teammate pair programming", "Multi-repo local swarm",
+        "Private team room + partner bridge", "Parallel GPU swarm + referee", "Write-only dropbox → quarantine"]
     assert [b.attrib["data-mode"] for b in buttons if b.get("aria-pressed") == "true"] == ["mobile-cloud"]
     svg = board.find(".//svg[@id='interlink-map']")
     assert svg.get("viewBox") == "0 0 780 310" and not svg.findall(".//svg")
@@ -1904,7 +1904,7 @@ def test_both_pages_share_one_design_system(worker, build):
     assert found[0]["dark"] == found[0]["system dark"]
     for style, script, page in zip(styles, scripts, (console, pages), strict=True):
         assert "font: 13.5px/1.5 var(--sans)" in style and "terracotta" not in style
-        assert "--mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace" in style
+        assert "--mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace" in style
         assert "font-variant-numeric: tabular-nums" in style
         top = re.search(r"\.top\s*\{([^}]*)\}", style)[1]
         assert "height: 48px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
@@ -4018,8 +4018,8 @@ def test_console_field_guide_keeps_the_full_maps_and_scope_tables(worker):
     for value in ("crosswire topic create wave-7", "crosswire join &lt;invite_link&gt;", "alice-seat-1..4",
                   "bob-seat-1..4", "crosswire topic revoke wave-7 &lt;npub&gt;", "K_wave7_v2"):
         assert value in enrollment
-    for value in ("Developer Laptops", "Remote Agent Pools", "Sealed Keyring Delivery",
-                  "In-Memory Auth &amp; ACL Router", "SQLite WAL", "Encrypted Blob Store"):
+    for value in ("Developer laptops", "Remote agent pools", "Sealed keyring delivery",
+                  "In-memory auth &amp; ACL router", "SQLite WAL", "Encrypted blob store"):
         assert value in physical
     assert chapters["8"].count('class="card"') == 2
 

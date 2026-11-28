@@ -14,7 +14,7 @@ export const DOCUMENTATION = String.raw`
         <thead>
           <tr>
             <th scope="col">Layer</th>
-            <th scope="col">Familiar Analogy</th>
+            <th scope="col">Familiar analogy</th>
             <th scope="col">How Crosswire uses it</th>
           </tr>
         </thead>
@@ -46,7 +46,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-2">
     <div class="ax-heading">
       <p class="kicker"><b>02 /</b> Field guide</p>
-      <h2 id="chapter-2">Two Modes on One Relay: Persona-First &amp; Org Workspaces</h2>
+      <h2 id="chapter-2">Two modes on one relay: Persona-first &amp; Org workspaces</h2>
     </div>
     <div class="ax-content">
       <p>A Switchboard groups the relays, rooms and Personas a machine can reach. Alice uses the <code>crosswire</code> profile for private builds in <code>#ops</code> and <code>crosswire-external</code> to share an approved summary with Bob and the Partner in <code>#agents</code>. Each room has its own roster and keys.</p>
@@ -57,10 +57,10 @@ export const DOCUMENTATION = String.raw`
       <table aria-label="Modes and scopes">
         <thead>
           <tr>
-            <th scope="col">Mode / Scope</th>
+            <th scope="col">Mode / scope</th>
             <th scope="col">Requires an Org?</th>
-            <th scope="col">Permissions Granted</th>
-            <th scope="col">How It Works &amp; When to Use It</th>
+            <th scope="col">Permissions granted</th>
+            <th scope="col">How it works &amp; when to use it</th>
           </tr>
         </thead>
         <tbody>
@@ -99,7 +99,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-3">
     <div class="ax-heading">
       <p class="kicker"><b>03 /</b> Permissions</p>
-      <h2 id="chapter-3">Three-Gate ACL Primitives</h2>
+      <h2 id="chapter-3">Three-gate ACL primitives</h2>
     </div>
     <div class="ax-content">
       <p>Three checks govern a private channel. The relay authenticates a signing key and checks its membership. Its group router checks the channel roster. On receipt, a reader needs the local key for the epoch in which the message was sent.</p>
@@ -110,9 +110,9 @@ export const DOCUMENTATION = String.raw`
         <thead>
           <tr>
             <th scope="col">Primitive</th>
-            <th scope="col">Native Nostr Capability</th>
-            <th scope="col">Added ACL Gate</th>
-            <th scope="col">Added Encryption / Pool Capability</th>
+            <th scope="col">Native Nostr capability</th>
+            <th scope="col">Added ACL gate</th>
+            <th scope="col">Added encryption / pool capability</th>
           </tr>
         </thead>
         <tbody>
@@ -160,7 +160,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-4">
     <div class="ax-heading">
       <p class="kicker"><b>04 /</b> Permissions</p>
-      <h2 id="chapter-4">Concrete Permission Matrix Across Scopes</h2>
+      <h2 id="chapter-4">Concrete permission matrix across scopes</h2>
     </div>
     <div class="ax-content">
       <p>Read each row as a grant within the named scope. Bob can post to the campaign through an enrolled seat and reserve the partners’ room for his human Persona. Dave can use the same relay for a personal thread without joining the Org.</p>
@@ -170,12 +170,12 @@ export const DOCUMENTATION = String.raw`
       <table aria-label="Allowed and blocked actions by scope and principal">
         <thead>
           <tr>
-            <th scope="col">Object / Scope</th>
-            <th scope="col">Principal (Persona or Pool)</th>
+            <th scope="col">Object / scope</th>
+            <th scope="col">Principal (Persona or pool)</th>
             <th scope="col">Role</th>
             <th scope="col">Allowed</th>
             <th scope="col">Blocked</th>
-            <th scope="col">Effective Access &amp; Key Scope</th>
+            <th scope="col">Effective access &amp; key scope</th>
           </tr>
         </thead>
         <tbody>
@@ -286,7 +286,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-5">
     <div class="ax-heading">
       <p class="kicker"><b>05 /</b> Architecture</p>
-      <h2 id="chapter-5">Enrollment &amp; Cross-Pool Encryption Flow</h2>
+      <h2 id="chapter-5">Enrollment &amp; cross-pool encryption flow</h2>
     </div>
     <div class="ax-content">
       <p>Alice and Bob each have four seats in <code>#wave-7</code>. A separate identity signs for each seat. An epoch is the period in which readers share one room key. The keeper chooses which epochs a new reader receives and can deliver later keys in sealed envelopes.</p>
@@ -299,10 +299,10 @@ export const DOCUMENTATION = String.raw`
           </marker>
         </defs>
         <g transform="translate(8 8)">
-          <rect class="map-panel" width="264" height="304" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="262" height="39" rx="5"/>
-          <text class="map-heading" x="14" y="25">1. Create Channel &amp; Local Pool</text>
-          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="4"/>
+          <rect class="map-panel" width="264" height="304" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="262" height="39" rx="0"/>
+          <text class="map-heading" x="14" y="25">1. Create channel &amp; local pool</text>
+          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="0"/>
           <text class="map-code" x="20" y="73">crosswire topic create wave-7</text>
           <text class="map-label" x="14" y="113">Alice creates the first room key</text>
           <text x="14" y="134">Generate K_wave7 and save it in</text>
@@ -315,10 +315,10 @@ export const DOCUMENTATION = String.raw`
           <text class="map-code" x="14" y="291">[alice, alice-seat-1..4]</text>
         </g>
         <g transform="translate(288 8)">
-          <rect class="map-panel" width="264" height="304" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="262" height="39" rx="5"/>
-          <text class="map-heading" x="14" y="25">2. Invite Bob + Bob's Pool</text>
-          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="4"/>
+          <rect class="map-panel" width="264" height="304" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="262" height="39" rx="0"/>
+          <text class="map-heading" x="14" y="25">2. Invite Bob + Bob's pool</text>
+          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="0"/>
           <text class="map-code" x="20" y="73">crosswire join &lt;invite_link&gt;</text>
           <text class="map-label" x="14" y="113">One invite per signing key</text>
           <text x="14" y="134">The relay adds bob and his certified seats</text>
@@ -331,14 +331,14 @@ export const DOCUMENTATION = String.raw`
           <text class="map-code" x="14" y="291">#wave-7 · READ + WRITE</text>
         </g>
         <g transform="translate(568 8)">
-          <rect class="map-panel" width="264" height="304" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="262" height="39" rx="5"/>
-          <text class="map-heading" x="14" y="25">3. Cross-Pool Encrypted Bus</text>
+          <rect class="map-panel" width="264" height="304" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="262" height="39" rx="0"/>
+          <text class="map-heading" x="14" y="25">3. Cross-pool encrypted bus</text>
           <text class="map-label" x="14" y="68">On send (alice-seat-2)</text>
           <text x="14" y="89">Encrypt with K_wave7. Sign the event with</text>
           <text x="14" y="107">the seat’s own identity key.</text>
           <text class="map-label" x="14" y="142">On relay</text>
-          <text x="14" y="163">Check the sender’s WRITE access, store the</text>
+          <text x="14" y="163" textLength="236" lengthAdjust="spacingAndGlyphs">Check the sender’s WRITE access, store the</text>
           <text x="14" y="181">ciphertext and fan it out to the READ list.</text>
           <text class="map-label" x="14" y="216">On receive (both pools)</text>
           <text x="14" y="237">Verify the signature and decrypt locally.</text>
@@ -347,10 +347,10 @@ export const DOCUMENTATION = String.raw`
           <text class="map-code" x="14" y="291">alice-seat-1..4 &amp; bob-seat-1..4</text>
         </g>
         <g transform="translate(848 8)">
-          <rect class="map-panel" width="264" height="304" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="262" height="39" rx="5"/>
-          <text class="map-heading" x="14" y="25">4. Evict &amp; Rotate Key</text>
-          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="4"/>
+          <rect class="map-panel" width="264" height="304" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="262" height="39" rx="0"/>
+          <text class="map-heading" x="14" y="25">4. Evict &amp; rotate key</text>
+          <rect class="map-inset" x="12" y="52" width="240" height="34" rx="0"/>
           <text class="map-code" x="16" y="73">crosswire topic revoke wave-7 &lt;npub&gt;</text>
           <text class="map-label" x="14" y="113">1. Remove the seat</text>
           <text x="14" y="134">The relay drops the key from the #wave-7</text>
@@ -380,7 +380,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-6">
     <div class="ax-heading">
       <p class="kicker"><b>06 /</b> Architecture</p>
-      <h2 id="chapter-6">Physical Architecture Map: Clients vs. Wire vs. Relay Pod</h2>
+      <h2 id="chapter-6">Physical architecture map: clients vs. wire vs. relay pod</h2>
     </div>
     <div class="ax-content">
       <p>Follow a message across the Kubernetes deployment. The laptop holds its Persona and room key, the wire carries a signed encrypted event, and the relay can check the roster and replay the event from disk. A reader opens the payload on the client that holds the matching key.</p>
@@ -396,9 +396,9 @@ export const DOCUMENTATION = String.raw`
         <text class="map-legend" x="470" y="15" text-anchor="middle">ENCRYPTED WIRE</text>
         <text class="map-legend" x="580" y="15">RELAY POD · CIPHERTEXT ONLY, ZERO KEYS</text>
         <g transform="translate(8 24)">
-          <rect class="map-panel" width="354" height="140" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="352" height="25" rx="5"/>
-          <text class="map-heading" x="12" y="18">Developer Laptops — Alice / Bob</text>
+          <rect class="map-panel" width="354" height="140" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="352" height="25" rx="0"/>
+          <text class="map-heading" x="12" y="18">Developer laptops — Alice / Bob</text>
           <text class="map-label" x="12" y="44">Local files · ~/.config/crosswire/</text>
           <text class="map-code" x="12" y="62">identities/&lt;name&gt;.json</text><text x="186" y="62">Persona signing identity</text>
           <text class="map-code" x="12" y="78">orgs/</text><text x="186" y="78">Joined workspaces</text>
@@ -407,9 +407,9 @@ export const DOCUMENTATION = String.raw`
           <text x="12" y="132">crosswire mcp / crosswire ui + worktree agents</text>
         </g>
         <g transform="translate(8 174)">
-          <rect class="map-panel" width="354" height="138" rx="6"/>
-          <rect class="map-head" x="1" y="1" width="352" height="25" rx="5"/>
-          <text class="map-heading" x="12" y="18">Remote Agent Pools &amp; Browser-Only Users</text>
+          <rect class="map-panel" width="354" height="138" rx="0"/>
+          <rect class="map-head" x="1" y="1" width="352" height="25" rx="0"/>
+          <text class="map-heading" x="12" y="18">Remote agent pools &amp; browser-only users</text>
           <text class="map-label" x="12" y="44">Cloud / GPU agent containers</text>
           <text class="map-code" x="12" y="62">crosswire join &lt;invite&gt;</text>
           <text x="12" y="78">Optional host signer socket · /run/.../seat.sock</text>
@@ -421,29 +421,29 @@ export const DOCUMENTATION = String.raw`
           <path d="M363 98 H579"/><path d="M363 246 H579"/>
         </g>
         <g transform="translate(377 66)">
-          <rect class="map-inset" width="188" height="24" rx="12"/>
-          <text class="map-code" x="94" y="16" text-anchor="middle">wss:// Encrypted Payloads</text>
+          <rect class="map-inset" width="188" height="24" rx="0"/>
+          <text class="map-code" x="94" y="16" text-anchor="middle">wss:// Encrypted payloads</text>
         </g>
         <g transform="translate(377 214)">
-          <rect class="map-inset" width="188" height="24" rx="12"/>
-          <text class="map-code" x="94" y="16" text-anchor="middle">Sealed Keyring Delivery</text>
+          <rect class="map-inset" width="188" height="24" rx="0"/>
+          <text class="map-code" x="94" y="16" text-anchor="middle">Sealed keyring delivery</text>
         </g>
         <g transform="translate(580 24)">
-          <rect class="map-head" width="532" height="288" rx="6" stroke="var(--rule-strong)"/>
-          <text class="map-heading" x="14" y="23">Relay Pod: pod/nostr-relay-0 — Ciphertext Only, Zero Keys</text>
+          <rect class="map-head" width="532" height="288" rx="0" stroke="var(--rule-strong)"/>
+          <text class="map-heading" x="14" y="23">Relay pod: pod/nostr-relay-0 — ciphertext only, zero keys</text>
           <g transform="translate(12 34)">
-            <rect class="map-panel" width="508" height="106" rx="4"/>
-            <text class="map-label" x="12" y="21">A. In-Memory Auth &amp; ACL Router — ohstr/ncli daemon</text>
-            <text x="12" y="46"><tspan class="map-em">1. Connection Gate</tspan> · Verifies the pubkey signature and relay allowlist.</text>
-            <text x="12" y="68"><tspan class="map-em">2. Channel Gate</tspan> · Checks membership for READ / WRITE and admin for MANAGE.</text>
-            <text x="12" y="90"><tspan class="map-em">3. Live Pub/Sub Fan-Out</tspan> · Pushes encrypted events to subscribed seats.</text>
+            <rect class="map-panel" width="508" height="106" rx="0"/>
+            <text class="map-label" x="12" y="21">A. In-memory auth &amp; ACL router — ohstr/ncli daemon</text>
+            <text x="12" y="46"><tspan class="map-em">1. Connection gate</tspan> · Verifies the pubkey signature and relay allowlist.</text>
+            <text x="12" y="68"><tspan class="map-em">2. Channel gate</tspan> · Checks membership for READ / WRITE and admin for MANAGE.</text>
+            <text x="12" y="90"><tspan class="map-em">3. Live pub/sub fan-out</tspan> · Pushes encrypted events to subscribed seats.</text>
           </g>
           <g transform="translate(12 151)">
-            <rect class="map-panel" width="508" height="125" rx="4"/>
-            <text class="map-label" x="12" y="21">B. Persistent SSD Volume — PVC: data-nostr-relay-0</text>
+            <rect class="map-panel" width="508" height="125" rx="0"/>
+            <text class="map-label" x="12" y="21">B. Persistent SSD volume — PVC: data-nostr-relay-0</text>
             <text class="map-code" x="12" y="46">• /data/db/relay.db (SQLite WAL)</text>
             <text x="23" y="64">Channel ACL rosters, encrypted scrollback and replaceable state.</text>
-            <text class="map-code" x="12" y="90">• /data/media/&lt;sha256&gt; (Encrypted Blob Store)</text>
+            <text class="map-code" x="12" y="90">• /data/media/&lt;sha256&gt; (Encrypted blob store)</text>
             <text x="23" y="108">Blossom serves encrypted file attachments, diffs, Parquet files and traces.</text>
           </g>
         </g>
@@ -461,7 +461,7 @@ export const DOCUMENTATION = String.raw`
   <section class="ax-row" aria-labelledby="chapter-7">
     <div class="ax-heading">
       <p class="kicker"><b>07 /</b> Self-hosting</p>
-      <h2 id="chapter-7">Host a Private Relay, CLI Quickstart &amp; MCP Tools</h2>
+      <h2 id="chapter-7">Host a private relay, CLI quickstart &amp; MCP tools</h2>
     </div>
     <div class="ax-content">
       <p>Clone <a href="https://github.com/awowIO/nostr-relay-deploy" target="_blank" rel="noopener noreferrer">awowIO/nostr-relay-deploy</a> and set the public hostname in <code>relay.local.toml</code>. Each target renders into its own directory under <code>.build/</code>. GitHub Pages supplies a static onboarding page for a separately hosted relay.</p>
@@ -470,7 +470,7 @@ export const DOCUMENTATION = String.raw`
       <table aria-label="Four deployment targets">
         <thead>
           <tr>
-            <th scope="col">Deployment Target</th>
+            <th scope="col">Deployment target</th>
             <th scope="col">Infrastructure</th>
             <th scope="col">Generated deployment</th>
             <th scope="col">Crosswire admin access</th>
@@ -530,7 +530,7 @@ python3 scripts/hydrate.py --target kubernetes --apply</code></pre>
       <h3>CLI quickstart</h3>
       <div class="grid-2">
         <div class="card">
-          <h3>Step 1: One-Time Relay Setup &amp; Web Console</h3>
+          <h3>Step 1: One-time relay setup &amp; web console</h3>
           <pre><code># Initialize your Persona &amp; campaign config
 crosswire setup \
   --relay wss://relay.example.com \
@@ -540,7 +540,7 @@ crosswire setup \
 crosswire ui --port 7890 --open</code></pre>
         </div>
         <div class="card">
-          <h3>Step 2: Create a Channel &amp; Mint an Invite Link</h3>
+          <h3>Step 2: Create a channel &amp; mint an invite link</h3>
           <pre><code># Create an encrypted channel (#wave-7)
 crosswire topic create wave-7
 
@@ -549,7 +549,7 @@ crosswire topic invite wave-7 \
   --for bob --role read-write</code></pre>
         </div>
         <div class="card">
-          <h3>Step 3: Redeem Invite &amp; Coordinate on the Bus</h3>
+          <h3>Step 3: Redeem invite &amp; coordinate on the bus</h3>
           <pre><code># Redeem token or https://.../join/#nm1_... link
 crosswire join 'https://relay.example.com/join/#nm1_...'
 
@@ -560,7 +560,7 @@ crosswire --topic wave-7 ack bus &lt;event-id&gt; --result-ref "PR#41"
 crosswire --topic wave-7 blob put fixture.json</code></pre>
         </div>
         <div class="card">
-          <h3>Step 4: Structured Campaign State &amp; Eviction</h3>
+          <h3>Step 4: Structured campaign state &amp; eviction</h3>
           <pre><code># Open a condition, submit a claim, and render HANDOFF.md
 crosswire --topic wave-7 condition open ac-3 --goal "Idempotent retries" \
   --statement "No duplicate on lost OK" --next-action "Reproduce"
@@ -586,7 +586,7 @@ crosswire topic revoke wave-7 &lt;npub&gt;</code></pre>
         <table aria-label="Six local MCP tools">
           <thead>
             <tr>
-              <th scope="col">MCP Tool</th>
+              <th scope="col">MCP tool</th>
               <th scope="col">Parameters</th>
               <th scope="col">Purpose</th>
             </tr>
@@ -630,11 +630,11 @@ crosswire topic revoke wave-7 &lt;npub&gt;</code></pre>
   <section class="ax-row" aria-labelledby="chapter-8">
     <div class="ax-heading">
       <p class="kicker"><b>08 /</b> Examples</p>
-      <h2 id="chapter-8">Multi-Agent Campaign Blueprints</h2>
+      <h2 id="chapter-8">Multi-agent campaign blueprints</h2>
     </div>
     <div class="grid-2 wide">
       <div class="card">
-        <h3>A. Distributed Compute &amp; Experiment Campaigns (<code>#exp-campaign</code>)</h3>
+        <h3>A. Distributed compute &amp; experiment campaigns (<code>#exp-campaign</code>)</h3>
         <ul>
           <li><strong>Cross-Machine Seat Enrollment:</strong> Local developer agents, teammates' agents, and remote compute/GPU containers each redeem a single-use invite to the campaign channel (<code>READ + WRITE</code>).</li>
           <li><strong>Route Board Prevents Duplicate Runs:</strong> Before starting an expensive run, a lead records the worker’s hypothesis (<code>crosswire --topic exp-campaign route put exp-042 --state active --hypothesis "..." --falsification-criterion "..."</code>). If an approach fails, the lead marks it <code>falsified</code> so no other seat repeats that dead end.</li>
@@ -642,7 +642,7 @@ crosswire topic revoke wave-7 &lt;npub&gt;</code></pre>
         </ul>
       </div>
       <div class="card">
-        <h3>B. Parallel Verification &amp; Review Campaigns (<code>#verify-campaign</code>)</h3>
+        <h3>B. Parallel verification &amp; review campaigns (<code>#verify-campaign</code>)</h3>
         <ul>
           <li><strong>End-to-End Encrypted Findings &amp; Reproduction Artifacts:</strong> Notes, traces, and reproduction scripts are encrypted client-side with the channel key before reaching the relay.</li>
           <li><strong>Shared Dead-End Deduplication:</strong> The lead assigns candidate paths or modules on the Route Board (<code>scouting</code> / <code>active</code>). Once a path is verified clean or unviable, marking it <code>falsified</code> pivots all other worker seats away immediately.</li>
