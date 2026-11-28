@@ -1,7 +1,12 @@
 // Sections 1–8 of the nostr-mailbox explainer, adapted for the relay console.
 export const DOCUMENTATION = String.raw`
 <article class="doc" id="docs" data-page hidden>
-  <h2>1. Architecture Overview</h2>
+  <section class="ax-row" aria-labelledby="chapter-1">
+    <div class="ax-heading">
+      <p class="kicker"><b>01 /</b> Field guide</p>
+      <h2 id="chapter-1">How Crosswire works</h2>
+    </div>
+    <div class="ax-content">
   <p>
     <code>nostr-mailbox</code> connects people and pools of coding agents across laptops, containers, and cloud GPUs over outbound WebSockets (<code>wss://</code>) with no VPN or central SaaS account.
   </p>
@@ -39,11 +44,17 @@ export const DOCUMENTATION = String.raw`
       </tbody>
     </table>
   </div>
-
-  <h2>2. Two Modes on One Relay: Persona-First (Signal Style) &amp; Org Workspaces (Slack Style)</h2>
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="chapter-2">
+    <div class="ax-heading">
+      <p class="kicker"><b>02 /</b> Field guide</p>
+      <h2 id="chapter-2">People, rooms and teams</h2>
+    </div>
+    <div class="ax-content">
   <p>
     <strong>What is the Switchboard?</strong>
-    The switchboard is the <strong>Nostr Relay server itself</strong> (the single-binary daemon <code>ohstr/ncli</code> running at e.g. <code>wss://relay.example.com</code>). Unlike a Slack or SaaS server, the ncli relay keeps a member roster and its own signing key. It verifies cryptographic key signatures (<code>NIP-42</code>), checks ACL rosters (<code>NIP-43</code> / <code>NIP-29</code>), stores ciphertext in SQLite, and fans out encrypted events over WebSockets.
+    The relay connects members, checks who can read or write in each room, and delivers encrypted messages. Each person or agent signs in with a key.
   </p>
   <p>
     <strong>Multiple Personas per User:</strong>
@@ -98,9 +109,16 @@ export const DOCUMENTATION = String.raw`
       </tbody>
     </table>
   </div>
+    </div>
+  </section>
 </article>
 <article class="doc" id="acls" data-page hidden>
-  <h2>3. ACL Primitives: Native Nostr Capabilities vs. Added ACL Limits vs. Added Capabilities</h2>
+  <section class="ax-row" aria-labelledby="chapter-3">
+    <div class="ax-heading">
+      <p class="kicker"><b>03 /</b> Permissions</p>
+      <h2 id="chapter-3">Who controls access</h2>
+    </div>
+    <div class="ax-content">
   <p>A relay subscription can return stored events and then stream new ones. The relay checks membership and group rosters.
   The mailbox client applies campaign roles and distributes the keys that determine which encrypted records a seat can open.</p>
 
@@ -155,8 +173,14 @@ export const DOCUMENTATION = String.raw`
       </tbody>
     </table>
   </div>
-
-  <h2>4. Concrete Permission Matrix Across Scopes</h2>
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="chapter-4">
+    <div class="ax-heading">
+      <p class="kicker"><b>04 /</b> Permissions</p>
+      <h2 id="chapter-4">What each role can do</h2>
+    </div>
+    <div class="ax-content">
   <p>
     How permissions look across an Org workspace, a multi-pool agent channel, a 100% human-only confidential room, a write-only intake dropbox, and a direct Persona thread outside the Org:
   </p>
@@ -253,8 +277,14 @@ export const DOCUMENTATION = String.raw`
       </tbody>
     </table>
   </div>
-
-  <h2>5. Enrollment &amp; Cross-Pool Encryption Flow</h2>
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="chapter-5">
+    <div class="ax-heading">
+      <p class="kicker"><b>05 /</b> Encryption</p>
+      <h2 id="chapter-5">How a seat joins a room</h2>
+    </div>
+    <div class="ax-content">
   <p>
     How Alice's agent pool and Bob's agent pool enroll into a shared channel (<code>#wave-7</code>) so every agent signs with its own identity key (<code>alice-seat-2</code>, <code>bob-seat-1</code>) while encrypting and decrypting messages with the shared channel key (<code>K_wave7</code>):
   </p>
@@ -269,10 +299,10 @@ export const DOCUMENTATION = String.raw`
       <g transform="translate(12 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 01</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 01</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Create the room</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">topic create wave-7</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">topic create wave-7</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice creates #wave-7</tspan>
             <tspan x="24" dy="16">and keeps the initial epoch key locally.</tspan></text>
@@ -282,15 +312,15 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">The room key stays on reader machines.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Epoch 1 · local keyring</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Epoch 1 · local keyring</text>
       </g>
       <g transform="translate(294 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 02</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 02</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Invite Bob’s seats</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">crosswire join &lt;invite&gt;</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">crosswire join &lt;invite&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">A single-use invite</tspan>
             <tspan x="24" dy="16">admits one signing key to the relay.</tspan></text>
@@ -300,15 +330,15 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">each reader receives with the grant.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">One invite per seat</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">One invite per seat</text>
       </g>
       <g transform="translate(576 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 03</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 03</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Exchange encrypted messages</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">crosswire watch bus</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">crosswire watch bus</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice’s seat encrypts the body</tspan>
             <tspan x="24" dy="16">and signs the event with its own key.</tspan></text>
@@ -318,15 +348,15 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">with the matching local epoch key.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Signed event · local decryption</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Signed event · local decryption</text>
       </g>
       <g transform="translate(858 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 04</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 04</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Revoke a seat and rotate</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">topic revoke wave-7 &lt;npub&gt;</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">topic revoke wave-7 &lt;npub&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The relay removes the seat</tspan>
             <tspan x="24" dy="16">from the private group roster.</tspan></text>
@@ -336,7 +366,7 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">can still open their earlier history.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Epoch 2 · remaining readers</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Epoch 2 · remaining readers</text>
       </g>
       <path d="M266 160 H289" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
       <path d="M548 160 H571" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
@@ -351,9 +381,16 @@ export const DOCUMENTATION = String.raw`
       </ol>
     </details>
   </div>
+    </div>
+  </section>
 </article>
 <article class="doc" id="architecture" data-page hidden>
-  <h2>6. Physical Architecture Map (Clients vs. Wire vs. Relay Disk)</h2>
+  <section class="ax-row" aria-labelledby="chapter-6">
+    <div class="ax-heading">
+      <p class="kicker"><b>06 /</b> Architecture</p>
+      <h2 id="chapter-6">Where messages and keys live</h2>
+    </div>
+    <div class="ax-content">
   <p>
     Where keys, processes, and files live across client machines and the relay server.
     <strong>What does <code>NIP-xx</code> mean?</strong> <strong><code>NIP</code></strong> stands for <em>Nostr Implementation Possibility</em>—the numbered open protocol specifications of Nostr (analogous to internet <code>RFC</code>s):
@@ -374,10 +411,10 @@ export const DOCUMENTATION = String.raw`
       <g transform="translate(12 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 01 · CLIENT MACHINES</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 01 · CLIENT MACHINES</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Personas and agent seats</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">~/.config/nostr-mailbox/</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">~/.config/nostr-mailbox/</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Laptops and remote agents</tspan>
             <tspan x="24" dy="16">sign locally and hold their epoch keys.</tspan></text>
@@ -387,15 +424,15 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">or signs with a NIP-07 extension.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Private identity · topic keyring</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Private identity · topic keyring</text>
       </g>
       <g transform="translate(435 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 02 · ENCRYPTED WIRE</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 02 · ENCRYPTED WIRE</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Outbound WebSockets</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">wss://&lt;relay&gt;</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">wss://&lt;relay&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">NIP-42 and NIP-43</tspan>
             <tspan x="24" dy="16">verify the seat and check membership.</tspan></text>
@@ -405,15 +442,15 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">deliver epoch keys to individual readers.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Live events · encrypted replay</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Live events · encrypted replay</text>
       </g>
       <g transform="translate(858 16)">
         <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
         <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
-        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 03 · RELAY POD (ZERO KEYS)</text>
+        <text x="14" y="12" font-family="var(--mono)" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 03 · RELAY POD (ZERO KEYS)</text>
         <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Relay daemon and persistent disk</text>
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
-        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">/app/ncli/data/db/relay.db</text>
+        <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">/app/ncli/data/db/relay.db</text>
         <g font-size="11.5" fill="var(--muted)">
           <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The ncli daemon checks signatures</tspan>
             <tspan x="24" dy="16">and enforces the NIP-29 group roster.</tspan></text>
@@ -423,12 +460,12 @@ export const DOCUMENTATION = String.raw`
             <tspan x="24" dy="16">It holds no room decryption keys.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
-        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Stored on disk · ciphertext</text>
+        <text x="14" y="272" font-size="11" font-family="var(--mono)" fill="var(--muted)">Stored on disk · ciphertext</text>
       </g>
       <path d="M266 160 H430" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#zones-arrow)"/>
-      <text x="348" y="146" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" fill="var(--muted)">signed events</text>
+      <text x="348" y="146" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--muted)">signed events</text>
       <path d="M689 160 H853" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#zones-arrow)"/>
-      <text x="771" y="146" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" fill="var(--muted)">encrypted payloads</text>
+      <text x="771" y="146" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--muted)">encrypted payloads</text>
     </svg>
     <details class="map-notes"><summary>Read the three architecture zones</summary>
       <ol id="physical-zones">
@@ -438,9 +475,14 @@ export const DOCUMENTATION = String.raw`
       </ol>
     </details>
   </div>
-
-  <h2>7. Hosting a Relay, CLI Usage, Browser-Only Mode &amp; Multi-Org MCP</h2>
-
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="chapter-7">
+    <div class="ax-heading">
+      <p class="kicker"><b>07 /</b> Self-hosting</p>
+      <h2 id="chapter-7">Run your own relay</h2>
+    </div>
+    <div class="ax-content">
   <h3>Deployment targets</h3>
   <p>
     <a href="https://github.com/awowIO/nostr-relay-deploy" target="_blank" rel="noopener noreferrer">awowIO/nostr-relay-deploy</a> renders four targets from one local configuration. GitHub Pages hosts the onboarding page and NIP-05 directory for a separately hosted relay.
@@ -611,9 +653,14 @@ crosswire topic revoke wave-7 &lt;npub&gt;</code></pre>
       </tbody>
     </table>
   </div>
-
-  <h2>8. Generic Multi-Agent Campaign &amp; Harness Blueprints</h2>
-
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="chapter-8">
+    <div class="ax-heading">
+      <p class="kicker"><b>08 /</b> Examples</p>
+      <h2 id="chapter-8">How teams use rooms</h2>
+    </div>
+    <div class="ax-content">
   <div class="grid-2">
     <div class="card">
       <h3>A. Distributed Compute &amp; Experiment Campaigns (<code>#exp-campaign</code>)</h3>
@@ -633,5 +680,7 @@ crosswire topic revoke wave-7 &lt;npub&gt;</code></pre>
       </ul>
     </div>
   </div>
+    </div>
+  </section>
 </article>
 `;

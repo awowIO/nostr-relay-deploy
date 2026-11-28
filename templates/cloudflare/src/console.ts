@@ -10,270 +10,192 @@ import { DOCUMENTATION } from "./console-docs.ts";
 export const CONSOLE_STYLE = String.raw`
 :root {
   color-scheme: light dark;
-  --bg: #f6f7f9; --panel: #fff; --ink: #18212f; --muted: #596677; --line: #e0e5eb; --soft: #f0f3f7;
-  --accent: #335ade; --green: #137657; --red: #b14439; --amber: #956014; --head: #eef1f5; --hover: #f4f7ff;
-  --shadow: 0 16px 70px #14243c26;
-  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --paper: #faf9f6; --bg: #faf9f6; --stone: #f0eee9; --soft: #f0eee9; --head: #f0eee9; --panel: #faf9f6;
+  --ink: #16181d; --muted: #5a5d64; --quiet: #6b6d74; --line: #e4e1da; --rule: #e4e1da; --rule-strong: #c9c4b9;
+  --teal: #3f5e63; --accent: #35547a; --terracotta: #35547a; --terracotta-ink: #263f5d;
+  --green: #4a6b53; --sage: #4a6b53; --amber: #78683a; --red: #8c3843; --hover: #e8eef0;
+  --ancient-bg: #14171c; --ancient-surface: #1c2027; --ancient-ink: #e8eaed; --ancient-rule: #2b313a;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --sans: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 :root[data-theme=light] { color-scheme: light; }
 :root[data-theme=dark] {
   color-scheme: dark;
-  --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
-  --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
-  --shadow: 0 16px 70px #0008;
+  --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
+  --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
+  --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
+  --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
     color-scheme: dark;
-    --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
-    --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
-    --shadow: 0 16px 70px #0008;
+    --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
+    --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
+    --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
+    --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.hdr-link {
-  display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--panel);
-  color: var(--ink); border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 550; text-decoration: none;
-}
-.hdr-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.55 var(--sans); }
+[hidden] { display: none !important; }
+h1, h2, h3, p, pre, dl, dd { margin: 0; }
+h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.12; letter-spacing: -.035em; }
+h2 { font-size: clamp(28px, 2.7vw, 40px); }
+h3 { font-size: 24px; }
+p + p { margin-top: .65em; }
+a { color: var(--terracotta-ink); text-underline-offset: .22em; }
+a:hover { color: var(--teal); }
 button, input { font: inherit; color: inherit; }
-button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 6px 10px; }
-button:hover { background: var(--soft); border-color: var(--muted); }
-button:disabled { opacity: .35; cursor: default; }
-button.go { border-color: var(--accent); background: var(--accent); color: var(--panel); font-weight: 600; }
-button.go:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: var(--accent); }
-input { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; outline: none; min-width: 0; }
-input[type="text"], input[type="email"] { flex: 1 1 14rem; }
-/* The invite-request form's honeypot: out of sight and out of reach, for bots to fill.
-   A rule here, not a style attribute, which the page's hash-only style-src would refuse. */
-#maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
-input:focus, :is(button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.top {
-  position: sticky; top: 0; z-index: 10;
-  height: 61px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--line); background: var(--panel);
-}
-.wordmark {
-  flex: 1 1 auto; margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.mark {
-  display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 8px; border-radius: 6px;
-  background: var(--accent); color: var(--panel); font: 650 20px/1 var(--mono); vertical-align: -2px;
-}
-/* The header's right side keeps its own width and the wordmark gives way (ellipsis), so a
-   narrow screen never scrolls sideways. */
-.header-right { flex: 0 0 auto; display: flex; gap: 17px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
-#theme { font-size: 19px; padding: 1px 9px; }
-.dot { display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%; background: currentColor; }
-.dot.good { color: var(--green); }
-.dot.bad { color: var(--red); }
-
-.page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); padding-block: 0 8px; }
-.overview {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px;
-  padding: 2px 0 2px clamp(20px, 3vw, 48px); border-left: 1px solid var(--line);
-}
-.stat { display: grid; align-content: start; gap: 3px; min-width: 0; }
-.stat strong { font-size: 24px; line-height: 1.15; letter-spacing: -.035em; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.stat.warn strong { color: var(--amber); }
-.stat.bad strong { color: var(--red); }
-.facts { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 18px; font-size: 11px; }
-.facts div { display: flex; gap: 6px; }
-.facts dt { color: var(--muted); }
-.facts dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
-
-.assumptions {
-  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px 28px; padding: 16px 18px; margin: 0 0 18px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-}
-.control { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 1 auto; }
-.control.grow { flex: 1 1 18rem; }
-.label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 500; }
-.note { font-size: 11px; color: var(--muted); }
-.room { display: flex; align-items: center; gap: 4px; }
-.room span { color: var(--muted); font-size: 15px; }
-.room input { width: 12rem; font-family: var(--mono); font-size: 12px; }
-
-.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; min-width: 0; }
-.wide { grid-column: 1 / -1; }
-.card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin: 0 0 6px; }
-h2 { margin: 0; font-size: 14px; font-weight: 600; }
-.card > h2 { margin: 0 0 6px; }
-h3 { margin: 14px 0 6px; font-size: 10px; font-weight: 550; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-p { margin: 0 0 10px; }
-.muted { color: var(--muted); }
+button, summary { cursor: pointer; }
+button { padding: 7px 13px; border: 1px solid var(--rule-strong); background: var(--paper); border-radius: 0; font-size: 14px; }
+button:hover { border-color: var(--teal); background: var(--hover); }
+button:disabled { opacity: .5; cursor: default; }
+button.go { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+button.go:hover { background: var(--teal); }
+input:not([type=checkbox]) { min-width: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--rule-strong); border-radius: 0; background: transparent; }
+input::placeholder { color: var(--quiet); opacity: 1; }
+input[type=checkbox] { accent-color: var(--teal); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+code, .mono { font-family: var(--mono); font-size: .9em; overflow-wrap: anywhere; }
+code { background: var(--soft); padding: .08em .25em; }
+.muted, .note { color: var(--muted); }
+.note { font-size: 14px; }
+.note:empty { display: none; }
 .good { color: var(--green); }
 .bad { color: var(--red); }
-code, .mono { font-family: var(--mono); font-size: 12px; }
-code { background: var(--soft); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
-form, .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
-label { display: inline-flex; gap: 6px; align-items: center; }
-.tag {
-  display: inline-flex; align-items: center; padding: 2px 6px; margin: 0 4px 4px 0; border-radius: 3px;
-  background: var(--soft); color: var(--muted); font-size: 10px; font-weight: 500; line-height: 1.5;
+.top {
+  position: sticky; top: 0; z-index: 10;
+  height: 61px; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--ink); background: var(--paper);
 }
-
-.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
-.pills button { border-radius: 13px; padding: 3px 10px; font-size: 12px; }
-.pills button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--hover); font-weight: 600; }
-.howto { margin: 0 0 10px; }
-.urls { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 6px 12px; align-items: center; margin: 10px 0; }
-.urls code { display: block; padding: 6px 8px; border: 1px solid var(--line); }
-.urls button, .snippet button { font-size: 11px; padding: 4px 9px; }
-.snippet { position: relative; margin: 0 0 10px; }
-.snippet pre {
-  margin: 0; padding: 10px 76px 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft);
-  border: 1px solid var(--line); border-radius: 6px; font: 12px/1.5 var(--mono);
+.wordmark {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 19px/1.3 var(--sans); letter-spacing: -.045em;
 }
-.snippet button { position: absolute; top: 6px; right: 6px; }
-
-.table-wrap { overflow: auto; max-height: 24rem; border: 1px solid var(--line); border-radius: 6px; }
-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; text-align: left; }
-th {
-  position: sticky; top: 0; background: var(--head); border-bottom: 1px solid var(--line); padding: 8px 12px;
-  font-size: 10px; font-weight: 550; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
-}
-td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
-tbody tr:last-child td { border-bottom: 0; }
+.mark { color: var(--teal); margin-right: 8px; font: 25px/1 var(--serif); }
+.header-right { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; }
+.hdr-link { color: var(--ink); text-decoration: none; font: 12px var(--mono); }
+.hdr-link:hover { text-decoration: underline; }
+#theme { font-size: 20px; line-height: 1; padding: 5px 7px; }
+.page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); }
+.lead { display: grid; grid-template-columns: 56% 1fr; align-items: end; gap: 3%; padding-block: clamp(28px, 4.4vw, 72px); }
+.lead h2 { font-size: clamp(38px, 4.7vw, 80px); line-height: 1.02; text-wrap: balance; letter-spacing: -.05em; }
+.lead p { color: var(--muted); text-wrap: pretty; }
+#request-access { display: block; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--terracotta-ink); text-decoration: underline; text-underline-offset: .22em; }
+#maywe-email { scroll-margin-block: 20vh; }
+.ax-row { display: grid; grid-template-columns: 28% minmax(0, 1fr); padding-block: clamp(24px, 2.8vw, 46px); border-top: 1px solid var(--rule-strong); }
+.ax-row > * { min-width: 0; }
+.ax-heading { padding-right: 2vw; }
+.ax-heading h2 { margin-top: 8px; }
+.kicker, .label, th { font: 12px/1.5 var(--mono); letter-spacing: .065em; text-transform: uppercase; }
+.kicker, .label { color: var(--muted); }
+.kicker b { margin-right: .6em; color: var(--terracotta-ink); font-weight: 400; }
+.pills { display: flex; flex-wrap: wrap; gap: 3px 5px; }
+.pills button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--muted); }
+.pills button:hover { color: var(--ink); background: var(--hover); }
+.pills button[aria-pressed=true] { border-color: var(--teal); color: var(--ink); background: var(--stone); }
+#install-clients { border-bottom: 1px solid var(--rule); }
+.invite-field { display: flex; gap: 6px 16px; align-items: baseline; flex-wrap: wrap; margin-block: 16px; }
+.invite-field input { flex: 1 1 15rem; width: 100%; font-size: 14px; }
+.terminal { margin-top: 12px; background: var(--ancient-bg); color: var(--ancient-ink); }
+.terminal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--ancient-rule); }
+.terminal-head h3 { font: 14px/1.4 var(--sans); letter-spacing: 0; }
+.terminal-head button, .snippet button { background: var(--ancient-surface); border: 1px solid var(--ancient-rule); color: var(--ancient-ink); font: 12px var(--mono); padding: 6px 12px; }
+.terminal-head button:hover, .snippet button:hover { border-color: var(--ancient-ink); }
+.terminal pre, .snippet pre { padding: 12px 15px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 10rem; overflow: auto; font: 13px/1.6 var(--mono); }
+#install-how { margin-top: 8px; }
+#maywe-form { display: grid; grid-template-columns: 1fr 1.35fr auto; align-items: end; gap: 18px; margin-top: 18px; }
+#maywe-form label { display: grid; gap: 3px; min-width: 0; }
+#maywe-form button { justify-self: start; }
+#maywe-status { margin-top: 10px; }
+#maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+summary { color: var(--teal); padding-block: 5px; }
+details[open] > summary { margin-bottom: 8px; }
+.snippet { display: flex; align-items: flex-start; justify-content: space-between; background: var(--ancient-bg); color: var(--ancient-ink); margin-block: 10px; }
+.snippet button { margin: 8px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+th { color: var(--muted); text-align: left; border-bottom: 1px solid var(--rule-strong); }
+td, th { padding: 10px 12px; vertical-align: top; }
+td { border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
 tbody tr:hover { background: var(--hover); }
-#log { list-style: none; margin: 0; padding: 0; font: 11px/1.5 var(--mono); }
-#log li { padding: 3px 0; border-bottom: 1px dashed var(--line); overflow-wrap: anywhere; }
-footer {
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 18px;
-  padding: 13px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
+footer { display: flex; flex-wrap: wrap; gap: 6px 20px; justify-content: space-between; padding-block: 16px 26px; border-top: 1px solid var(--ink); color: var(--muted); font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+@media (width <= 760px) {
+  .hdr-repo { display: none; }
+  .header-right { gap: 10px; }
+  .lead, .ax-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .ax-heading { padding: 0; }
+  .pills button { padding-inline: 9px; }
+  #maywe-form { grid-template-columns: 1fr; gap: 14px; }
 }
-.tabs { display: flex; align-self: stretch; align-items: stretch; gap: clamp(16px, 2vw, 32px); }
-.tabs a {
-  display: flex; align-items: center; border-bottom: 2px solid transparent; padding: 2px 0 0;
-  color: var(--muted); font-size: 13px; font-weight: 550; white-space: nowrap;
-}
-.tabs a:hover { color: var(--ink); text-decoration: none; }
-.tabs a[aria-current=page] { color: var(--accent); border-color: currentColor; }
-.lead {
-  display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: center;
-  gap: clamp(24px, 4vw, 68px); padding-block: clamp(24px, 3vw, 44px);
-}
-.lead-copy > p:last-child { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
-.kicker { margin: 0 0 8px; font: 550 10px/1.5 var(--mono); letter-spacing: .6px; text-transform: uppercase; color: var(--accent); }
-.lead h2 { text-wrap: balance; margin: 0 0 9px; font-size: clamp(22px, 2.2vw, 26px); line-height: 1.18; font-weight: 650; letter-spacing: -.03em; }
-.workbench { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; gap: 16px; }
-.workbench h2 { font-size: 18px; line-height: 1.35; font-weight: 650; letter-spacing: -.025em; margin: 0 0 14px; }
-.workbench h3, .guides h3 { margin: 0 0 8px; font-size: 15px; line-height: 1.4; color: var(--ink); letter-spacing: -.015em; text-transform: none; font-weight: 600; }
-.workbench .pills { gap: 5px; margin: 10px 0 12px; }
-.workbench .pills button { padding: 5px 9px; }
-.terminal { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; }
-.terminal-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); }
-.terminal-head .label { font-family: var(--mono); }
-.terminal-head button { font-size: 11px; padding: 3px 10px; }
-.terminal pre { padding: 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 var(--mono); }
-.workbench .note { font-size: 12px; line-height: 1.5; }
-#install-how { margin: 6px 0 0; }
-.specimen, #maywe-card { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
-.specimen .kicker { margin-bottom: 3px; }
-.specimen h3 { font-size: 16px; }
-.specimen h3 span { font-family: var(--mono); }
-.transcript { border-block: 1px solid var(--line); }
-.message { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 9px 0; }
-.message + .message { border-top: 1px solid var(--line); }
-.message time, .message b, .event { font: 11px/1.5 var(--mono); }
-.message time { padding-top: 1px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.message b { font-weight: 650; color: var(--ink); }
-.event { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px; color: var(--muted); background: var(--soft); }
-.message p { margin: 3px 0 0; }
-.packet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 5px 0 0; }
-.packet dt { color: var(--muted); font-size: 12px; }
-.packet dd { margin: 0; }
-.receipt { margin: 8px 0 0; color: var(--green); font: 11px/1.5 var(--mono); }
-#admission p { color: var(--muted); }
-#open-form, #maywe-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px 8px; align-items: end; margin: 10px 0 6px; }
-#open-invite { justify-self: start; }
-#admission input:not([type=checkbox]), #admission button { padding: 8px 10px; }
-#maywe-form { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
-#maywe-form label { display: grid; gap: 5px; }
-#maywe-form button { grid-column: 1 / -1; justify-self: start; color: var(--accent); font-weight: 550; }
-#maywe-status:empty, #whoami:empty { margin: 0; }
-#admission .bad { color: var(--red); }
-#admission .good { color: var(--green); }
-.returning { background: var(--soft); border-radius: 5px; padding: 9px 12px; }
-summary { cursor: pointer; }
-.returning summary { color: var(--muted); font-size: 12px; }
-.returning[open] summary { margin-bottom: 8px; }
-#extension-choice { margin: 8px 0 0; display: flex; font-size: 12px; }
-#link-card { margin-block: 10px; overflow-wrap: anywhere; }
-.guides { margin-block: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.guides article { display: flex; flex-direction: column; }
-.guides h3 span { font: 10px var(--mono); letter-spacing: .6px; color: var(--muted); }
-.guides p { color: var(--muted); }
-.guides a { align-self: flex-start; margin-top: auto; font-size: 12px; font-weight: 600; }
-.workbench:has(#admission[hidden]) { grid-template-columns: minmax(0, 1fr); }
-#switchboard:has(#admission[hidden]) :is(.lead-copy, .specimen, .guides) { display: none; }
-#switchboard:has(#admission[hidden]) .lead { display: block; }
-#switchboard:has(#admission[hidden]) .overview { grid-template-columns: repeat(4, minmax(0, 1fr)); border: 0; padding: 0; }
-.backup { margin-block: 14px; }
-.backup summary { cursor: pointer; font-weight: 600; }
-.backup p { margin-block: 6px; }
+
+.tabs { display: flex; align-self: stretch; gap: clamp(12px, 2vw, 30px); }
+.tabs a { display: grid; align-items: center; border-bottom: 2px solid transparent; color: var(--muted); font: 12px/1.5 var(--mono); text-decoration: none; }
+.tabs a:hover, .tabs a[aria-current=page] { color: var(--teal); border-color: currentColor; }
+#persona-npub { font-size: 12px; }
+#open-form, .row, #workspace form, #key-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 10px; }
+#workspace input:not([type=checkbox]), #key-form input { flex: 1 1 12rem; }
+#invited-card details, #link-card, #whoami { margin-top: 10px; }
+#extension-choice { display: block; margin-top: 8px; }
+#link-card, .member-info { overflow-wrap: anywhere; }
+.backup { border-block: 1px solid var(--rule-strong); padding-block: 14px; }
 .backup code { user-select: all; }
-#key-form input { flex: 1 1 14rem; }
-#whoami { margin-block: 8px 0; }
-.member-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-block: 16px; }
-.member-info .facts { margin: 0; }
-.doc { padding-block: 6px 16px; }
-.doc h2 { font-size: 20px; margin: 24px 0 8px; letter-spacing: -.02em; }
-.doc h3 { font-size: 14px; color: var(--ink); text-transform: none; letter-spacing: normal; }
-.doc .table-wrap { max-height: none; background: var(--panel); }
-.doc table { min-width: 44rem; }
-.doc .badge { display: inline-block; padding: 2px 5px; margin: 2px; border-radius: 3px; background: var(--soft); font: 11px var(--mono); }
+#switchboard:has(#admission[hidden]) :is(.lead, .guides, .specimen) { display: none; }
+#workspace h2 { margin-bottom: 10px; }
+#workspace h3 { margin: 20px 0 4px; }
+.member-info, .facts, .assumptions, .overview { display: flex; flex-wrap: wrap; gap: 12px 32px; }
+.member-info { margin-block: 20px; }
+.facts div, .stat { display: flex; gap: 8px; align-items: baseline; }
+.facts, .member-info, .stat { font-size: 14px; }
+.facts dt, .stat span { color: var(--muted); }
+.facts dd, .stat strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.stat.warn { color: var(--amber); }
+.stat.good { color: var(--green); }
+.overview { padding-block: 14px; border-top: 1px solid var(--rule); }
+.control { flex: 1 1 18rem; min-width: 0; }
+.control .label { display: block; }
+.grid, .doc .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; }
+.card, .assumptions { min-width: 0; border-top: 1px solid var(--rule-strong); padding-block: 18px; }
+.wide { grid-column: 1 / -1; }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tag, .doc .badge, .event { display: inline-block; margin-right: 4px; padding: 2px 5px; font: 12px/1.6 var(--mono); background: var(--soft); }
+.urls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-block: 12px; }
+#workspace .pills { margin-block: 12px; }
+#workspace .table-wrap { max-height: 24rem; overflow: auto; }
+#workspace th { position: sticky; top: 0; background: var(--paper); }
+#log { list-style: none; margin: 0; padding: 0; font: 12px/1.5 var(--mono); }
+#log li, .message { padding: 8px 0; border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+.specimen, .guides { border-top: 1px solid var(--rule); padding-block: 16px; }
+.transcript { margin-top: 8px; }
+.message, .packet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; }
+.message time, .message b, .receipt { font: 12px/1.6 var(--mono); }
+.message time, .packet dt { color: var(--muted); }
+.receipt { margin-top: 10px; color: var(--green); }
+.guides { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.doc .ax-content > :is(h3, .table-wrap, .grid-2, .diagram-box) { margin-top: 20px; }
+.doc .ax-content > :first-child { margin-top: 0; }
+.doc p { text-wrap: pretty; }
+.doc table { min-width: 40rem; }
 .doc .badge-on { color: var(--green); }
 .doc .badge-off { color: var(--muted); text-decoration: line-through; }
-.doc .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 12px; margin: 12px 0; }
-.doc .card h3 { margin-top: 0; }
-.doc pre { overflow-x: auto; background: var(--soft); padding: 10px; }
-.doc .diagram-box { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-.map-notes { border-top: 1px solid var(--line); padding: 8px 14px; }
-.map-notes summary { color: var(--accent); font-size: 12px; }
-.map-notes ol { padding-left: 18px; margin: 8px 0; }
-.map-notes li + li { margin-top: 6px; }
-.doc svg { display: block; width: 100%; height: auto; }
-[hidden] { display: none !important; }
-
-@media (width <= 1120px) {
-  .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; height: auto; gap: 0 12px; }
-  .wordmark, .header-right { margin-block: 10px; }
-  .header-right { grid-area: 1 / 2; }
-  .tabs { grid-column: 1 / -1; }
-  .tabs a { padding: 8px 0; }
+.doc pre { padding: 12px; background: var(--ancient-bg); color: var(--ancient-ink); overflow-x: auto; }
+.doc pre code { background: transparent; padding: 0; }
+.doc .card h3 { margin-bottom: 10px; }
+.diagram-box { overflow-x: auto; }
+.doc svg { display: block; width: 100%; min-width: 48rem; height: auto; }
+.map-notes { border-top: 1px solid var(--rule); padding-block: 8px; }
+@media (width <= 1020px) {
+  .top { height: auto; flex-wrap: wrap; gap: 0 12px; padding-block: 7px 0; }
+  .tabs { order: 1; flex-basis: 100%; overflow-x: auto; gap: 16px; }
+  .tabs a { padding: 7px 0; }
 }
 @media (width <= 760px) {
-  .wordmark { font-size: 15px; }
-  .header-right { gap: 8px; font-size: 10px; }
-  #persona-npub, .hdr-repo { display: none; }
-  .tabs { gap: 0; justify-content: space-between; }
-  .tabs a { font-size: 12px; }
-  .lead, .workbench, .guides { grid-template-columns: minmax(0, 1fr); }
-  .lead { gap: 16px; }
-  .overview { gap: 14px; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
-  .workbench:has(#link-card:not([hidden])) #admission { grid-row: 1; }
-  #switchboard:has(#admission[hidden]) .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .guides { gap: 10px; }
-  .urls { grid-template-columns: minmax(0, 1fr) max-content; }
+  #persona-npub { display: none; }
+  .grid, .doc .grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .urls { grid-template-columns: minmax(0, 1fr) auto; }
   .urls .label { grid-column: 1 / -1; }
-}
-@media (width <= 540px) {
-  .tabs { display: grid; grid-template-columns: auto auto; justify-content: stretch; column-gap: 12px; }
-  .tabs a { justify-content: center; padding: 6px 0; white-space: normal; text-align: center; }
-  .stat > span { font-size: 11px; }
-  #maywe-form { grid-template-columns: minmax(0, 1fr); }
-  .packet { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .packet dd + dt { margin-top: 5px; }
 }
 `;
 
@@ -282,9 +204,9 @@ const BODY = String.raw`
   <h1 class="wordmark"><span class="mark" aria-hidden="true">⨉</span><span id="relay-name">Relay console</span></h1>
   <nav class="tabs" aria-label="Console and documentation">
     <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
-    <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
-    <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
-    <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
+    <a href="#docs" data-tab="docs">Guide</a>
+    <a href="#acls" data-tab="acls">Permissions</a>
+    <a href="#architecture" data-tab="architecture">Architecture</a>
   </nav>
   <div class="header-right">
     <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" title="Source code, CLI & agent plugins on GitHub">GitHub<span class="hdr-repo"> · awowIO/crosswire</span> ↗</a>
@@ -297,79 +219,71 @@ const BODY = String.raw`
 <main class="page">
   <div id="switchboard" data-page>
   <section class="lead" aria-labelledby="lead-title">
-    <div class="lead-copy">
-      <p class="kicker">ENCRYPTED AGENT &amp; TEAM SWITCHBOARD · NIP-42 · NIP-43 · NIP-44 v2</p>
-      <h2 id="lead-title">One encrypted wire for your coding agents and teammates across machines.</h2>
-      <p>Connect Claude Code, Codex, ChatGPT, Claude Desktop, Antigravity, and teammates into shared end-to-end encrypted rooms (#wave-7, #deals) or 1-to-1 threads over outbound WebSockets. No VPN, no central SaaS account, and zero decryption keys on the relay—messages, 4-field handoffs, claims, and file blobs are encrypted client-side before leaving your machine.</p>
-    </div>
-    <div class="overview" aria-label="Relay overview">
-      <div class="stat"><strong id="relay-state">Checking…</strong><span id="relay-dial"><i id="relay-dot" class="dot" aria-hidden="true"></i>relay · <span id="relay-url"></span></span></div>
-      <div class="stat"><strong id="gate-state">Checking…</strong><span>NIP-42 auth · NIP-43 allowlist</span></div>
-      <div class="stat"><strong>NIP-44 v2</strong><span>client-side E2EE · epoch keyrings</span></div>
-      <div class="stat"><strong>7 clients</strong><span>CLI · stdio &amp; HTTP MCP · browser</span></div>
-    </div>
+    <h2 id="lead-title">A private room for your coding agents.</h2>
+    <p>Crosswire lets agents and teammates exchange encrypted messages across machines.
+      Joining a room requires an operator-approved <code>nm1_</code> invite.
+      <button type="button" id="request-access" aria-controls="maywe-form">Request an invite ↓</button></p>
   </section>
-
-  <div class="workbench">
-    <section class="card" id="try-now" aria-labelledby="try-title">
-      <h2 id="try-title">Try It Now — Install &amp; Join in 2 Commands</h2>
-      <div class="pills" id="install-clients" role="group" aria-label="Choose your harness">
-        <button type="button" data-install="claude">Claude Code</button>
-        <button type="button" data-install="codex">Codex</button>
-        <button type="button" data-install="cli" aria-pressed="true">CLI (uv)</button>
-        <button type="button" data-install="claude-desktop">Claude Desktop</button>
-        <button type="button" data-install="chatgpt">ChatGPT</button>
-        <button type="button" data-install="antigravity">Antigravity (agy)</button>
-        <button type="button" data-install="cursor">Cursor</button>
+  <div id="admission">
+  <section class="ax-row" id="try-now" aria-labelledby="try-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>01 /</b> Get connected</p>
+      <h2 id="try-title">Pick your agent</h2>
+    </div>
+    <div>
+      <div class="pills" id="install-clients" role="group" aria-labelledby="try-title">
+        <button type="button" data-install="claude" aria-pressed="true">Claude Code</button>
+        <button type="button" data-install="codex" aria-pressed="false">Codex</button>
+        <button type="button" data-install="antigravity" aria-pressed="false">Antigravity (agy)</button>
+        <button type="button" data-install="cursor" aria-pressed="false">Cursor</button>
+        <button type="button" data-install="claude-desktop" aria-pressed="false">Claude Desktop</button>
+        <button type="button" data-install="chatgpt" aria-pressed="false">ChatGPT</button>
+        <button type="button" data-install="cli" aria-pressed="false">CLI (uv)</button>
+      </div>
+      <div class="invite-field">
+        <label for="open-token">Have an invite?</label>
+        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
+          placeholder="Paste your invite link or nm1_ token" aria-describedby="install-status">
+      </div>
+      <p class="note" id="install-status" role="status"></p>
+      <div class="terminal">
+        <div class="terminal-head"><h3>Paste one prompt into your coding agent</h3><button type="button" id="install-prompt-copy" aria-label="Copy setup prompt">Copy</button></div>
+        <pre id="install-prompt"></pre>
       </div>
       <div class="terminal">
-        <div class="terminal-head"><span class="label">Terminal</span><button type="button" id="install-copy">Copy</button></div>
+        <div class="terminal-head"><h3>Or run two commands in your terminal</h3><button type="button" id="install-copy" aria-label="Copy terminal commands">Copy</button></div>
         <pre id="install-command"></pre>
       </div>
       <p class="note" id="install-how" aria-live="polite"></p>
-
-      <section class="specimen" aria-labelledby="specimen-title">
-        <p class="kicker">Room preview · sample messages</p>
-        <h3 id="specimen-title"><span>#wave-7</span> · Encrypted Room Specimen</h3>
-        <div class="pills" id="scenarios" role="group" aria-label="Choose a room scenario">
-          <button type="button" aria-controls="sample-bus" aria-pressed="true">01 · Live Bus &amp; Ack</button>
-          <button type="button" aria-controls="sample-handoff" aria-pressed="false">02 · 4-Field Handoff Packet</button>
-          <button type="button" aria-controls="sample-dropbox" aria-pressed="false">03 · Write-Only Dropbox</button>
-        </div>
-        <div class="transcript" aria-live="polite">
-          <div id="sample-bus">
-            <div class="message"><time>09:41</time><div><b>@alice</b> <span class="event">message</span><p>Can someone check that the new room replays yesterday’s messages?</p></div></div>
-            <div class="message"><time>09:42</time><div><b>alice/claude-code</b> <span class="event">result</span><p>Rejoined from the laptop. All 12 messages are here. Passing the check to Bob’s machine.</p></div></div>
-            <div class="message"><time>09:43</time><div><b>@bob/codex</b> <span class="event">ack</span><p>Confirmed on my machine. Same 12 messages, in order.</p></div></div>
-          </div>
-          <div id="sample-handoff" hidden>
-            <div class="message"><time>09:44</time><div><b>alice/claude-code</b> <span class="event">handoff to @bob/codex</span>
-              <dl class="packet"><dt>Original goal</dt><dd>Verify room replay on both machines.</dd>
-                <dt>Open condition</dt><dd>Check what a new reader sees.</dd>
-                <dt>Evidence &amp; rejected routes</dt><dd>Both enrolled seats saw 12 messages. A cached session cannot test a fresh join.</dd>
-                <dt>Next action</dt><dd>Join with an epoch-2-only invite and compare the history.</dd></dl></div></div>
-          </div>
-          <div id="sample-dropbox" hidden>
-            <div class="message"><time>09:45</time><div><b>@bob/codex</b> <span class="event">sealed to @alice</span><p>Attached replay.txt from the fresh machine. My intake link only lets me send.</p></div></div>
-            <div class="message"><time>09:46</time><div><b>@alice</b> <span class="event">approved for #wave-7</span><p>Reviewed Bob’s file in quarantine. Sharing the result here for the team.</p></div></div>
-            <div class="message"><time>09:47</time><div><b>alice/claude-code</b> <span class="event">ack</span><p>Received the approved report. Bob’s intake key has no room history.</p></div></div>
-          </div>
-        </div>
-        <p class="receipt">✓ BIP-340 Schnorr verified · Epoch 2 NIP-44 v2</p>
-      </section>
-    </section>
-
-    <div class="card" id="admission">
-      <h2>Access the Switchboard</h2>
-      <section id="invited-card" aria-labelledby="invited-title">
-        <h3 id="invited-title">01 · Already invited — Open your room</h3>
-        <form id="open-form">
-          <label class="label" for="open-token">Invite</label>
-          <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
-            placeholder="Paste your invite link, nm1_… token, or claim code" aria-describedby="open-help">
-          <button type="submit" id="open-invite" class="go">Redeem Invite &amp; Open →</button>
-        </form>
-        <p id="open-help" class="note">Generates a signing key in this browser automatically, redeems your single-use invite over <span id="invite-relay"></span>, and unlocks the switchboard.</p>
+    </div>
+  </section>
+  <section class="ax-row" id="maywe-card" aria-labelledby="maywe-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>02 /</b> Waitlist</p>
+      <h2 id="maywe-title">Request an invite</h2>
+    </div>
+    <div>
+      <p>Public self-registration is closed. Tell the operator what you’d like to connect.
+        MayWe emails you to confirm your request.</p>
+      <form id="maywe-form">
+        <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@example.com"></label>
+        <label><span class="label">Use case (optional)</span><input type="text" id="maywe-note" name="note" placeholder="Which agents or teammates?"></label>
+        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="go" type="submit">Request Invite →</button>
+      </form>
+      <p id="maywe-status" class="note" aria-live="polite"></p>
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="invited-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>03 /</b> Browser access</p>
+      <h2 id="invited-title">Use the relay console</h2>
+    </div>
+    <details id="invited-card">
+      <summary>Redeem an invite or sign in here</summary>
+      <p id="open-help">To use this browser as a member, paste your invite above and redeem it here.
+        This spends the invite on a browser key for <span id="invite-relay"></span>.</p>
+      <form id="open-form"><button type="submit" id="open-invite" class="go">Redeem in this browser</button></form>
         <div id="link-card" hidden>
           <p id="link-about"></p>
           <p id="link-next" aria-live="polite"></p>
@@ -379,7 +293,7 @@ const BODY = String.raw`
           </details>
         </div>
         <details class="returning" id="returning">
-          <summary>Already an enrolled member? Sign in with your nsec1… key or NIP-07 extension</summary>
+          <summary>Sign in with an existing key or extension</summary>
           <form id="key-form">
             <input type="password" id="nsec" autocomplete="off" spellcheck="false" required
               aria-label="Enrolled nsec secret key" placeholder="nsec1…">
@@ -390,19 +304,8 @@ const BODY = String.raw`
           <button type="button" id="reconnect" hidden>Reconnect with this key</button>
         </details>
         <p class="note" id="whoami" role="status"></p>
-      </section>
-      <section id="maywe-card" aria-labelledby="maywe-title">
-        <h3 id="maywe-title">02 · Request an invite — Waitlist via MayWe</h3>
-        <p>Leave your email and confirm your place using the message from MayWe.</p>
-        <form id="maywe-form">
-          <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com"></label>
-          <label><span class="label">Use case (optional)</span><input type="text" id="maywe-note" name="note" placeholder="What would you connect?"></label>
-          <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-          <button type="submit">Request Invite →</button>
-        </form>
-        <p id="maywe-status" class="note" aria-live="polite"></p>
-      </section>
-    </div>
+    </details>
+  </section>
   </div>
 
   <details class="card backup" id="backup" open hidden>
@@ -451,7 +354,7 @@ const BODY = String.raw`
     </section>
     <section class="card wide" id="local-pair" hidden>
       <h2>Pair a coding agent</h2>
-      <p>Mint a fresh invite for the agent. On its machine, run the install and join commands above with its invite.
+      <p>Mint a fresh invite and open its link on the agent’s machine to see the install and join commands.
       For a local MCP client, use <code>crosswire mcp</code> as the stdio server command.</p>
       <div class="snippet" id="local-command-box" hidden><pre id="local-command"></pre>
         <button id="local-copy" type="button">Copy</button></div>
@@ -585,17 +488,42 @@ const BODY = String.raw`
 
   </div>
 
-  <div class="guides" aria-label="Switchboard guides">
-    <article class="card"><h3><span>01 ·</span> Persona-First &amp; Org Modes</h3>
-      <p>Open a private thread as yourself, bring an agent into a project room, or invite your whole team to an Org.</p>
-      <a href="#docs">Explore Modes →</a></article>
-    <article class="card"><h3><span>02 ·</span> Three-Gate ACLs &amp; Epoch Rotation</h3>
-      <p>Follow a seat through relay admission, the room roster, and the epoch keys that unlock its history.</p>
-      <a href="#acls">Inspect ACLs &amp; Flow →</a></article>
-    <article class="card"><h3><span>03 ·</span> Zero-Key Relay &amp; 1-Command Self-Hosting</h3>
-      <p>See where keys and ciphertext live, then render a relay configuration for your own infrastructure.</p>
-      <a href="#architecture">View Architecture Map →</a></article>
-  </div>
+  <details class="specimen"><summary id="specimen-title">Preview a conversation in #wave-7</summary>
+        <div class="pills" id="scenarios" role="group" aria-label="Choose a room scenario">
+          <button type="button" aria-controls="sample-bus" aria-pressed="true">01 · Live Bus &amp; Ack</button>
+          <button type="button" aria-controls="sample-handoff" aria-pressed="false">02 · 4-Field Handoff Packet</button>
+          <button type="button" aria-controls="sample-dropbox" aria-pressed="false">03 · Write-Only Dropbox</button>
+        </div>
+        <div class="transcript" aria-live="polite">
+          <div id="sample-bus">
+            <div class="message"><time>09:41</time><div><b>@alice</b> <span class="event">message</span><p>Can someone check that the new room replays yesterday’s messages?</p></div></div>
+            <div class="message"><time>09:42</time><div><b>alice/claude-code</b> <span class="event">result</span><p>Rejoined from the laptop. All 12 messages are here. Passing the check to Bob’s machine.</p></div></div>
+            <div class="message"><time>09:43</time><div><b>@bob/codex</b> <span class="event">ack</span><p>Confirmed on my machine. Same 12 messages, in order.</p></div></div>
+          </div>
+          <div id="sample-handoff" hidden>
+            <div class="message"><time>09:44</time><div><b>alice/claude-code</b> <span class="event">handoff to @bob/codex</span>
+              <dl class="packet"><dt>Original goal</dt><dd>Verify room replay on both machines.</dd>
+                <dt>Open condition</dt><dd>Check what a new reader sees.</dd>
+                <dt>Evidence &amp; rejected routes</dt><dd>Both enrolled seats saw 12 messages. A cached session cannot test a fresh join.</dd>
+                <dt>Next action</dt><dd>Join with an epoch-2-only invite and compare the history.</dd></dl></div></div>
+          </div>
+          <div id="sample-dropbox" hidden>
+            <div class="message"><time>09:45</time><div><b>@bob/codex</b> <span class="event">sealed to @alice</span><p>Attached replay.txt from the fresh machine. My intake link only lets me send.</p></div></div>
+            <div class="message"><time>09:46</time><div><b>@alice</b> <span class="event">approved for #wave-7</span><p>Reviewed Bob’s file in quarantine. Sharing the result here for the team.</p></div></div>
+            <div class="message"><time>09:47</time><div><b>alice/claude-code</b> <span class="event">ack</span><p>Received the approved report. Bob’s intake key has no room history.</p></div></div>
+          </div>
+        </div>
+        <p class="receipt">✓ BIP-340 Schnorr verified · Epoch 2 NIP-44 v2</p>
+  </details>
+  <nav class="guides" aria-label="Learn more about Crosswire">
+    <a href="#docs">How rooms work →</a>
+    <a href="#acls">Permissions &amp; encryption →</a>
+    <a href="#architecture">Architecture &amp; self-hosting →</a>
+  </nav>
+    <div class="overview" aria-label="Relay overview">
+      <div class="stat"><strong id="relay-state">Checking…</strong><span id="relay-dial"><i id="relay-dot" class="dot" aria-hidden="true"></i>relay · <span id="relay-url"></span></span></div>
+      <div class="stat"><strong id="gate-state">Checking…</strong><span>membership</span></div>
+    </div>
   </div>
 
   <!-- documentation -->
@@ -1033,26 +961,26 @@ export const CONSOLE_SCRIPT = String.raw`
     try { return readGateInvite(fragment); } catch (err) { return { error: err.message }; }
   }
   // Parse before selecting a signer or opening a socket.
-  function openGiven() {
-    var given = $('open-token').value.trim();
+  function pastedInvite(given) {
     var at = given.indexOf('#');
     var link;
     try { link = readGateInvite(at < 0 ? given : given.slice(at)); } catch (err) { link = { error: err.message }; }
     if (link === null) {
-      if (at >= 0 || !/^[A-Za-z0-9_-]+$/.test(given)) throw new Error('that is no invite link, nm1_ token or invite code');
+      if (at >= 0 || !/^[A-Za-z0-9_-]+$/.test(given)) return { error: 'Expected an invite link, nm1_ token or claim code.' };
       link = { token: null, code: given, topic: null, role: null };
     }
-    $('open-token').value = '';
-    state.link = link;
-    if (given.includes('://') && !link.token && !link.error && new URL(given).host !== location.host) {
-      link.error = 'The claim link names another relay';
+    if (given.includes('://') && !link.token && !link.error) {
+      try {
+        if (new URL(given).host !== location.host) link.error = 'The claim link names another relay';
+      } catch { link.error = 'Invalid invite URL'; }
     }
-    renderLink();
+    return link;
   }
   function forThisRelay(link) { return !link.token || new URL(link.relay).href === RELAY_URL + '/'; }
   function usableHere(link) { return !link.error && !/^nsec1/i.test(link.code) && forThisRelay(link); }
   function renderLink() {
     var link = state.link;
+    $('link-command').textContent = '';
     $('link-card').hidden = !link;
     if (!link) return;
     var about = $('link-about'), next = $('link-next');
@@ -1186,7 +1114,7 @@ export const CONSOLE_SCRIPT = String.raw`
     return function (ev) {
       var button = ev.currentTarget;
       navigator.clipboard.writeText($(id).textContent).then(function () { button.textContent = 'Copied'; },
-        function (err) { log('copying failed (' + err.message + '): select the text and copy it', 'bad'); });
+        function () { button.textContent = 'Select & copy'; });
     };
   }
   // The label stays until the button loses focus, rather than for a guessed delay.
@@ -1394,7 +1322,10 @@ export const CONSOLE_SCRIPT = String.raw`
     render();
     try {
       const claiming = mode === 'claim';
-      if (claiming && $('open-token').value.trim()) openGiven();
+      if (claiming && $('open-token').value.trim()) {
+        state.link = pastedInvite($('open-token').value.trim());
+        $('open-token').value = '';
+      }
       if (claiming && (!state.link || !usableHere(state.link))) {
         render();
         $('whoami').textContent = 'Use an invite issued for this relay.';
@@ -1660,6 +1591,7 @@ export const CONSOLE_SCRIPT = String.raw`
 
   // ------------------------------------------------------------------------ render
   function gateControls() {
+    $('open-token').disabled = state.busy;
     const held = !!state.signer;
     $('key-form').hidden = held;
     $('signin').hidden = held;
@@ -1680,14 +1612,14 @@ export const CONSOLE_SCRIPT = String.raw`
     $('admission').hidden = state.member;
     const loaded = !!(state.link && usableHere(state.link) && !state.link.spent);
     $('open-token').required = !loaded;
-    $('open-token').placeholder = loaded ? 'Invite loaded · paste another to replace it' : 'Paste your invite link, nm1_… token, or claim code';
-    $('open-invite').textContent = loaded ? 'Redeem this invite' : 'Redeem Invite & Open →';
+    $('open-token').placeholder = loaded ? 'Invite loaded · paste another to replace it' : 'Paste your invite link or nm1_ token';
+    $('open-invite').textContent = loaded ? 'Redeem this invite' : 'Redeem in this browser';
     $('local-pair').hidden = HOSTED_MCP || !state.member;
     ['groups-card', 'mailbox-card'].forEach(function (id) { $(id).hidden = !state.member; });
     gateControls();
     if (!state.member) { $('group-card').hidden = true; state.counts = { groups: null, mail: null }; counted(); }
     renderLink();
-    if (state.install) installFor(state.install);
+    renderSetup();
   }
 
   // ---------------------------------------------------------------- 02 · waitlist
@@ -1754,23 +1686,85 @@ export const CONSOLE_SCRIPT = String.raw`
       else link.removeAttribute('aria-current');
     }
   }
-  window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+  window.addEventListener('hashchange', () => {
+    const link = takeInviteLink();
+    if (link && !state.busy) {
+      state.link = link;
+      $('open-token').value = '';
+      render();
+    }
+    route();
+    window.scrollTo(0, 0);
+  });
   route();
-  function installFor(client) {
-    const repo = 'https://github.com/awowIO/crosswire';
-    const cli = client === 'cli' || client === 'chatgpt';
-    const install = cli ? 'uv tool install git+' + repo :
-      'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
+  function renderSetup() {
     const link = state.link;
-    const token = link && usableHere(link) && !link.spent && link.token;
-    const watch = token && link.channel ? 'crosswire --topic ' + link.topic + ' watch bus' : 'crosswire watch bus';
-    $('install-command').textContent = install + "\ncrosswire join '" + (token || '<nm1_ token or join link>') + "' && " + watch;
-    let note = cli ? 'Requires uv.' : 'Run from the checkout’s parent directory. Keep the checkout and put ~/.local/bin on PATH.';
-    if (client === 'chatgpt') note += ' Run these on your connector host. Then run crosswire mcp --http behind public HTTPS and add its MCP URL in ChatGPT.';
-    if (client === 'claude-desktop') note += ' Restart Claude Desktop to load its stdio server.';
-    $('install-how').textContent = note + (token ? ' This invite is ready to use once.' : ' Replace the quoted placeholder with an unused invite.');
-    for (const button of document.querySelectorAll('#install-clients button')) button.setAttribute('aria-pressed', String(button.dataset.install === client));
-    state.install = client;
+    let message = '';
+    if (link && !link.spent) {
+      if (setupInvite()) message = 'Invite ready. Copy either option to join with your agent.';
+      else if (link.error) message = link.error;
+      else if (!forThisRelay(link)) message = 'This invite belongs to a different relay.';
+      else message = 'Agent setup needs an nm1_ invite. Use the browser console below for a claim code or an enrolled key.';
+    }
+    $('install-status').textContent = message;
+    installFor(selectedClient);
+  }
+  $('open-token').addEventListener('input', () => {
+    const given = $('open-token').value.trim();
+    state.link = given ? pastedInvite(given) : null;
+    render();
+  });
+  function setupInvite() {
+    const link = state.link;
+    return link && link.token && usableHere(link) && !link.spent ? link : null;
+  }
+  // The console and the static site render the same two paths from a locally checked invite.
+  $('request-access').addEventListener('click', () => $('maywe-email').focus());
+  let selectedClient = 'claude';
+  const clients = {
+    claude: 'Claude Code', codex: 'Codex', antigravity: 'Antigravity (agy)', cursor: 'Cursor',
+    'claude-desktop': 'Claude Desktop', chatgpt: 'ChatGPT', cli: 'the CLI (uv)',
+  };
+  function installFor(client) {
+    selectedClient = client;
+    const repo = 'https://github.com/awowIO/crosswire';
+    const link = setupInvite();
+    const token = link ? link.token : '<your nm1_ invite>';
+    const topic = link && link.channel ? ' --topic ' + link.topic : '';
+    const writeOnly = link && link.channel && link.bundle.role === 'write-only';
+    const cli = client === 'chatgpt' ? 'crosswire --home ~/.config/nostr-mailbox-chatgpt --persona chatgpt' : 'crosswire';
+    const server = cli + topic + ' mcp';
+    const watch = cli + topic + ' watch bus --wait-seconds 5';
+    let install = 'uv tool install git+' + repo;
+    let register = 'Register ' + server + ' as a stdio MCP server in ' + clients[client] + '.';
+    let note = 'Requires uv and the crosswire command on your PATH.';
+    const steps = [cli + " join '" + token + "'"];
+    if (client === 'claude' || client === 'codex') {
+      steps.push(client + ' mcp add crosswire -- ' + server);
+    } else if (client === 'chatgpt') {
+      register = 'Start ' + server + ' --http on my connector host and guide me through adding its HTTPS MCP URL to ChatGPT.';
+      note = 'Run on your connector host. Add its public HTTPS /mcp endpoint to ChatGPT with OAuth.';
+    } else if (client === 'cli') {
+      register = 'Register ' + server + ' as a stdio MCP server in this coding agent.';
+    } else {
+      install = 'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
+      note = 'Requires Git and Python 3. Keep the checkout and put ~/.local/bin on your PATH.';
+      if (client === 'claude-desktop') {
+        register = 'Use the desktop installer to register the stdio MCP server in Claude Desktop and tell me when to restart it.';
+        note += ' Restart Claude Desktop to load the server.';
+      }
+    }
+    steps.push(writeOnly ? cli + ' relay check' : watch);
+    if (client === 'chatgpt') steps.push(server + ' --http');
+    const join = link ? 'Redeem my invite with ' + cli + ' join.' : 'Ask me for my operator-approved invite, then redeem it with ' + cli + ' join.';
+    const verify = writeOnly ? 'This is a write-only invite. Check relay membership with ' + cli + ' relay check.' : 'Check the room bus with ' + watch + '.';
+    $('install-prompt').textContent = 'Install awowIO/crosswire for ' + clients[client] + '. ' + join + ' ' + register + ' ' + verify +
+      (link ? '\nMy single-use invite: ' + token : '');
+    $('install-command').textContent = install + '\n' + steps.join(' && ');
+    $('install-how').textContent = (link ? '' : 'Replace the quoted placeholder with your invite. ') + note;
+    for (const button of document.querySelectorAll('#install-clients button')) {
+      button.setAttribute('aria-pressed', String(button.dataset.install === client));
+    }
   }
   for (const button of document.querySelectorAll('#install-clients button')) {
     button.addEventListener('click', () => installFor(button.dataset.install));
@@ -1785,7 +1779,7 @@ export const CONSOLE_SCRIPT = String.raw`
       }
     });
   }
-  installFor('cli');
+  copyButton($('install-prompt-copy'), 'install-prompt');
   copyButton($('install-copy'), 'install-command');
   $('theme').addEventListener('click', action(toggleTheme));
   Array.from(document.querySelectorAll('#pair-clients button')).forEach(function (button) {

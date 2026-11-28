@@ -1041,16 +1041,22 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert not [(t, a) for t, a in parsed.tags if "style" in a]
     assert re.search(r"#maywe-website \{ position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; "
                      r"pointer-events: none; \}", parsed.style)
+    choices = [a for t, a in parsed.tags if t == "button" and "data-install" in a]
+    assert [a["data-install"] for a in choices] == [
+        "claude", "codex", "antigravity", "cursor", "claude-desktop", "chatgpt", "cli"]
+    assert [a["data-install"] for a in choices if a["aria-pressed"] == "true"] == ["claude"]
+    ids = [a["id"] for _, a in parsed.tags if "id" in a]
+    assert len(ids) == len(set(ids))
+    order = [ids.index(name) for name in ("install-clients", "open-token", "install-prompt", "install-command", "maywe-card")]
+    assert order == sorted(order), "choose an agent, prepare an invite, copy a setup path, or request access"
+    for button in ("install-copy", "install-prompt-copy"):
+        assert any(t == "button" and a.get("id") == button and a["type"] == "button" for t, a in parsed.tags)
     if console_page:
         admission = page[page.index('id="admission"'):page.index('id="workspace"')]
-        steps = re.findall(r'<h3 id="(?:invited|maywe)-title">(.*?)</h3>', admission)
-        assert steps == ["01 · Already invited — Open your room", "02 · Request an invite — Waitlist via MayWe"]
+        assert admission.index('id="maywe-card"') < admission.index('<details id="invited-card">')
         drawer = re.search(r'<details class="returning" id="returning">(.*?)</details>', admission, re.DOTALL)
         assert drawer and all(f'id="{field}"' in drawer[1] for field in
                               ("key-form", "nsec", "signin", "reconnect", "extension-choice", "use-extension"))
-    else:
-        cards = re.findall(r"<section[^>]*>.*?</section>", page[page.index('<div class="grid">'):], re.DOTALL)
-        assert ">01 · Already invited</h2>" in cards[0] and ">02 · Request an invite</h2>" in cards[1]
     opener = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "open-form")
     assert "action" not in opener
     pasted = next(a for t, a in parsed.tags if t == "input" and a.get("id") == "open-token")
@@ -1099,14 +1105,8 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     assert f'const RELAY_HOST = "{RELAY_HOST}";' in page
     assert 'fetch(url, { headers: { Accept: "application/nostr+json" }' in page
     assert "awowIO/nostr-mailbox" not in page, "the repository is awowIO/crosswire now"
-    for command in ("claude plugin marketplace add awowIO/crosswire",
-                    "claude plugin install nostr-mailbox@nostr-mailbox",
-                    "codex plugin marketplace add awowIO/crosswire",
-                    "codex plugin add nostr-mailbox@nostr-mailbox",
-                    "uv tool install git+https://github.com/awowIO/crosswire",
-                    "nostr-mailbox join &lt;nm1_ token or invite link from your operator&gt;",
-                    "nostr-mailbox relay check",
-                    f"nostr-mailbox setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl"):
+    for command in ("nostr-mailbox relay check", f"nostr-mailbox setup --relay wss://{RELAY_HOST} "
+                    "--campaign my-campaign --kubectl", "nostr-mailbox invite --kubectl"):
         assert command in page, command
     # An invite link opens this page at / or /join/ (GitHub Pages sends /join there): the
     # page reads the token from the fragment, then takes the fragment off the address bar.
@@ -1114,7 +1114,6 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     invite = next(a for t, a in parsed.tags if a.get("id") == "invite")
     assert "hidden" in invite, "nothing about an invite shows without one"
     assert re.search(r"^  showInvite\(\);\n  checkRelay\(\);\n</script>", page, re.MULTILINE)
-    assert page.index('id="maywe-title"') < page.index('id="install-title"'), "02 before the install steps"
     assert 'history.replaceState(null, "", location.pathname + location.search);' in page
     assert (pages / ".nojekyll").exists()
     assert json.loads((pages / ".well-known" / "nostr.json").read_text()) == {"names": {}, "relays": {}}
@@ -1738,7 +1737,7 @@ PALETTES = {
 
 def palettes(style: str) -> dict[str, dict[str, str]]:
     css = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
-    return {name: dict(re.findall(r"(--[a-z]+)\s*:\s*([^;]+?)\s*;", rule.search(css).group(1)))
+    return {name: dict(re.findall(r"(--[a-z-]+)\s*:\s*([^;]+?)\s*;", rule.search(css).group(1)))
             for name, rule in PALETTES.items()}
 
 
@@ -1753,14 +1752,16 @@ def test_both_pages_share_one_design_system(worker, build):
     found = [palettes(s) for s in styles]
     assert found[0] == found[1], "one palette on both pages"
     colours = {"--bg", "--panel", "--ink", "--muted", "--line", "--soft", "--accent", "--green", "--red", "--amber",
-               "--head", "--hover", "--shadow"}
+               "--head", "--hover", "--paper", "--stone", "--quiet", "--rule", "--rule-strong", "--teal",
+               "--terracotta", "--terracotta-ink", "--sage"}
     for theme in ("light", "dark"):
         assert colours <= set(found[0][theme]), theme
     assert found[0]["dark"] == found[0]["system dark"], "the toggle's dark is the system's dark"
-    assert found[0]["light"]["--bg"] != found[0]["dark"]["--bg"]
+    assert (found[0]["light"]["--paper"], found[0]["dark"]["--paper"]) == ("#faf9f6", "#14171c")
     for style, script, page in zip(styles, scripts, (console, pages), strict=True):
-        assert 'font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' in style
-        assert "--mono: ui-monospace, SFMono-Regular, Consolas, monospace" in style
+        assert "font: 16px/1.55 var(--sans)" in style
+        assert "--serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" in style
+        assert "--mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace" in style
         assert "font-variant-numeric: tabular-nums" in style
         top = re.search(r"\.top\s*\{([^}]*)\}", style).group(1)
         assert "height: 61px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
@@ -3569,7 +3570,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   await settle();
   for (const [verb, id, value] of scenario.steps) {
     if (verb === 'set') element(id).value = value;
-    if (verb === 'submit' || verb === 'click') {
+    if (verb === 'submit' || verb === 'click' || verb === 'input') {
       for (const fn of element(id).listeners[verb] || []) await fn({ preventDefault() {} });
     }
     if (verb === 'mark') requests.push({ mark: id });
@@ -3633,6 +3634,15 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
     code = hashlib.sha256(b"a pasted code").hexdigest()
     token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="agents",
                          operator_pubkeys=[NIP19_NPUB], code=code, member="boaz")
+    for page in (worker.http("GET", "/")[2].decode(), (build / "github-pages" / "index.html").read_text()):
+        for steps, fragment in (([], f"#{token}"), ([["set", "open-token", token], ["input", "open-token"]], "")):
+            preview = run_page(tmp_path, page, hash=fragment, steps=steps)
+            assert token not in json.dumps(preview["requests"])
+            assert not any("dial" in r or "stored" in r for r in preview["requests"])
+            assert token in preview["elements"]["install-prompt"]["text"]
+            install, join = preview["elements"]["install-command"]["text"].splitlines()
+            assert install == f"uv tool install git+{SOURCE_URL}"
+            assert f"crosswire join '{token}'" in join and "crosswire watch bus" in join
     for given in (f"https://{RELAY_HOST}/join/#{token}", token, f"#join={token}"):
         seen = run_page(tmp_path, worker.http("GET", "/")[2].decode(),
                         steps=[["set", "open-token", given], ["submit", "open-form"]])

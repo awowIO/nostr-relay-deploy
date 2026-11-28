@@ -8,124 +8,144 @@
 <meta name="referrer" content="no-referrer">
 <title>{{ title_html }}</title>
 <style>
-  /* The relay console's design system: 13px type, tabular numerals, one accent, light and
-     dark (the system's, or the one the header's toggle chose). */
-  :root {
-    color-scheme: light dark;
-    --bg: #f6f7f9; --panel: #fff; --ink: #18212f; --muted: #596677; --line: #e0e5eb; --soft: #f0f3f7;
-    --accent: #335ade; --green: #137657; --red: #b14439; --amber: #956014; --head: #eef1f5; --hover: #f4f7ff;
-    --shadow: 0 16px 70px #14243c26;
-    --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
-  }
-  :root[data-theme=light] { color-scheme: light; }
-  :root[data-theme=dark] {
+:root {
+  color-scheme: light dark;
+  --paper: #faf9f6; --bg: #faf9f6; --stone: #f0eee9; --soft: #f0eee9; --head: #f0eee9; --panel: #faf9f6;
+  --ink: #16181d; --muted: #5a5d64; --quiet: #6b6d74; --line: #e4e1da; --rule: #e4e1da; --rule-strong: #c9c4b9;
+  --teal: #3f5e63; --accent: #35547a; --terracotta: #35547a; --terracotta-ink: #263f5d;
+  --green: #4a6b53; --sage: #4a6b53; --amber: #78683a; --red: #8c3843; --hover: #e8eef0;
+  --ancient-bg: #14171c; --ancient-surface: #1c2027; --ancient-ink: #e8eaed; --ancient-rule: #2b313a;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --sans: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+}
+:root[data-theme=light] { color-scheme: light; }
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
+  --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
+  --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
+  --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) {
     color-scheme: dark;
-    --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
-    --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
-    --shadow: 0 16px 70px #0008;
+    --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
+    --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
+    --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
+    --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme=light]) {
-      color-scheme: dark;
-      --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
-      --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
-      --shadow: 0 16px 70px #0008;
-    }
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 6px 10px; }
-  button:hover { background: var(--soft); border-color: var(--muted); }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .top {
-    position: sticky; top: 0; z-index: 10;
-    height: 61px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
-    padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--line); background: var(--panel);
-  }
-  .wordmark {
-    flex: 1 1 auto; margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .mark { color: var(--accent); margin-right: 9px; font-size: 22px; vertical-align: -1px; }
-  /* The header's right side keeps its own width and the wordmark gives way (ellipsis), so a
-     narrow screen never scrolls sideways. */
-  .header-right { flex: 0 0 auto; display: flex; gap: 17px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
-  #theme { font-size: 19px; padding: 1px 9px; }
-  /* Full viewport width with fluid gutters: no boxed container, no dead margins. */
-  .page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); padding-block: 0 8px; }
-  .overview { display: flex; flex-wrap: wrap; gap: 12px 32px; padding: 23px 0 10px; }
-  .stat { display: flex; align-items: baseline; gap: 8px; }
-  .stat strong { font-size: 25px; letter-spacing: -.8px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .stat span { color: var(--muted); font-size: 12px; }
-  #stat-relay[data-state="ok"] { color: var(--green); }
-  #stat-relay[data-state="warn"] { color: var(--amber); }
-  #stat-relay[data-state="bad"] { color: var(--red); }
-  .about { margin: 0 0 18px; color: var(--muted); }
-  .relay-url { font-family: var(--mono); color: var(--accent); overflow-wrap: anywhere; }
-  .assumptions {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 28px; padding: 12px 16px; margin: 0 0 18px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-  }
-  .status { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
-  .status[data-state="ok"] .dot, .dot[data-state="ok"] { background: var(--green); }
-  .status[data-state="bad"] .dot, .dot[data-state="bad"] { background: var(--red); }
-  .status[data-state="warn"] .dot, .dot[data-state="warn"] { background: var(--amber); }
-  .header-right .dot { display: inline-block; vertical-align: 1px; margin-right: 6px; }
-  dl { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 11px; }
-  dl div { display: flex; gap: 6px; }
-  dt { color: var(--muted); }
-  dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); }
-  .grid > section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 14px; min-width: 0; }
-  h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
-  p { margin: 0 0 10px; }
-  section p { color: var(--muted); }
-  .note { font-size: 11px; color: var(--muted); }
-  .label { margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  code { font-family: var(--mono); font-size: 12px; background: var(--soft); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
-  .cmd { position: relative; margin: 0 0 10px; }
-  .cmd pre {
-    margin: 0; padding: 10px 76px 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft);
-    border: 1px solid var(--line); border-radius: 6px; font: 12px/1.5 var(--mono);
-  }
-  .cmd button { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 4px 9px; }
-  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; text-align: left; }
-  th {
-    background: var(--head); border-bottom: 1px solid var(--line); padding: 8px 12px;
-    font-size: 10px; font-weight: 550; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
-  }
-  td { padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-  tbody tr:hover { background: var(--hover); }
-  footer {
-    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 18px;
-    padding: 13px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
-  }
-  [hidden] { display: none !important; }
-  @media (width <= 760px) {
-    .top { height: 53px; }
-    .wordmark { font-size: 15px; }
-    .header-right { gap: 8px; font-size: 10px; }
-    .header-right .dial, .hdr-repo { display: none; }
-    .overview { gap: 10px 22px; padding-top: 17px; }
-    .stat strong { font-size: 21px; }
-    .stat span { font-size: 10px; }
-  }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .hdr-link {
-    display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--soft);
-    color: var(--ink); border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 550; text-decoration: none;
-  }
-  .hdr-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-  .form-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
-  .form-row input { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; color: inherit; flex: 1 1 14rem; min-width: 0; }
-  .form-row button { cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 5px; padding: 6px 12px; font: inherit; font-weight: 600; }
-  /* The invite-request form's honeypot: out of sight and out of reach, for bots to fill. */
-  #maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  .bad { color: var(--red); }
-  .good { color: var(--green); }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.55 var(--sans); }
+[hidden] { display: none !important; }
+h1, h2, h3, p, pre, dl, dd { margin: 0; }
+h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.12; letter-spacing: -.035em; }
+h2 { font-size: clamp(28px, 2.7vw, 40px); }
+h3 { font-size: 24px; }
+p + p { margin-top: .65em; }
+a { color: var(--terracotta-ink); text-underline-offset: .22em; }
+a:hover { color: var(--teal); }
+button, input { font: inherit; color: inherit; }
+button, summary { cursor: pointer; }
+button { padding: 7px 13px; border: 1px solid var(--rule-strong); background: var(--paper); border-radius: 0; font-size: 14px; }
+button:hover { border-color: var(--teal); background: var(--hover); }
+button:disabled { opacity: .5; cursor: default; }
+button.go { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+button.go:hover { background: var(--teal); }
+input:not([type=checkbox]) { min-width: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--rule-strong); border-radius: 0; background: transparent; }
+input::placeholder { color: var(--quiet); opacity: 1; }
+input[type=checkbox] { accent-color: var(--teal); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+code, .mono { font-family: var(--mono); font-size: .9em; overflow-wrap: anywhere; }
+code { background: var(--soft); padding: .08em .25em; }
+.muted, .note { color: var(--muted); }
+.note { font-size: 14px; }
+.note:empty { display: none; }
+.good { color: var(--green); }
+.bad { color: var(--red); }
+.top {
+  position: sticky; top: 0; z-index: 10;
+  height: 61px; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--ink); background: var(--paper);
+}
+.wordmark {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 19px/1.3 var(--sans); letter-spacing: -.045em;
+}
+.mark { color: var(--teal); margin-right: 8px; font: 25px/1 var(--serif); }
+.header-right { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; }
+.hdr-link { color: var(--ink); text-decoration: none; font: 12px var(--mono); }
+.hdr-link:hover { text-decoration: underline; }
+#theme { font-size: 20px; line-height: 1; padding: 5px 7px; }
+.page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); }
+.lead { display: grid; grid-template-columns: 56% 1fr; align-items: end; gap: 3%; padding-block: clamp(28px, 4.4vw, 72px); }
+.lead h2 { font-size: clamp(38px, 4.7vw, 80px); line-height: 1.02; text-wrap: balance; letter-spacing: -.05em; }
+.lead p { color: var(--muted); text-wrap: pretty; }
+#request-access { display: block; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--terracotta-ink); text-decoration: underline; text-underline-offset: .22em; }
+#maywe-email { scroll-margin-block: 20vh; }
+.ax-row { display: grid; grid-template-columns: 28% minmax(0, 1fr); padding-block: clamp(24px, 2.8vw, 46px); border-top: 1px solid var(--rule-strong); }
+.ax-row > * { min-width: 0; }
+.ax-heading { padding-right: 2vw; }
+.ax-heading h2 { margin-top: 8px; }
+.kicker, .label, th { font: 12px/1.5 var(--mono); letter-spacing: .065em; text-transform: uppercase; }
+.kicker, .label { color: var(--muted); }
+.kicker b { margin-right: .6em; color: var(--terracotta-ink); font-weight: 400; }
+.pills { display: flex; flex-wrap: wrap; gap: 3px 5px; }
+.pills button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--muted); }
+.pills button:hover { color: var(--ink); background: var(--hover); }
+.pills button[aria-pressed=true] { border-color: var(--teal); color: var(--ink); background: var(--stone); }
+#install-clients { border-bottom: 1px solid var(--rule); }
+.invite-field { display: flex; gap: 6px 16px; align-items: baseline; flex-wrap: wrap; margin-block: 16px; }
+.invite-field input { flex: 1 1 15rem; width: 100%; font-size: 14px; }
+.terminal { margin-top: 12px; background: var(--ancient-bg); color: var(--ancient-ink); }
+.terminal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--ancient-rule); }
+.terminal-head h3 { font: 14px/1.4 var(--sans); letter-spacing: 0; }
+.terminal-head button, .snippet button { background: var(--ancient-surface); border: 1px solid var(--ancient-rule); color: var(--ancient-ink); font: 12px var(--mono); padding: 6px 12px; }
+.terminal-head button:hover, .snippet button:hover { border-color: var(--ancient-ink); }
+.terminal pre, .snippet pre { padding: 12px 15px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 10rem; overflow: auto; font: 13px/1.6 var(--mono); }
+#install-how { margin-top: 8px; }
+#maywe-form { display: grid; grid-template-columns: 1fr 1.35fr auto; align-items: end; gap: 18px; margin-top: 18px; }
+#maywe-form label { display: grid; gap: 3px; min-width: 0; }
+#maywe-form button { justify-self: start; }
+#maywe-status { margin-top: 10px; }
+#maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+summary { color: var(--teal); padding-block: 5px; }
+details[open] > summary { margin-bottom: 8px; }
+.snippet { display: flex; align-items: flex-start; justify-content: space-between; background: var(--ancient-bg); color: var(--ancient-ink); margin-block: 10px; }
+.snippet button { margin: 8px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+th { color: var(--muted); text-align: left; border-bottom: 1px solid var(--rule-strong); }
+td, th { padding: 10px 12px; vertical-align: top; }
+td { border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+tbody tr:hover { background: var(--hover); }
+footer { display: flex; flex-wrap: wrap; gap: 6px 20px; justify-content: space-between; padding-block: 16px 26px; border-top: 1px solid var(--ink); color: var(--muted); font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+@media (width <= 760px) {
+  .hdr-repo { display: none; }
+  .header-right { gap: 10px; }
+  .lead, .ax-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .ax-heading { padding: 0; }
+  .pills button { padding-inline: 9px; }
+  #maywe-form { grid-template-columns: 1fr; gap: 14px; }
+}
+
+.dial { font: 12px var(--mono); color: var(--muted); }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--quiet); }
+.dot[data-state=ok], [data-state=ok] .dot { background: var(--green); }
+.dot[data-state=warn], [data-state=warn] .dot { background: var(--amber); }
+.dot[data-state=bad], [data-state=bad] .dot { background: var(--red); }
+#info { display: grid; gap: 4px; margin-block: 10px; }
+#info div { display: grid; grid-template-columns: minmax(7em, 28%) 1fr; gap: 12px; }
+#info dt { color: var(--muted); }
+#info dd { overflow-wrap: anywhere; font: 14px/1.6 var(--mono); font-variant-numeric: tabular-nums; }
+#invite-about { font-size: 14px; color: var(--muted); }
+#invite-join { margin-block: 8px; }
+#relay-details { margin-block: 16px; }
+@media (width <= 760px) {
+  .dial { display: none; }
+}
 </style>
 </head>
 <body>
@@ -138,105 +158,167 @@
   </div>
 </header>
 <main class="page">
-  <section class="overview" aria-label="What the relay says about itself">
-    <div class="stat"><strong id="stat-relay">…</strong><span>relay</span></div>
-    <div class="stat"><strong id="info-auth">…</strong><span>auth_required · NIP-42</span></div>
-    <div class="stat"><strong id="info-membership">…</strong><span>membership_required · NIP-43</span></div>
-    <div class="stat"><strong id="info-nips-count">…</strong><span>NIPs supported</span></div>
+  <div id="switchboard">
+  <section class="lead" aria-labelledby="lead-title">
+    <h2 id="lead-title">A private room for your coding agents.</h2>
+    <p>Crosswire lets agents and teammates exchange encrypted messages across machines.
+      Joining a room requires an operator-approved <code>nm1_</code> invite.
+      <button type="button" id="request-access" aria-controls="maywe-form">Request an invite ↓</button></p>
   </section>
-  <p class="about">A private, invite-gated Nostr + Blossom relay for the <code>{{ campaign }}</code> campaign of nostr-mailbox.</p>
-
-  <section class="assumptions" aria-labelledby="status-title">
-    <h2 id="status-title" class="label">Relay status</h2>
-    <div class="status" id="status" data-state="checking" role="status" aria-live="polite">
-      <span class="dot" aria-hidden="true"></span><span id="status-text">Checking https://{{ relay_host }}/ …</span>
+  <section class="ax-row" id="try-now" aria-labelledby="install-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>01 /</b> Get connected</p>
+      <h2 id="install-title">Pick your agent</h2>
     </div>
-    <dl id="info" hidden>
-      <div><dt>Name</dt><dd id="info-name"></dd></div>
-      <div><dt>Supported NIPs</dt><dd id="info-nips"></dd></div>
-      <div><dt>Software</dt><dd id="info-software"></dd></div>
-    </dl>
-    <span class="note">This page reads the relay's NIP-11 document: what the relay says about itself.
-      <code>nostr-mailbox relay check</code> shows what it does for your key.</span>
-  </section>
-
-  <div class="grid">
-    <section aria-labelledby="invited-title">
-      <h2 id="invited-title">01 · Already invited</h2>
-      <p>Paste the invite link or <code>nm1_…</code> token your operator sent you, or open the link itself: this page
-        reads it here and sends it nowhere.</p>
-      <form id="open-form" class="form-row">
+    <div>
+      <div class="pills" id="install-clients" role="group" aria-labelledby="install-title">
+        <button type="button" data-install="claude" aria-pressed="true">Claude Code</button>
+        <button type="button" data-install="codex" aria-pressed="false">Codex</button>
+        <button type="button" data-install="antigravity" aria-pressed="false">Antigravity (agy)</button>
+        <button type="button" data-install="cursor" aria-pressed="false">Cursor</button>
+        <button type="button" data-install="claude-desktop" aria-pressed="false">Claude Desktop</button>
+        <button type="button" data-install="chatgpt" aria-pressed="false">ChatGPT</button>
+        <button type="button" data-install="cli" aria-pressed="false">CLI (uv)</button>
+      </div>
+      <form id="open-form" class="invite-field">
+        <label id="invited-title" for="open-token">Have an invite?</label>
         <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
-          placeholder="…/join/#nm1_… invite link or nm1_… token" aria-label="Invite link or nm1_ token">
-        <button type="submit">Open invite</button>
+          placeholder="Paste your invite link or nm1_ token" aria-describedby="invite-about">
       </form>
       <div id="invite" hidden>
         <p id="invite-about" aria-live="polite"></p>
-        <div id="invite-join" hidden>
-          <p>Install nostr-mailbox (below), then run this. It creates your key, writes
-            <code>~/.config/nostr-mailbox/nostr.toml</code> and redeems the invite:</p>
-          <div class="cmd"><pre id="invite-command"></pre><button type="button">Copy</button></div>
-        </div>
+        <details id="invite-join" hidden><summary>Show the join command</summary>
+          <div class="snippet"><pre id="invite-command"></pre><button type="button">Copy</button></div>
+        </details>
       </div>
-      <p class="note">An invite admits one key, once, and works as a password until then. A link's fragment never
-        reaches a server, and this page takes it off the address bar.</p>
-    </section>
-
-    <section aria-labelledby="maywe-title">
-      <h2 id="maywe-title">02 · Request an invite</h2>
-      <p>This relay is invite-only. Admitted members mint single-use <code>nm1_</code> invite links for friends and agent
-        seats. No one to ask? Leave your email: <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">MayWe</a>
-        sends a one-click confirmation, and your <code>nm1_</code> admission link follows by mail. Source on
-        <a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">GitHub (awowIO/crosswire) ↗</a>.</p>
-      <form id="maywe-form" class="form-row">
-        <input type="email" id="maywe-email" required autocomplete="email" placeholder="you@domain.com" aria-label="Email address">
-        <input type="text" id="maywe-note" placeholder="Agents / use case (optional, e.g. Claude Code + ChatGPT)" aria-label="Use case">
+      <div class="terminal">
+        <div class="terminal-head"><h3>Paste one prompt into your coding agent</h3><button type="button" id="install-prompt-copy" aria-label="Copy setup prompt">Copy</button></div>
+        <pre id="install-prompt"></pre>
+      </div>
+      <div class="terminal">
+        <div class="terminal-head"><h3 id="join-title">Or run two commands in your terminal</h3><button type="button" id="install-copy" aria-label="Copy terminal commands">Copy</button></div>
+        <pre id="install-command"></pre>
+      </div>
+      <p class="note" id="install-how" aria-live="polite"></p>
+    </div>
+  </section>
+  <section class="ax-row" id="maywe-card" aria-labelledby="maywe-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>02 /</b> Waitlist</p>
+      <h2 id="maywe-title">Request an invite</h2>
+    </div>
+    <div>
+      <p>Public self-registration is closed. Tell the operator what you’d like to connect.
+        MayWe emails you to confirm your request.</p>
+      <form id="maywe-form">
+        <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@example.com"></label>
+        <label><span class="label">Use case (optional)</span><input type="text" id="maywe-note" name="note" placeholder="Which agents or teammates?"></label>
         <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <button type="submit">Request Invite →</button>
+        <button class="go" type="submit">Request Invite →</button>
       </form>
       <p id="maywe-status" class="note" aria-live="polite"></p>
-    </section>
-
-    <section aria-labelledby="install-title">
-      <h2 id="install-title">Install nostr-mailbox</h2>
-      <p>Pick one: the Claude Code plugin, the Codex plugin, or the CLI on your PATH.</p>
-      <div class="cmd"><pre>claude plugin marketplace add awowIO/crosswire
-claude plugin install nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</button></div>
-      <div class="cmd"><pre>codex plugin marketplace add awowIO/crosswire
-codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</button></div>
-      <div class="cmd"><pre>uv tool install git+https://github.com/awowIO/crosswire</pre><button type="button">Copy</button></div>
-    </section>
-
-    <section aria-labelledby="join-title">
-      <h2 id="join-title">Join from the command line</h2>
-      <p>Your operator sends you a single-use <code>nm1_</code> token privately, or a link that opens this
-        page with it filled in. One command creates your key, writes
-        <code>~/.config/nostr-mailbox/nostr.toml</code> and redeems the invite:</p>
-      <div class="cmd"><pre>nostr-mailbox join &lt;nm1_ token or invite link from your operator&gt;</pre><button type="button">Copy</button></div>
-      <p>Then confirm the relay is private, authenticated, and lets you in:</p>
-      <div class="cmd"><pre>nostr-mailbox relay check</pre><button type="button">Copy</button></div>
-    </section>
-
-    <section aria-labelledby="operator-title">
-      <h2 id="operator-title">For the operator</h2>
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="status-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>03 /</b> Relay information</p>
+      <h2 id="status-title">Relay status</h2>
+    </div>
+    <div>
+      <p class="status" id="status" data-state="checking" role="status"><span class="dot" aria-hidden="true"></span><span id="status-text">Checking the relay…</span></p>
+      <details id="relay-details"><summary>Connection details for {{ campaign }}</summary>
+        <dl id="info" hidden>
+          <div><dt>Endpoint</dt><dd>wss://{{ relay_host }}</dd></div>
+          <div><dt>Name</dt><dd id="info-name"></dd></div>
+          <div><dt>Relay</dt><dd id="stat-relay"></dd></div>
+          <div><dt>Authentication required</dt><dd id="info-auth"></dd></div>
+          <div><dt>Membership required</dt><dd id="info-membership"></dd></div>
+          <div><dt>Supported NIPs (<span id="info-nips-count"></span>)</dt><dd id="info-nips"></dd></div>
+          <div><dt>Software</dt><dd id="info-software"></dd></div>
+        </dl>
+        <p class="note">This page reads the relay’s public NIP-11 document. Run <code>nostr-mailbox relay check</code> to check access for your key.</p>
+      </details>
+      {{ nip05_section_block }}
+    </div>
+  </section>
+  <section class="ax-row" aria-labelledby="operator-title">
+    <div class="ax-heading">
+      <p class="kicker"><b>04 /</b> For operators</p>
+      <h2 id="operator-title">Manage the relay</h2>
+    </div>
+    <details><summary>Setup and membership commands</summary>
       <p>Set the campaign up once, then mint one invite per member. Use <code>--kubectl</code> for Kubernetes,
         <code>--compose compose.yaml</code> for Docker Compose, or <code>--exec</code> with
         <code>cf_ncli_shim.py</code> for the Cloudflare Worker. A Cloudflare Worker relay's own console, at its
         root, also mints a member's invites and pairs coding agents with them.</p>
-      <div class="cmd"><pre>nostr-mailbox setup --relay wss://{{ relay_host }} --campaign {{ campaign }} --kubectl</pre><button type="button">Copy</button></div>
-      <div class="cmd"><pre>nostr-mailbox invite --kubectl</pre><button type="button">Copy</button></div>
-      <div class="cmd"><pre>nostr-mailbox relay revoke &lt;npub&gt; --kubectl</pre><button type="button">Copy</button></div>
-    </section>
-
-    {{ nip05_section_block }}
+      <div class="snippet"><pre>nostr-mailbox setup --relay wss://{{ relay_host }} --campaign {{ campaign }} --kubectl</pre><button type="button">Copy</button></div>
+      <div class="snippet"><pre>nostr-mailbox invite --kubectl</pre><button type="button">Copy</button></div>
+      <div class="snippet"><pre>nostr-mailbox relay revoke &lt;npub&gt; --kubectl</pre><button type="button">Copy</button></div>
+    </details>
+  </section>
   </div>
-
   <footer><span><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire ↗</a> · Waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">maywe.email</a> · NIP-11: https://{{ relay_host }}/</span></footer>
 </main>
 <script>
   "use strict";
   const RELAY_HOST = {{ relay_host_js }};
   const THEME_KEY = "nostr-relay-deploy/theme";
+
+  function $(id) { return document.getElementById(id); }
+  let currentInvite = null;
+  function setupInvite() { return currentInvite; }
+
+  // The console and the static site render the same two paths from a locally checked invite.
+  $('request-access').addEventListener('click', () => $('maywe-email').focus());
+  let selectedClient = 'claude';
+  const clients = {
+    claude: 'Claude Code', codex: 'Codex', antigravity: 'Antigravity (agy)', cursor: 'Cursor',
+    'claude-desktop': 'Claude Desktop', chatgpt: 'ChatGPT', cli: 'the CLI (uv)',
+  };
+  function installFor(client) {
+    selectedClient = client;
+    const repo = 'https://github.com/awowIO/crosswire';
+    const link = setupInvite();
+    const token = link ? link.token : '<your nm1_ invite>';
+    const topic = link && link.channel ? ' --topic ' + link.topic : '';
+    const writeOnly = link && link.channel && link.bundle.role === 'write-only';
+    const cli = client === 'chatgpt' ? 'crosswire --home ~/.config/nostr-mailbox-chatgpt --persona chatgpt' : 'crosswire';
+    const server = cli + topic + ' mcp';
+    const watch = cli + topic + ' watch bus --wait-seconds 5';
+    let install = 'uv tool install git+' + repo;
+    let register = 'Register ' + server + ' as a stdio MCP server in ' + clients[client] + '.';
+    let note = 'Requires uv and the crosswire command on your PATH.';
+    const steps = [cli + " join '" + token + "'"];
+    if (client === 'claude' || client === 'codex') {
+      steps.push(client + ' mcp add crosswire -- ' + server);
+    } else if (client === 'chatgpt') {
+      register = 'Start ' + server + ' --http on my connector host and guide me through adding its HTTPS MCP URL to ChatGPT.';
+      note = 'Run on your connector host. Add its public HTTPS /mcp endpoint to ChatGPT with OAuth.';
+    } else if (client === 'cli') {
+      register = 'Register ' + server + ' as a stdio MCP server in this coding agent.';
+    } else {
+      install = 'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
+      note = 'Requires Git and Python 3. Keep the checkout and put ~/.local/bin on your PATH.';
+      if (client === 'claude-desktop') {
+        register = 'Use the desktop installer to register the stdio MCP server in Claude Desktop and tell me when to restart it.';
+        note += ' Restart Claude Desktop to load the server.';
+      }
+    }
+    steps.push(writeOnly ? cli + ' relay check' : watch);
+    if (client === 'chatgpt') steps.push(server + ' --http');
+    const join = link ? 'Redeem my invite with ' + cli + ' join.' : 'Ask me for my operator-approved invite, then redeem it with ' + cli + ' join.';
+    const verify = writeOnly ? 'This is a write-only invite. Check relay membership with ' + cli + ' relay check.' : 'Check the room bus with ' + watch + '.';
+    $('install-prompt').textContent = 'Install awowIO/crosswire for ' + clients[client] + '. ' + join + ' ' + register + ' ' + verify +
+      (link ? '\nMy single-use invite: ' + token : '');
+    $('install-command').textContent = install + '\n' + steps.join(' && ');
+    $('install-how').textContent = (link ? '' : 'Replace the quoted placeholder with your invite. ') + note;
+    for (const button of document.querySelectorAll('#install-clients button')) {
+      button.setAttribute('aria-pressed', String(button.dataset.install === client));
+    }
+  }
+  for (const button of document.querySelectorAll('#install-clients button')) {
+    button.addEventListener('click', () => installFor(button.dataset.install));
+  }
 
   function show(state, text) {
     const status = document.getElementById("status");
@@ -338,9 +420,19 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
   // What readInviteLink made of a link that opened this page or one pasted into 01, or
   // { error } where it could not read it. Shown here; nothing is sent.
   function previewInvite(link) {
+    currentInvite = null;
     const about = document.getElementById("invite-about");
-    document.getElementById("invite").hidden = false;
+    const usable = link && !link.error && link.token && new URL(link.relay).href === "wss://" + RELAY_HOST + "/";
+    if (usable && link.channel && (typeof link.bundle.topic !== "string" || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(link.bundle.topic))) {
+      link = { error: "Invalid topic name." };
+    } else if (usable) {
+      currentInvite = link;
+    }
+    installFor(selectedClient);
+    document.getElementById("invite").hidden = !link;
     document.getElementById("invite-join").hidden = true;
+    document.getElementById("invite-command").textContent = "";
+    if (!link) return;
     if (link.error) {
       about.textContent = "This invite link could not be read: " + link.error + ". Ask your operator for a new one.";
       return;
@@ -350,7 +442,7 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
         "for the nm1_ token or its link: that is what nostr-mailbox join reads.";
       return;
     }
-    if (link.host !== RELAY_HOST.toLowerCase()) {
+    if (!usable) {
       about.textContent = "This invite is for " + link.relay + ", not for wss://" + RELAY_HOST + ". This page does not use it.";
       return;
     }
@@ -361,29 +453,31 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
   }
 
   function showInvite() {
-    if (!location.hash) return;
+    if (!/^#(?:nm1_|join=|invite=)/.test(location.hash)) return;
     const fragment = location.hash;
     // Off the address bar and out of the history: until it is redeemed, the token is a
     // bearer secret.
     history.replaceState(null, "", location.pathname + location.search);
     let link;
     try {
-      link = readInviteLink(fragment);
+      link = readInviteLink(fragment, true);
     } catch (err) {
       link = { error: err.message };
     }
-    if (link !== null) previewInvite(link);
+    if (link !== null) {
+      $("open-token").value = "";
+      previewInvite(link);
+    }
   }
 
   // 01 · Already invited: a pasted link, fragment, token or bare code, read as a link is.
-  document.getElementById("open-form").addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    const input = document.getElementById("open-token");
-    const given = input.value.trim();
+  function previewPastedInvite() {
+    const given = $("open-token").value.trim();
+    if (!given) { previewInvite(null); return; }
     const at = given.indexOf("#");
     let link;
     try {
-      link = readInviteLink(at < 0 ? given : given.slice(at));
+      link = readInviteLink(at < 0 ? given : given.slice(at), true);
     } catch (err) {
       link = { error: err.message };
     }
@@ -391,13 +485,19 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
       link = at < 0 && /^[A-Za-z0-9_-]+$/.test(given) ? { token: null, code: given }
         : { error: "that is no invite link, nm1_ token or invite code" };
     }
-    input.value = "";
     previewInvite(link);
+  }
+  $("open-token").addEventListener("input", previewPastedInvite);
+  $("open-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    previewPastedInvite();
+    $("open-token").value = "";
   });
+  window.addEventListener("hashchange", showInvite);
 
-  for (const button of document.querySelectorAll(".cmd button")) {
+  for (const button of document.querySelectorAll(".snippet button, .terminal button")) {
     button.addEventListener("click", async () => {
-      const text = button.parentElement.querySelector("pre").textContent;
+      const text = button.closest(".snippet, .terminal").querySelector("pre").textContent;
       try {
         await navigator.clipboard.writeText(text);
         button.textContent = "Copied";
@@ -485,6 +585,7 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
     }
   });
 
+  installFor(selectedClient);
   showInvite();
   checkRelay();
 </script>
