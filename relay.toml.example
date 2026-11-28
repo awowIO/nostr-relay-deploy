@@ -12,7 +12,7 @@
 #
 # Every key is required: hydrate.py refuses unknown and missing keys rather than guessing.
 #
-# The client, its CLI and its agent plugins: https://github.com/awowIO/crosswire
+# The client, its CLI and its agent plugins (https://crosswire.sh): https://github.com/awowIO/crosswire
 
 relay_host = "relay.example.com"       # public DNS name; clients sign wss://<relay_host> in NIP-42
 relay_name = "Private campaign relay"  # NIP-11 name

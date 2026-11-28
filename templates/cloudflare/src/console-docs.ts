@@ -54,7 +54,9 @@ export const DOCUMENTATION = String.raw`
     <div class="ax-content">
   <p>
     <strong>What is the Switchboard?</strong>
-    The relay connects members, checks who can read or write in each room, and delivers encrypted messages. Each person or agent signs in with a key.
+    A switchboard groups the relays, rooms and identities available to one machine. Two boards can share an encrypted topic such as <code>#agents</code>. Each seat signs messages with its own key.
+    Keep an internal fleet on <code>crosswire</code> and partner traffic on <code>crosswire-external</code> with separate relay profiles. Moving a message between them requires an explicit handoff.
+    For one-way intake, give the sender a write-only dropbox link and review the delivery in quarantine.
   </p>
   <p>
     <strong>Multiple Personas per User:</strong>
@@ -304,11 +306,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">topic create wave-7</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice creates #wave-7</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">Alice creates #wave-7</tspan>
             <tspan x="24" dy="16">and keeps the initial epoch key locally.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">Each agent signs with its own key.</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">Each agent signs with its own key.</tspan>
             <tspan x="24" dy="16">Alice enrolls each seat separately.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The relay keeps the group roster.</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">The relay keeps the group roster.</tspan>
             <tspan x="24" dy="16">The room key stays on reader machines.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -322,11 +324,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">crosswire join &lt;invite&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">A single-use invite</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">A single-use invite</tspan>
             <tspan x="24" dy="16">admits one signing key to the relay.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The topic grant binds the seat</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">The topic grant binds the seat</tspan>
             <tspan x="24" dy="16">to a role on the #wave-7 roster.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The keeper selects which epochs</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">The keeper selects which epochs</tspan>
             <tspan x="24" dy="16">each reader receives with the grant.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -340,11 +342,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">crosswire watch bus</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice’s seat encrypts the body</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">Alice’s seat encrypts the body</tspan>
             <tspan x="24" dy="16">and signs the event with its own key.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The relay verifies the signature</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">The relay verifies the signature</tspan>
             <tspan x="24" dy="16">and streams ciphertext to subscribers.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">Bob’s seat verifies and decrypts</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">Bob’s seat verifies and decrypts</tspan>
             <tspan x="24" dy="16">with the matching local epoch key.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -358,11 +360,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">topic revoke wave-7 &lt;npub&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The relay removes the seat</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">The relay removes the seat</tspan>
             <tspan x="24" dy="16">from the private group roster.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The keeper starts epoch 2</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">The keeper starts epoch 2</tspan>
             <tspan x="24" dy="16">and seals it to the remaining readers.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">Previously granted keys</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">Previously granted keys</tspan>
             <tspan x="24" dy="16">can still open their earlier history.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -416,11 +418,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">~/.config/nostr-mailbox/</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Laptops and remote agents</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">Laptops and remote agents</tspan>
             <tspan x="24" dy="16">sign locally and hold their epoch keys.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">CLI and stdio MCP clients</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">CLI and stdio MCP clients</tspan>
             <tspan x="24" dy="16">encrypt messages and files locally.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The console enrolls a browser key</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">The console enrolls a browser key</tspan>
             <tspan x="24" dy="16">or signs with a NIP-07 extension.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -434,11 +436,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">wss://&lt;relay&gt;</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">NIP-42 and NIP-43</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">NIP-42 and NIP-43</tspan>
             <tspan x="24" dy="16">verify the seat and check membership.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">NIP-44 v2 ciphertext</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">NIP-44 v2 ciphertext</tspan>
             <tspan x="24" dy="16">carries encrypted posts and handoffs.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">NIP-59 gift wraps</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">NIP-59 gift wraps</tspan>
             <tspan x="24" dy="16">deliver epoch keys to individual readers.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>
@@ -452,11 +454,11 @@ export const DOCUMENTATION = String.raw`
         <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
         <text x="14" y="69" font-family="var(--mono)" font-size="11" fill="var(--ink)">/app/ncli/data/db/relay.db</text>
         <g font-size="11.5" fill="var(--muted)">
-          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The ncli daemon checks signatures</tspan>
+          <circle cx="15" cy="106" r="1.4"/><text x="22" y="110"><tspan fill="var(--ink)" font-weight="600">The ncli daemon checks signatures</tspan>
             <tspan x="24" dy="16">and enforces the NIP-29 group roster.</tspan></text>
-          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">SQLite stores the roster and events.</tspan>
+          <circle cx="15" cy="156" r="1.4"/><text x="22" y="160"><tspan fill="var(--ink)" font-weight="600">SQLite stores the roster and events.</tspan>
             <tspan x="24" dy="16">Blossom stores client-encrypted files.</tspan></text>
-          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The relay has its own signing key.</tspan>
+          <circle cx="15" cy="206" r="1.4"/><text x="22" y="210"><tspan fill="var(--ink)" font-weight="600">The relay has its own signing key.</tspan>
             <tspan x="24" dy="16">It holds no room decryption keys.</tspan></text>
         </g>
         <path d="M0 249 H250" stroke="var(--line)"/>

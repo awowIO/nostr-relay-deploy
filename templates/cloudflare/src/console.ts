@@ -10,290 +10,527 @@ import { DOCUMENTATION } from "./console-docs.ts";
 export const CONSOLE_STYLE = String.raw`
 :root {
   color-scheme: light dark;
-  --paper: #faf9f6; --bg: #faf9f6; --stone: #f0eee9; --soft: #f0eee9; --head: #f0eee9; --panel: #faf9f6;
-  --ink: #16181d; --muted: #5a5d64; --quiet: #6b6d74; --line: #e4e1da; --rule: #e4e1da; --rule-strong: #c9c4b9;
-  --teal: #3f5e63; --accent: #35547a; --terracotta: #35547a; --terracotta-ink: #263f5d;
-  --green: #4a6b53; --sage: #4a6b53; --amber: #78683a; --red: #8c3843; --hover: #e8eef0;
-  --ancient-bg: #14171c; --ancient-surface: #1c2027; --ancient-ink: #e8eaed; --ancient-rule: #2b313a;
-  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --paper: #faf9f6; --bg: #faf9f6; --stone: #f1f0ec; --soft: #f1f0ec; --head: #f1f0ec; --panel: #ffffff;
+  --ink: #181c20; --muted: #586068; --quiet: #6d757d; --line: #e2e0d8; --rule: #e2e0d8; --rule-strong: #c5c2b8;
+  --accent: #244b7a; --cobalt: #244b7a; --hover: #e6eef2; --green: #28664b; --sage: #28664b; --wash: #dce8df;
+  --amber: #b8892e; --brass: #b8892e; --gold: #d19a30; --red: #9e3b42;
+  --ancient-bg: #12161a; --ancient-surface: #181e24; --ancient-ink: #e6eaee; --ancient-rule: #28313a;
   --sans: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
 }
 :root[data-theme=light] { color-scheme: light; }
 :root[data-theme=dark] {
   color-scheme: dark;
-  --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
-  --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
-  --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
-  --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
+  --paper: #111518; --bg: #111518; --stone: #171c21; --panel: #171c21; --head: #171c21; --soft: #1e252b;
+  --ink: #eaeef2; --muted: #9da7b2; --quiet: #7c8691; --line: #273038; --rule: #273038; --rule-strong: #394550;
+  --accent: #7fa6d6; --cobalt: #7fa6d6; --green: #7ec2a0; --sage: #7ec2a0; --wash: #223831;
+  --amber: #d8ae5e; --brass: #d8ae5e; --red: #e08b92; --hover: #1f2831; --sun-display: none; --moon-display: block;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
     color-scheme: dark;
-    --paper: #14171c; --bg: #14171c; --stone: #1c2027; --panel: #1c2027; --head: #1c2027; --soft: #222730;
-    --ink: #e8eaed; --muted: #a9b0bc; --quiet: #8b93a1; --line: #2b313a; --rule: #2b313a; --rule-strong: #3d4552;
-    --teal: #8ba6aa; --accent: #8fa8c4; --terracotta: #8fa8c4; --terracotta-ink: #afc4dc;
-    --green: #8fae95; --sage: #8fae95; --amber: #b8ab84; --red: #e08b94; --hover: #252c37;
+    --paper: #111518; --bg: #111518; --stone: #171c21; --panel: #171c21; --head: #171c21; --soft: #1e252b;
+    --ink: #eaeef2; --muted: #9da7b2; --quiet: #7c8691; --line: #273038; --rule: #273038; --rule-strong: #394550;
+    --accent: #7fa6d6; --cobalt: #7fa6d6; --green: #7ec2a0; --sage: #7ec2a0; --wash: #223831;
+    --amber: #d8ae5e; --brass: #d8ae5e; --red: #e08b92; --hover: #1f2831; --sun-display: none; --moon-display: block;
   }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--paper); color: var(--ink); font: 16px/1.55 var(--sans); }
+body { background: var(--paper); color: var(--ink); font: 13.5px/1.5 var(--sans); }
 [hidden] { display: none !important; }
 h1, h2, h3, p, pre, dl, dd { margin: 0; }
-h2, h3 { font-family: var(--serif); font-weight: 400; line-height: 1.12; letter-spacing: -.035em; }
-h2 { font-size: clamp(28px, 2.7vw, 40px); }
-h3 { font-size: 24px; }
-p + p { margin-top: .65em; }
-a { color: var(--terracotta-ink); text-underline-offset: .22em; }
-a:hover { color: var(--teal); }
+h1, h2, h3 { font-weight: 640; line-height: 1.25; letter-spacing: -.025em; }
+h1, h2 { font-size: 20px; }
+h3 { font-size: 15px; }
+p + p { margin-top: .5em; }
+a, summary { color: var(--cobalt); text-underline-offset: .2em; }
 button, input { font: inherit; color: inherit; }
 button, summary { cursor: pointer; }
-button { padding: 7px 13px; border: 1px solid var(--rule-strong); background: var(--paper); border-radius: 0; font-size: 14px; }
-button:hover { border-color: var(--teal); background: var(--hover); }
-button:disabled { opacity: .5; cursor: default; }
-button.go { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-button.go:hover { background: var(--teal); }
-input:not([type=checkbox]) { min-width: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--rule-strong); border-radius: 0; background: transparent; }
+button { padding: 5px 10px; background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 4px; }
+button:hover { background: var(--hover); border-color: var(--cobalt); }
+button:disabled { opacity: .55; cursor: default; }
+button.go { background: var(--cobalt); color: var(--paper); border-color: var(--cobalt); }
+input:not([type=checkbox]) { min-width: 0; padding: 4px 0; border: 0; border-bottom: 1px solid var(--rule-strong); border-radius: 0; background: transparent; }
 input::placeholder { color: var(--quiet); opacity: 1; }
-input[type=checkbox] { accent-color: var(--teal); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-code, .mono { font-family: var(--mono); font-size: .9em; overflow-wrap: anywhere; }
+input[type=checkbox] { accent-color: var(--sage); }
+:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+code, .mono { font: .91em/1.5 var(--mono); overflow-wrap: anywhere; }
 code { background: var(--soft); padding: .08em .25em; }
 .muted, .note { color: var(--muted); }
-.note { font-size: 14px; }
+.note { font-size: 12px; }
 .note:empty { display: none; }
 .good { color: var(--green); }
 .bad { color: var(--red); }
+.icon { display: inline-block; width: 16px; height: 16px; flex: none; vertical-align: middle; }
 .top {
-  position: sticky; top: 0; z-index: 10;
-  height: 61px; display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--ink); background: var(--paper);
+  position: sticky; top: 0; z-index: 10; height: 48px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--rule-strong); background: var(--paper);
 }
-.wordmark {
-  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font: 600 19px/1.3 var(--sans); letter-spacing: -.045em;
+.brand, .wordmark, .header-right, .tabs { display: flex; align-items: center; }
+.brand { gap: 8px; height: 100%; }
+.wordmark { gap: 8px; font-size: 19px; font-weight: 690; letter-spacing: -.055em; }
+.mark { width: 26px; height: 26px; }
+.bird-btn { align-self: end; width: 64px; padding: 0; border: 0; border-bottom: 1px dashed var(--brass); border-radius: 0; background: transparent; }
+.bird-btn svg { display: block; width: 100%; overflow: visible; }
+.bird-hop, .bird-beak, .bird-wing { transform-box: fill-box; transform-origin: center bottom; }
+@media (prefers-reduced-motion: no-preference) {
+  .bird-btn.is-playing .bird-hop { animation: bird-hop 2.2s ease-in-out; }
+  .bird-btn.is-playing .bird-wing { animation: bird-wing 2.2s ease-in-out; }
+  .bird-btn.is-playing .bird-beak, .bird-btn.is-playing .bird-knot { animation: bird-tug 2.2s ease-in-out; }
+  .bird-btn.is-playing .bird-thread { animation: bird-thread 2.2s linear; }
 }
-.mark { color: var(--teal); margin-right: 8px; font: 25px/1 var(--serif); }
-.header-right { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; }
-.hdr-link { color: var(--ink); text-decoration: none; font: 12px var(--mono); }
-.hdr-link:hover { text-decoration: underline; }
-#theme { font-size: 20px; line-height: 1; padding: 5px 7px; }
+@keyframes bird-hop { 12% { transform: scale(1.06,.89); } 28% { transform: translate(4px,-12px) rotate(-6deg); } 42%,100% { transform: none; } }
+@keyframes bird-wing { 18%,28% { transform: rotate(32deg); } 23%,33% { transform: rotate(-10deg); } }
+@keyframes bird-tug { 62%,80% { transform: translate(-5px,-2px); } 72%,90% { transform: none; } }
+@keyframes bird-thread { 65%,85% { stroke-dashoffset: -8; } }
+.tabs { height: 100%; gap: clamp(8px, 1.2vw, 22px); overflow-x: auto; }
+.tabs a { display: grid; place-items: center; height: 100%; padding: 0 4px; color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; font-size: 12px; }
+.tabs a[aria-current=page], .tabs a:hover { color: var(--cobalt); border-color: currentColor; }
+.header-right { flex: 0 0 auto; gap: 9px; }
+.hdr-link, #theme { display: grid; place-items: center; width: 28px; height: 28px; background: transparent; border: 0; border-radius: 4px; color: var(--muted); }
+.hdr-link:hover, #theme:hover { background: var(--hover); color: var(--cobalt); }
+#theme .moon { display: var(--moon-display, none); }
+#theme .sun { display: var(--sun-display, block); }
+.relay-pill { display: flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--rule); border-radius: 20px; font: 11px/1.65 var(--mono); white-space: nowrap; color: var(--muted); }
+.relay-pill svg { width: 10px; height: 10px; }
+.relay-pill.good, .relay-pill[data-state=ok] { color: var(--sage); background: var(--wash); border-color: transparent; }
+.relay-pill.bad, .relay-pill[data-state=bad] { color: var(--red); }
 .page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); }
-.lead { display: grid; grid-template-columns: 56% 1fr; align-items: end; gap: 3%; padding-block: clamp(28px, 4.4vw, 72px); }
-.lead h2 { font-size: clamp(38px, 4.7vw, 80px); line-height: 1.02; text-wrap: balance; letter-spacing: -.05em; }
-.lead p { color: var(--muted); text-wrap: pretty; }
-#request-access { display: block; margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--terracotta-ink); text-decoration: underline; text-underline-offset: .22em; }
-#maywe-email { scroll-margin-block: 20vh; }
-.ax-row { display: grid; grid-template-columns: 28% minmax(0, 1fr); padding-block: clamp(24px, 2.8vw, 46px); border-top: 1px solid var(--rule-strong); }
-.ax-row > * { min-width: 0; }
-.ax-heading { padding-right: 2vw; }
-.ax-heading h2 { margin-top: 8px; }
-.kicker, .label, th { font: 12px/1.5 var(--mono); letter-spacing: .065em; text-transform: uppercase; }
-.kicker, .label { color: var(--muted); }
-.kicker b { margin-right: .6em; color: var(--terracotta-ink); font-weight: 400; }
-.pills { display: flex; flex-wrap: wrap; gap: 3px 5px; }
-.pills button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--muted); }
-.pills button:hover { color: var(--ink); background: var(--hover); }
-.pills button[aria-pressed=true] { border-color: var(--teal); color: var(--ink); background: var(--stone); }
-#install-clients { border-bottom: 1px solid var(--rule); }
-.invite-field { display: flex; gap: 6px 16px; align-items: baseline; flex-wrap: wrap; margin-block: 16px; }
-.invite-field input { flex: 1 1 15rem; width: 100%; font-size: 14px; }
-.terminal { margin-top: 12px; background: var(--ancient-bg); color: var(--ancient-ink); }
-.terminal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--ancient-rule); }
-.terminal-head h3 { font: 14px/1.4 var(--sans); letter-spacing: 0; }
-.terminal-head button, .snippet button { background: var(--ancient-surface); border: 1px solid var(--ancient-rule); color: var(--ancient-ink); font: 12px var(--mono); padding: 6px 12px; }
-.terminal-head button:hover, .snippet button:hover { border-color: var(--ancient-ink); }
-.terminal pre, .snippet pre { padding: 12px 15px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 10rem; overflow: auto; font: 13px/1.6 var(--mono); }
-#install-how { margin-top: 8px; }
-#maywe-form { display: grid; grid-template-columns: 1fr 1.35fr auto; align-items: end; gap: 18px; margin-top: 18px; }
-#maywe-form label { display: grid; gap: 3px; min-width: 0; }
-#maywe-form button { justify-self: start; }
-#maywe-status { margin-top: 10px; }
+.patchbay { padding-top: 16px; }
+.patch-head, .tray-head, .terminal-head, .board-head, .patch-foot, footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.patch-head { display: grid; grid-template-columns: minmax(0,1fr) auto; margin-bottom: 12px; }
+.patch-head p { margin-top: 2px; color: var(--muted); }
+.modes, .pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.modes { border: 1px solid var(--rule); padding: 3px; background: var(--stone); border-radius: 5px; }
+.modes button, .pills button { padding: 5px 8px; border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; }
+.modes button[aria-pressed=true], .pills button[aria-pressed=true] { color: var(--cobalt); background: var(--panel); border-color: var(--rule-strong); box-shadow: 0 1px 2px #0001; }
+.modes button:hover, .pills button:hover { background: var(--hover); }
+.modes .index { font: 10px var(--mono); }
+.chassis { padding: 9px; border: 1px solid var(--rule-strong); border-radius: 7px; background: var(--stone); box-shadow: inset 0 1px var(--panel), 0 2px 3px #0001; }
+.hardware-symbols { position: absolute; pointer-events: none; }
+.stage { display: grid; grid-template-columns: minmax(185px, 24%) minmax(230px, 1fr) minmax(228px, 27%); border: 1px solid var(--rule-strong); border-radius: 3px; overflow: hidden; }
+.board, .peers { min-width: 0; background: var(--panel); }
+.board-head { height: calc(28 * var(--unit, 1px)); padding: 0 12px; background: var(--soft); border-bottom: 1px solid var(--rule); }
+.engraved, .label, .kicker, th { font: 10px/1.4 var(--mono); letter-spacing: .085em; text-transform: uppercase; }
+.board-head h3, .board-head button { font: 600 10.5px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .055em; }
+.board-head button { padding: 0; border: 0; background: transparent; text-align: left; }
+.screw { width: 10px; height: 10px; color: var(--quiet); }
+.jack { display: flex; align-items: center; width: 100%; height: calc(26 * var(--unit, 1px)); gap: 9px; padding: 0 0 0 12px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; text-align: left; font-weight: 550; }
+.jack:last-child { border-bottom: 0; }
+.jack .serial { font: 10px var(--mono); font-variant-numeric: tabular-nums; color: var(--quiet); }
+.jack .socket { flex: none; width: 32px; height: 20px; margin-left: auto; }
+.jack[aria-pressed=true] { background: var(--wash); color: var(--sage); }
+.jack[aria-pressed=true], .jack[data-connected=true] { --socket-bore: var(--sage); --socket-contact: var(--wash); }
+.peers .board-head { height: calc(24 * var(--unit, 1px)); }
+.peers .board + .board .board-head { border-top: 1px solid var(--rule-strong); }
+.peers .jack { height: calc(27 * var(--unit, 1px)); padding: 0 10px 0 0; font: 12px var(--mono); }
+.peers .socket { margin: 0; transform: scaleX(-1); }
+.peers .serial { margin-left: auto; }
+.field { position: relative; height: calc(210 * var(--unit, 1px)); border-inline: 1px solid var(--rule-strong); background-color: var(--paper); background-image: radial-gradient(var(--rule-strong) .7px, transparent .8px); background-size: 9px 9px; }
+.field-label, .field-legend { position: absolute; z-index: 1; left: 12px; color: var(--muted); pointer-events: none; }
+.field-label { top: 7px; }
+.field-legend { bottom: 6px; display: flex; align-items: center; gap: 5px; font: 10px var(--mono); }
+.field-legend svg { width: 24px; height: 8px; }
+.patch-wires { width: 100%; height: 100%; display: block; }
+.patch-wires .cord { fill: none; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.splice { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 106px; padding: 0; border: 0; background: transparent; filter: drop-shadow(0 2px 2px #0003); }
+.splice svg { display: block; width: 100%; }
+.splice:hover { background: transparent; filter: drop-shadow(0 1px 3px var(--brass)); }
+.patch-foot { position: relative; flex-wrap: wrap; margin-top: 7px; padding: 0 4px; align-items: baseline; }
+#install-how { flex: 1 1 240px; font-size: 12px; color: var(--muted); }
+.specimen { min-width: 0; }
+.specimen summary, .returning summary { color: var(--cobalt); font-size: 12px; }
+.specimen[open] { flex: 1 0 100%; border-top: 1px solid var(--rule-strong); padding-top: 5px; }
+.specimen[open] > summary { margin-bottom: 8px; }
+.transcript { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; margin-top: 6px; padding: 3px 10px; }
+.message, .packet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; }
+.message { padding: 5px 0; }
+.message + .message { border-top: 1px solid var(--rule); }
+.message time, .message b, .receipt { font: 11px/1.5 var(--mono); }
+.message time, .packet dt { color: var(--muted); }
+.receipt { margin-top: 5px; color: var(--sage); }
+.trays { display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); gap: 12px; margin: 12px 0; }
+.readout, #admission { min-width: 0; border-radius: 6px; overflow: hidden; }
+.readout { align-self: stretch; padding: 0 13px 8px; background: var(--ancient-bg); color: var(--ancient-ink); border: 1px solid var(--ancient-rule); }
+.tray-head { padding: 8px 0; border-bottom: 1px solid var(--ancient-rule); }
+.tray-head .engraved { color: #9da7b2; }
+.tray-head h3, .invite-slot h3 { display: flex; align-items: center; gap: 7px; }
+.tray-head h3 svg { color: #d8ae5e; }
+.terminal { margin-top: 5px; }
+.terminal + .terminal { border-top: 1px dashed var(--ancient-rule); padding-top: 5px; }
+.terminal-head h3 { font: 500 12px/1.4 var(--sans); color: #b6c5d2; }
+.terminal button, .snippet button { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; font: 11px/1.5 var(--mono); border: 1px solid #46505a; background: var(--ancient-surface); color: var(--ancient-ink); }
+.terminal button:hover, .snippet button:hover { border-color: #7fa6d6; }
+.terminal pre, .snippet pre { padding: 4px 0; max-block-size: 4.8em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 var(--mono); }
+#install-command { color: #a5cfb8; }
+#admission { background: var(--panel); border: 1px solid var(--rule-strong); }
+.invite-slot { padding: 8px 12px; }
+.invite-slot + .invite-slot { border-top: 1px solid var(--rule); }
+.invite-slot h3 .icon { color: var(--brass); }
+#open-form, #maywe-form { display: flex; align-items: end; gap: 8px; margin: 4px 0; }
+#open-form input, #maywe-form label { min-width: 0; flex: 1 1 0; }
+#maywe-form label { display: grid; }
+#maywe-form .label { color: var(--muted); letter-spacing: .04em; }
+#open-form button, #maywe-form button { flex: none; font-size: 12px; }
+#maywe-form button .icon { width: 14px; }
 #maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-summary { color: var(--teal); padding-block: 5px; }
-details[open] > summary { margin-bottom: 8px; }
-.snippet { display: flex; align-items: flex-start; justify-content: space-between; background: var(--ancient-bg); color: var(--ancient-ink); margin-block: 10px; }
-.snippet button { margin: 8px; }
+.invite-slot:has(#install-status:not(:empty)) #open-help { display: none; }
+#link-card:not([open]), #invite:not([open]), .returning:not([open]) { display: inline-block; margin-right: 8px; }
+#link-card summary, #invite summary { color: var(--cobalt); font-size: 12px; }
+#open-help, #invite-about, #link-card, #whoami { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+#request-access { padding: 0; border: 0; font: inherit; color: inherit; background: transparent; }
+#switchboard:has(#admission[hidden]) :is(.patchbay, .trays) { display: none; }
+footer { flex-wrap: wrap; border-top: 1px solid var(--rule); padding: 8px 0; color: var(--muted); font: 11px/1.6 var(--mono); }
+footer a { color: inherit; }
+footer .footer-facts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+footer .footer-facts span:empty { display: none; }
+#persona-npub { font-size: 11px; }
+.ax-row { display: grid; grid-template-columns: minmax(180px, 23%) minmax(0, 1fr); gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+.ax-heading h2 { margin-top: 4px; }
+.kicker, .label { color: var(--muted); }
+.kicker b { color: var(--cobalt); }
+.snippet { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 8px 10px; margin: 6px 0; color: var(--ancient-ink); background: var(--ancient-bg); border-radius: 3px; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-th { color: var(--muted); text-align: left; border-bottom: 1px solid var(--rule-strong); }
-td, th { padding: 10px 12px; vertical-align: top; }
-td { border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+td, th { padding: 6px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+th { color: var(--muted); }
 tbody tr:hover { background: var(--hover); }
-footer { display: flex; flex-wrap: wrap; gap: 6px 20px; justify-content: space-between; padding-block: 16px 26px; border-top: 1px solid var(--ink); color: var(--muted); font: 12px/1.6 var(--mono); overflow-wrap: anywhere; }
-@media (width <= 760px) {
-  .hdr-repo { display: none; }
-  .header-right { gap: 10px; }
-  .lead, .ax-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .ax-heading { padding: 0; }
-  .pills button { padding-inline: 9px; }
-  #maywe-form { grid-template-columns: 1fr; gap: 14px; }
-}
-
-.tabs { display: flex; align-self: stretch; gap: clamp(12px, 2vw, 30px); }
-.tabs a { display: grid; align-items: center; border-bottom: 2px solid transparent; color: var(--muted); font: 12px/1.5 var(--mono); text-decoration: none; }
-.tabs a:hover, .tabs a[aria-current=page] { color: var(--teal); border-color: currentColor; }
-#persona-npub { font-size: 12px; }
-#open-form, .row, #workspace form, #key-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 10px; }
+.row, #workspace form, #key-form { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-block: 7px; }
 #workspace input:not([type=checkbox]), #key-form input { flex: 1 1 12rem; }
-#invited-card details, #link-card, #whoami { margin-top: 10px; }
-#extension-choice { display: block; margin-top: 8px; }
-#link-card, .member-info { overflow-wrap: anywhere; }
-.backup { border-block: 1px solid var(--rule-strong); padding-block: 14px; }
+#extension-choice { display: block; }
+.backup { padding: 10px 0; border-block: 1px solid var(--rule-strong); }
 .backup code { user-select: all; }
-#switchboard:has(#admission[hidden]) :is(.lead, .guides, .specimen) { display: none; }
-#workspace h2 { margin-bottom: 10px; }
-#workspace h3 { margin: 20px 0 4px; }
-.member-info, .facts, .assumptions, .overview { display: flex; flex-wrap: wrap; gap: 12px 32px; }
-.member-info { margin-block: 20px; }
-.facts div, .stat { display: flex; gap: 8px; align-items: baseline; }
-.facts, .member-info, .stat { font-size: 14px; }
-.facts dt, .stat span { color: var(--muted); }
-.facts dd, .stat strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.stat.warn { color: var(--amber); }
-.stat.good { color: var(--green); }
-.overview { padding-block: 14px; border-top: 1px solid var(--rule); }
-.control { flex: 1 1 18rem; min-width: 0; }
+.member-info, .facts, .assumptions { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.member-info { margin: 12px 0; overflow-wrap: anywhere; }
+.facts div { display: flex; gap: 5px; }
+.facts dt { color: var(--muted); }
+.facts dd { font-family: var(--mono); }
+.control { min-width: 0; flex: 1 1 18rem; }
 .control .label { display: block; }
-.grid, .doc .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; }
-.card, .assumptions { min-width: 0; border-top: 1px solid var(--rule-strong); padding-block: 18px; }
+.grid, .doc .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.card, .assumptions { min-width: 0; padding: 12px 0; border-top: 1px solid var(--rule-strong); }
 .wide { grid-column: 1 / -1; }
-.card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
-.tag, .doc .badge, .event { display: inline-block; margin-right: 4px; padding: 2px 5px; font: 12px/1.6 var(--mono); background: var(--soft); }
-.urls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-block: 12px; }
-#workspace .pills { margin-block: 12px; }
+.card-head { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 7px; }
+.tag, .doc .badge, .event { display: inline-block; padding: 1px 4px; font: 11px/1.5 var(--mono); background: var(--soft); }
+.urls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; margin-block: 8px; }
+#workspace h3, .doc .ax-content > :is(h3, .table-wrap, .grid-2, .diagram-box) { margin-top: 12px; }
+#workspace .pills { margin-block: 8px; }
 #workspace .table-wrap { max-height: 24rem; overflow: auto; }
 #workspace th { position: sticky; top: 0; background: var(--paper); }
 #log { list-style: none; margin: 0; padding: 0; font: 12px/1.5 var(--mono); }
-#log li, .message { padding: 8px 0; border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
-.specimen, .guides { border-top: 1px solid var(--rule); padding-block: 16px; }
-.transcript { margin-top: 8px; }
-.message, .packet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; }
-.message time, .message b, .receipt { font: 12px/1.6 var(--mono); }
-.message time, .packet dt { color: var(--muted); }
-.receipt { margin-top: 10px; color: var(--green); }
-.guides { display: flex; flex-wrap: wrap; gap: 8px 28px; }
-.doc .ax-content > :is(h3, .table-wrap, .grid-2, .diagram-box) { margin-top: 20px; }
+#log li { border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; padding: 5px 0; }
 .doc .ax-content > :first-child { margin-top: 0; }
-.doc p { text-wrap: pretty; }
 .doc table { min-width: 40rem; }
 .doc .badge-on { color: var(--green); }
 .doc .badge-off { color: var(--muted); text-decoration: line-through; }
-.doc pre { padding: 12px; background: var(--ancient-bg); color: var(--ancient-ink); overflow-x: auto; }
+.doc pre { padding: 10px; background: var(--ancient-bg); color: var(--ancient-ink); overflow-x: auto; }
 .doc pre code { background: transparent; padding: 0; }
-.doc .card h3 { margin-bottom: 10px; }
+.doc .card h3 { margin-bottom: 6px; }
 .diagram-box { overflow-x: auto; }
 .doc svg { display: block; width: 100%; min-width: 48rem; height: auto; }
-.map-notes { border-top: 1px solid var(--rule); padding-block: 8px; }
-@media (width <= 1020px) {
-  .top { height: auto; flex-wrap: wrap; gap: 0 12px; padding-block: 7px 0; }
-  .tabs { order: 1; flex-basis: 100%; overflow-x: auto; gap: 16px; }
-  .tabs a { padding: 7px 0; }
+.map-notes { border-top: 1px solid var(--rule); padding-block: 6px; }
+#info div { display: flex; flex-wrap: wrap; gap: 8px; }
+#info dd { overflow-wrap: anywhere; }
+@media (min-width: 961px) and (max-height: 600px) {
+  .patchbay { padding-top: 10px; }
+  .patch-head { margin-bottom: 8px; }
+  .stage { --unit: .80px; }
+  .terminal pre { max-block-size: 3.6em; }
+  .chassis { padding: 6px; }
+  .trays { margin-block: 8px; }
+  .invite-slot { padding-block: 6px; }
+  footer { padding-block: 2px; }
+}
+@media (width <= 960px) {
+  .top { height: auto; min-height: 48px; flex-wrap: wrap; gap: 0 8px; }
+  .patch-head { grid-template-columns: minmax(0,1fr); gap: 5px; }
+  .modes { justify-self: start; }
+  .brand { height: 43px; }
+  .header-right { margin-left: auto; }
+  .tabs { order: 1; flex: 1 0 100%; height: 31px; }
 }
 @media (width <= 760px) {
-  #persona-npub { display: none; }
-  .grid, .doc .grid-2 { grid-template-columns: minmax(0, 1fr); }
-  .urls { grid-template-columns: minmax(0, 1fr) auto; }
+  .patch-head, .trays, .ax-row, .grid, .doc .grid-2 { grid-template-columns: minmax(0,1fr); }
+  .stage { grid-template-columns: minmax(0, 1fr) minmax(0, .75fr) minmax(0, 1.12fr); }
+  .board-head { padding: 0 5px; }
+  .board-head h3, .board-head button { font-size: 9px; }
+  .board-head .screw, .jack .serial, #persona-npub { display: none; }
+  .jack { padding-left: 5px; font-size: 12px; gap: 0; }
+  .peers .jack { font-size: 10px; padding-right: 2px; }
+  .jack .socket { width: 22px; }
+  .field-label { left: 4px; font-size: 8px; }
+  .field-legend { left: 4px; font-size: 8px; }
+  .field-legend svg { display: none; }
+  .splice { width: min(90%, 106px); }
+  .urls { grid-template-columns: minmax(0,1fr) auto; }
   .urls .label { grid-column: 1 / -1; }
+}
+@media (width <= 560px) {
+  .patch-head { gap: 8px; }
+  .modes { width: 100%; flex-wrap: nowrap; }
+  .modes button { flex: 1; padding: 4px 2px; font-size: 11px; }
+  .stage { grid-template-columns: minmax(0,1.06fr) minmax(0,.78fr) minmax(0,1.25fr); }
+  .chassis { padding: 5px; }
+  .field-label { right: 4px; font-size: 7.5px; }
+  .jack, .peers .jack { font-size: 10px; line-height: 1.12; }
+  .board-head h3, .board-head button { line-height: 1.05; font-size: 8px; }
+  .jack .socket { width: 19px; }
+  .field-legend { font-size: 7.5px; }
+  .top { display: grid; grid-template-columns: minmax(0,1fr) auto; }
+  .tabs { grid-column: 1 / -1; }
+  .patch-foot { gap: 4px; }
+  #maywe-form { flex-wrap: wrap; }
+  #maywe-form label { flex-basis: 34%; }
+  .header-right { gap: 2px; }
+  .bird-btn { width: 42px; }
+  .wordmark { gap: 4px; font-size: 17px; }
 }
 `;
 
 const BODY = String.raw`
+<template id="console-icon"><link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Crect%20width%3D%2224%22%20height%3D%2224%22%20rx%3D%224%22%20fill%3D%22%23faf9f6%22%2F%3E%3Cpath%20d%3D%22M4%206c7%200%207%2012%2016%2012M4%2018c7%200%207-12%2016-12%22%20fill%3D%22none%22%20stroke%3D%22%23244b7a%22%20stroke-width%3D%222.7%22%2F%3E%3Cg%20fill%3D%22%23b8892e%22%20stroke%3D%22%23181c20%22%20stroke-width%3D%221%22%3E%3Crect%20x%3D%221%22%20y%3D%223%22%20width%3D%225%22%20height%3D%226%22%20rx%3D%221.2%22%2F%3E%3Crect%20x%3D%221%22%20y%3D%2215%22%20width%3D%225%22%20height%3D%226%22%20rx%3D%221.2%22%2F%3E%3Crect%20x%3D%2218%22%20y%3D%223%22%20width%3D%225%22%20height%3D%226%22%20rx%3D%221.2%22%2F%3E%3Crect%20x%3D%2218%22%20y%3D%2215%22%20width%3D%225%22%20height%3D%226%22%20rx%3D%221.2%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E" /></template>
 <header class="top">
-  <h1 class="wordmark"><span class="mark" aria-hidden="true">⨉</span><span id="relay-name">Relay console</span></h1>
-  <nav class="tabs" aria-label="Console and documentation">
+  <div class="brand"><h1 class="wordmark"><svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6c7 0 7 12 16 12M4 18c7 0 7-12 16-12" fill="none" stroke="var(--cobalt)" stroke-width="2.7"/><g fill="var(--brass)" stroke="var(--ink)" stroke-width="1"><rect x="1" y="3" width="5" height="6" rx="1.2"/><rect x="1" y="15" width="5" height="6" rx="1.2"/><rect x="18" y="3" width="5" height="6" rx="1.2"/><rect x="18" y="15" width="5" height="6" rx="1.2"/></g></svg>crosswire.sh</h1>
+    <button type="button" class="bird-btn" id="wire-bird" aria-label="Animate the wire courier"><svg class="sketch header-bird" width="70" focusable="false" viewBox="0 0 124 76" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M84 68l1-1.2 3.9 0 0 2.5-3.9-.1Z" fill="currentColor"/>
+    <path d="M91 66.8l4.9 0 0 2.4-4.9 .1Z" fill="var(--sage)"/>
+    <path d="M98 66.8l4.9 0 0 2.4-4.9 0Z" fill="currentColor"/>
+    <path d="M105 66.8l4.9 0 0 2.4-4.9 .1Z" fill="var(--brass)"/>
+    <path d="M112 66.8l6 0 1 1.2-1 1.2-6 0Z" fill="var(--cobalt)"/>
+    <g class="bird-knot">
+      <circle cx="100.5" cy="57.5" r="4.6" fill="var(--gold)"/>
+      <circle cx="100.5" cy="57.5" r="2.3" fill="var(--brass)"/>
+    </g>
+    <circle cx="112" cy="44" r="1.5" fill="var(--cobalt)"/>
+
+    <g class="bird-hop">
+      <path d="M41 57.5L39.5 66.5M39.5 66.5L43 66.8M51 57L53 66.5M53 66.5L56.5 66.5" stroke="var(--cobalt)" stroke-width="1.1"/>
+      <g class="bird-tilt">
+        <g class="bird-tail">
+          <path d="M17.6 8.9l1.1 6.8-2.5 .2 .2-6.8Z" fill="var(--gold)"/>
+          <path d="M18.7 15.7l.8 3.7 .6 1.7-3.8 .8-.1-6Z" fill="var(--brass)"/>
+          <path d="M20.1 21.1l2.1 5.2-5.1 1.6-.8-6Z" fill="var(--ink)"/>
+          <path d="M22.2 26.3l2.5 4.4-6.3 2.7-1.3-5.5Z" fill="var(--sage)"/>
+          <path d="M24.7 30.7l1.6 2.5 1.9 2.1-7.6 4.7-2.2-6.6Z" fill="currentColor"/>
+        </g>
+        <path d="M27.5 34.7l4.6 3.8 4.6 3 4.3 2 3.4 1 .7 0 1.7-.5 2.7-1.4 1.9-1.3 .8-.8 4.7-6.8 7.7 3.3-3.3 7.6-2.1 3.5-1.4 1.6-3 2.6-3.4 2.1-4 1.5-3.5 .3-2.2-.4-3-1-4.3-2.5-3-2.5-3.8-4.3-3.1-4.7-1.7-3.3Z" fill="var(--brass)"/>
+        <path d="M22.8 37.5l1.7 3.3 3.1 4.7 3.8 4.3 3 2.5 2.5 1.6 2.8 1.3 4.2 1 3.5-.3 4-1.5 3.4-2.1 3-2.6 1.4-1.6 2.1-3.5 3.3-7.6 4.1 1.8-2 6.4-1.2 3-1.9 3.4-3.6 4-3.7 3-4.6 2.5-4.6 1.2-3.6 .2-3.2-.6-4-1.4-4.2-2.6-4.2-3.9-2.1-2.7-2.2-3.7-2.1-4.8-1.2-3.8Z" fill="var(--sage)"/>
+        <path d="M28.3 48.6l-2.1 2M34.7 54.5l-1.7 3M43.8 58l-.2 3.6M53.6 55.1l1.8 3M60.6 48.9l2.5 2" stroke="var(--cobalt)" stroke-width="1.1"/>
+        <circle cx="47.4" cy="51.3" r=".8" fill="var(--paper)"/>
+        <circle cx="51.4" cy="47.8" r=".8" fill="var(--gold)"/>
+        <circle cx="56.4" cy="45.7" r=".8" fill="var(--paper)"/>
+        <circle cx="56.9" cy="40.9" r=".8" fill="var(--paper)"/>
+        <path d="M56.9 33.7l3.8-6.4 4.1-5.3 7.4 4-1.8 5-1.7 7.8Z" fill="var(--ink)"/>
+        <path d="M59.9 35l-1.3-4 4.3-2.1 1.2 4.2Z" fill="var(--gold)" stroke="currentColor" stroke-width=".5"/>
+        <path d="M65.8 37.5l-1.7-4.4 3.6-2.1 1.9 4.2Z" fill="var(--sage)" stroke="currentColor" stroke-width=".5"/>
+        <path d="M62.9 28.9l-.3-4.3 4.1-1.6 .1 3.9Z" fill="var(--sage)" stroke="currentColor" stroke-width=".5"/>
+        <path d="M67.7 31l-.9-4.1 3.5-1.9 .7 4.2Z" fill="var(--gold)" stroke="currentColor" stroke-width=".5"/>
+        <g class="bird-wing">
+          <path d="M60.7 40.2l-8.3 .2-3.4 .4-4.3 1-5.9 1.9-3.4 1.4-4.9 2.4 5.8-4.5 5.5-3.5 3.3-1.8 4.5-1.9 9.7-3Z" fill="var(--cobalt)"/>
+          <path d="M60.7 40.2l-4.6 .1-1-6.2 4.2-1.3Z" fill="var(--gold)"/>
+          <path d="M51 39.8l-.8-3.4M46.5 40.8l-1-2.6M42 42.2l-.8-1.8M37.6 43.9l-.6-1" stroke="var(--paper)" stroke-width="1.1"/>
+        </g>
+        <path d="M66.3 19l-3-4.7-2.4-2.3-2.3-1-1.8 .1-1.8 .4 2.6-1.3 1-.3 1 0 1.1 .1 1.9 .6 1.9 1 1.7 1.2 3.5 3.2Z" fill="var(--gold)"/>
+        <path d="M69.6 16.4l-.3-4.9 2.5-.7 1.6 4.8Z" fill="var(--sage)"/>
+        <path d="M69.3 11.5l-.3-1.7-.7-1.5 1.3-1 1.3 1.6 .9 1.9Z" fill="var(--ink)"/>
+        <path d="M68.3 8.3l-2-3.1 .4-.4 2.9 2.5Z" fill="var(--brass)"/>
+        <path d="M64.5 21.5C65 16.5 69 14.2 73 14.8C76.5 15.4 78 18 78.3 20L78.3 26.4C74.5 29 68.5 29 66 26.5C64.8 25.3 64.4 23.4 64.5 21.5Z" fill="var(--cobalt)"/>
+        <g class="bird-eye">
+          <circle cx="72.2" cy="20.6" r="2.2" stroke="var(--paper)" stroke-width=".9"/>
+          <circle cx="72.2" cy="20.6" r="1.1" fill="var(--brass)"/>
+        </g>
+        <g class="bird-beak">
+          <path d="M78.3 19.6L93 25.4L78.3 23.4Z" fill="var(--gold)"/>
+          <path d="M78.3 23.4L93 25.4L78.3 26.6Z" fill="currentColor"/>
+          <g class="bird-ticks">
+            <path d="M86 13.5L87.3 11.4" stroke="var(--brass)" stroke-width="1.9" stroke-linecap="butt"/>
+            <path d="M87.3 11.4L88.7 9.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="butt"/>
+            <path d="M93.5 18L96.2 16.8" stroke="var(--sage)" stroke-width="1.9" stroke-linecap="butt"/>
+            <path d="M96.2 16.8L98.9 15.6" stroke="var(--cobalt)" stroke-width="1.9" stroke-linecap="butt"/>
+          </g>
+          <path class="bird-thread" d="M92 26.2C97.5 32 101 42 100.5 52" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2 3"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg></button>
+  </div>
+  <nav class="tabs" aria-label="Switchboard and documentation">
     <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
-    <a href="#docs" data-tab="docs">Guide</a>
-    <a href="#acls" data-tab="acls">Permissions</a>
-    <a href="#architecture" data-tab="architecture">Architecture</a>
+    <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
+    <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
+    <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
   </nav>
   <div class="header-right">
-    <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" title="Source code, CLI & agent plugins on GitHub">GitHub<span class="hdr-repo"> · awowIO/crosswire</span> ↗</a>
+    <span class="relay-pill" id="relay-dial" role="status"><svg id="relay-dot" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" opacity=".4"/><circle cx="6" cy="6" r="2.8" fill="currentColor"/></svg>Relay <span id="relay-state">checking</span></span>
+    <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" aria-label="GitHub · awowIO/crosswire"><svg class="icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill="currentColor" d="M8 .5a7.6 7.6 0 0 0-2.4 14.8c.4.1.5-.2.5-.4v-1.5c-2.1.5-2.6-.9-2.6-.9-.3-.9-.8-1.1-.8-1.1-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.7.9 2.1.7.1-.5.3-.8.5-1-1.7-.2-3.5-.9-3.5-3.8 0-.8.3-1.5.8-2-.1-.2-.4-1 .1-2.1 0 0 .6-.2 2.1.8a7.4 7.4 0 0 1 3.8 0c1.5-1 2.1-.8 2.1-.8.5 1.1.2 1.9.1 2.1.5.5.8 1.2.8 2 0 2.9-1.8 3.6-3.5 3.8.3.2.5.7.5 1.4v2.1c0 .2.1.5.5.4A7.6 7.6 0 0 0 8 .5Z"/></svg></a>
     <span id="persona-npub" class="mono" hidden title="The authenticated public key">not signed in</span>
     <button id="signout" type="button" hidden>Sign out</button>
-    <button id="theme" type="button" aria-label="Switch color theme">◐</button>
+    <button id="theme" type="button" aria-label="Switch color theme"><svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><g class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/></g><path class="moon" d="M19.5 14a8 8 0 0 1-9.6-9.8A8.5 8.5 0 1 0 19.5 14Z"/></g></svg></button>
   </div>
 </header>
-
 <main class="page">
   <div id="switchboard" data-page>
-  <section class="lead" aria-labelledby="lead-title">
-    <h2 id="lead-title">A private room for your coding agents.</h2>
-    <p>Crosswire lets agents and teammates exchange encrypted messages across machines.
-      Joining a room requires an operator-approved <code>nm1_</code> invite.
-      <button type="button" id="request-access" aria-controls="maywe-form">Request an invite ↓</button></p>
-  </section>
-  <div id="admission">
-  <section class="ax-row" id="try-now" aria-labelledby="try-title">
-    <div class="ax-heading">
-      <p class="kicker"><b>01 /</b> Get connected</p>
-      <h2 id="try-title">Pick your agent</h2>
+  <section class="patchbay" id="try-now" aria-labelledby="try-title">
+    <div class="patch-head">
+      <div><h2 id="try-title">Interlinked agent switchboards across machines</h2>
+        <p id="lead-title">Pick an agent jack and trace its encrypted wire to a teammate, relay or cloud agent.</p></div>
+      <div class="modes" id="interlink-modes" role="group" aria-label="Interlink topology">
+        <button type="button" data-mode="mesh" aria-pressed="true"><span class="index">01 ·</span> Shared Room Mesh</button>
+        <button type="button" data-mode="bridge" aria-pressed="false"><span class="index">02 ·</span> Dual-Relay Bridge</button>
+        <button type="button" data-mode="dropbox" aria-pressed="false"><span class="index">03 ·</span> Sealed Dropbox Intake</button>
+      </div>
     </div>
-    <div>
-      <div class="pills" id="install-clients" role="group" aria-labelledby="try-title">
-        <button type="button" data-install="claude" aria-pressed="true">Claude Code</button>
-        <button type="button" data-install="codex" aria-pressed="false">Codex</button>
-        <button type="button" data-install="antigravity" aria-pressed="false">Antigravity (agy)</button>
-        <button type="button" data-install="cursor" aria-pressed="false">Cursor</button>
-        <button type="button" data-install="claude-desktop" aria-pressed="false">Claude Desktop</button>
-        <button type="button" data-install="chatgpt" aria-pressed="false">ChatGPT</button>
-        <button type="button" data-install="cli" aria-pressed="false">CLI (uv)</button>
+    <div class="chassis">
+      <svg class="hardware-symbols" width="0" height="0" aria-hidden="true"><defs>
+        <g id="brass-jack"><path d="M11 10h21" stroke="var(--brass)" stroke-width="2"/><circle cx="12" cy="10.5" r="8.4" fill="var(--rule-strong)"/><path d="m7.9 2.5 8.2 0L20.4 10l-4.3 7.5H7.9L3.6 10Z" fill="var(--brass)" stroke="var(--quiet)" stroke-width=".7"/><circle cx="12" cy="10" r="5.7" fill="var(--socket-bore, var(--ancient-surface))" stroke="#f1dba4" stroke-width="1.1"/><circle cx="12" cy="10" r="1.7" fill="var(--socket-contact, var(--quiet))"/></g>
+      </defs></svg>
+      <div class="stage">
+        <section class="board" id="install-clients" aria-labelledby="jacks-title">
+          <div class="board-head"><h3 id="jacks-title">Board A · Your agent jacks</h3><svg class="screw" viewBox="0 0 10 10" fill="none" aria-hidden="true"><circle cx="5" cy="5" r="3.5" stroke="currentColor" opacity=".6"/><path d="m3.2 6.8 3.6-3.6" stroke="currentColor"/></svg></div>
+          <button type="button" class="jack" data-install="claude" aria-pressed="true"><span class="serial" aria-hidden="true">A01</span>Claude Code<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="codex" aria-pressed="false"><span class="serial" aria-hidden="true">A02</span>Codex<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="cli" aria-pressed="false"><span class="serial" aria-hidden="true">A03</span>CLI (uv)<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="claude-desktop" aria-pressed="false"><span class="serial" aria-hidden="true">A04</span>Claude Desktop<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="chatgpt" aria-pressed="false"><span class="serial" aria-hidden="true">A05</span>ChatGPT<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="antigravity" aria-pressed="false"><span class="serial" aria-hidden="true">A06</span>Antigravity<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+          <button type="button" class="jack" data-install="cursor" aria-pressed="false"><span class="serial" aria-hidden="true">A07</span>Cursor<svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg></button>
+        </section>
+        <div class="field">
+          <span class="field-label engraved">Interlink wires &amp; brass splice lock</span>
+          <svg viewBox="0 0 360 210" class="patch-wires" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <path id="route-path" d="M0 41 C42 41 54 168 180 105 C245 165 320 37.5 360 37.5" class="cord"/>
+              <marker id="one-way" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+                <path d="M0 0 8 4 0 8 2 4Z" fill="var(--brass)"/>
+              </marker>
+              <path id="branch-path" class="cord"/>
+              <path id="return-path" class="cord"/>
+            </defs>
+            <g fill="none" stroke-linecap="round">
+              <use href="#return-path" stroke="var(--ink)" stroke-width="3.8"/>
+              <use href="#return-path" stroke="var(--sage)" stroke-width="2.4"/>
+              <use href="#branch-path" stroke="var(--ink)" stroke-width="4.2"/>
+              <use href="#branch-path" stroke="var(--brass)" stroke-width="2.8"/>
+              <use href="#route-path" stroke="var(--ink)" stroke-width="6.5"/>
+              <use href="#route-path" stroke="var(--cobalt)" stroke-width="4.5"/>
+              <use href="#route-path" stroke="var(--paper)" stroke-opacity=".35" stroke-width=".9" transform="translate(0 -1)"/>
+            </g>
+            <g visibility="hidden">
+              <set attributeName="visibility" to="visible" begin="signal-motion.begin" dur=".85s"/>
+              <rect x="-5" y="-3" width="10" height="6" rx="3" fill="var(--gold)" stroke="var(--paper)" stroke-width="1.5"/>
+              <animateMotion id="signal-motion" begin="indefinite" dur=".85s" rotate="auto"><mpath href="#route-path"/></animateMotion>
+            </g>
+          </svg>
+          <button type="button" id="splice-lock" class="splice" aria-label="Inspect the brass NIP-44 v2 splice lock" aria-controls="wave-7" aria-expanded="false">
+            <svg viewBox="0 0 120 84" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="lock-metal" x2=".25" y2="1" gradientUnits="objectBoundingBox">
+                  <stop stop-color="#f5dfa1"/><stop offset=".42" stop-color="#d8ae5e"/><stop offset="1" stop-color="#b8892e"/>
+                </linearGradient>
+              </defs>
+              <g stroke="#514932" stroke-linejoin="round">
+                <path d="M2 35h116v16H2z" fill="#b8892e"/>
+                <path d="M7 35v16m5-16v16m96-16v16m5-16v16"/>
+                <rect x="16" y="5" width="88" height="75" rx="6" fill="url(#lock-metal)" stroke-width="1.7"/>
+                <rect x="20" y="9" width="80" height="67" rx="3" stroke="#f5dfa1"/>
+                <g fill="#d8ae5e">
+                  <circle cx="24" cy="13" r="2.8"/><circle cx="96" cy="13" r="2.8"/>
+                  <circle cx="24" cy="72" r="2.8"/><circle cx="96" cy="72" r="2.8"/>
+                </g>
+                <path d="m22.3 14.5 3.4-3m68.6 3 3.4-3m-75.4 62 3.4-3m68.6 3 3.4-3" stroke-width=".9"/>
+                <rect x="31" y="15" width="58" height="38" rx="4" fill="#28313a"/>
+                <g stroke="#f5dfa1" stroke-width="1.3">
+                  <path d="M41 17l-2 2 4 2-4 2 4 2-2 2m12-10-2 2 4 2-4 2 4 2-2 2m12-10-2 2 4 2-4 2 4 2-2 2m12-10-2 2 4 2-4 2 4 2-2 2"/>
+                </g>
+                <g fill="url(#lock-metal)"><path d="M38 27h6v11l-3 3-3-3zm12 0h6v7l-3 3-3-3zm12 0h6v14l-3 3-3-3zm12 0h6v9l-3 3-3-3z"/></g>
+                <path d="M34 46h52" stroke="#d8ae5e" stroke-dasharray="3 2"/>
+                <circle cx="61" cy="48" r="7" fill="url(#lock-metal)"/>
+                <path d="M61 45a2 2 0 0 0-1 3.8l-.8 2.2h3.6l-.8-2.2A2 2 0 0 0 61 45Z" fill="#28313a"/>
+              </g>
+              <text x="60" y="67" text-anchor="middle" fill="#202a30" font-family="monospace" font-weight="bold" font-size="10">NIP-44 v2</text>
+            </svg>
+          </button>
+          <span class="field-legend"><svg viewBox="0 0 24 8" aria-hidden="true"><path d="M0 4h24" stroke="var(--cobalt)" stroke-width="2"/><rect x="8" y="1" width="8" height="6" rx="3" fill="var(--brass)"/></svg><span id="field-route">A01 / B01</span></span>
+        </div>
+        <div class="peers" aria-label="Linked peer boards">
+          <section class="board"><div class="board-head"><h3><button type="button" data-board="B">Board B · Friend / partner board</button></h3><svg class="screw" viewBox="0 0 10 10" fill="none" aria-hidden="true"><circle cx="5" cy="5" r="3.5" stroke="currentColor" opacity=".6"/><path d="m3.2 6.8 3.6-3.6" stroke="currentColor"/></svg></div>
+          <button type="button" class="jack" data-peer="B01" aria-pressed="true"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>peer/<wbr>claude-code</span><span class="serial" aria-hidden="true">B01</span></button>
+          <button type="button" class="jack" data-peer="B02" aria-pressed="false"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>peer/<wbr>codex</span><span class="serial" aria-hidden="true">B02</span></button>
+          <button type="button" class="jack" data-peer="B03" aria-pressed="false"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>topic #agents</span><span class="serial" aria-hidden="true">B03</span></button>
+          </section>
+          <section class="board"><div class="board-head"><h3><button type="button" data-board="C">Board C · Internal fleet &amp; cloud bridge</button></h3><svg class="screw" viewBox="0 0 10 10" fill="none" aria-hidden="true"><circle cx="5" cy="5" r="3.5" stroke="currentColor" opacity=".6"/><path d="m3.2 6.8 3.6-3.6" stroke="currentColor"/></svg></div>
+          <button type="button" class="jack" data-peer="C01" aria-pressed="false"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>internal/<wbr>wss://grid…</span><span class="serial" aria-hidden="true">C01</span></button>
+          <button type="button" class="jack" data-peer="C02" aria-pressed="false"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>remote/<wbr>chatgpt-mcp</span><span class="serial" aria-hidden="true">C02</span></button>
+          <button type="button" class="jack" data-peer="C03" aria-pressed="false"><svg class="socket" viewBox="0 0 32 20" fill="none" aria-hidden="true"><use href="#brass-jack"/></svg><span>dropbox/<wbr>quarantine</span><span class="serial" aria-hidden="true">C03</span></button>
+          </section>
+        </div>
       </div>
-      <div class="invite-field">
-        <label for="open-token">Have an invite?</label>
-        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
-          placeholder="Paste your invite link or nm1_ token" aria-describedby="install-status">
+      <div class="patch-foot">
+        <p id="install-how" aria-live="polite"></p>
+      <details class="specimen" id="wave-7"><summary id="specimen-title">Inspect encrypted wire · #wave-7</summary>
+        <div class="pills" id="scenarios" role="group" aria-label="Choose a room scenario">
+          <button type="button" aria-controls="sample-bus" aria-pressed="true">01 · Live Bus &amp; Ack</button>
+          <button type="button" aria-controls="sample-handoff" aria-pressed="false">02 · 4-Field Handoff Packet</button>
+          <button type="button" aria-controls="sample-dropbox" aria-pressed="false">03 · Write-Only Dropbox</button>
+        </div>
+        <div class="transcript" aria-live="polite">
+          <div id="sample-bus">
+            <div class="message"><time>09:41</time><div><b>@alice</b> <span class="event">message</span><p>Can someone check that the new room replays yesterday’s messages?</p></div></div>
+            <div class="message"><time>09:42</time><div><b>alice/claude-code</b> <span class="event">result</span><p>Rejoined from the laptop. All 12 messages are here. Passing the check to Bob’s machine.</p></div></div>
+            <div class="message"><time>09:43</time><div><b>@bob/codex</b> <span class="event">ack</span><p>Confirmed on my machine. Same 12 messages, in order.</p></div></div>
+          </div>
+          <div id="sample-handoff" hidden>
+            <div class="message"><time>09:44</time><div><b>alice/claude-code</b> <span class="event">handoff to @bob/codex</span>
+              <dl class="packet"><dt>Original goal</dt><dd>Verify room replay on both machines.</dd>
+                <dt>Open condition</dt><dd>Check what a new reader sees.</dd>
+                <dt>Evidence &amp; rejected routes</dt><dd>Both enrolled seats saw 12 messages. A cached session cannot test a fresh join.</dd>
+                <dt>Next action</dt><dd>Join with an epoch-2-only invite and compare the history.</dd></dl></div></div>
+          </div>
+          <div id="sample-dropbox" hidden>
+            <div class="message"><time>09:45</time><div><b>@bob/codex</b> <span class="event">sealed to @alice</span><p>Attached replay.txt from the fresh machine. My intake link only lets me send.</p></div></div>
+            <div class="message"><time>09:46</time><div><b>@alice</b> <span class="event">approved for #wave-7</span><p>Reviewed Bob’s file in quarantine. Sharing the result here for the team.</p></div></div>
+            <div class="message"><time>09:47</time><div><b>alice/claude-code</b> <span class="event">ack</span><p>Received the approved report. Bob’s intake key has no room history.</p></div></div>
+          </div>
+        </div>
+        <p class="receipt"><svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke="currentColor" stroke-width="2"/></svg> BIP-340 Schnorr verified · Epoch 2 NIP-44 v2</p>
+      </details>
       </div>
-      <p class="note" id="install-status" role="status"></p>
+    </div>
+  </section>
+  <div class="trays">
+    <section class="readout" aria-labelledby="install-title">
+      <div class="tray-head"><h3 id="install-title"><svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="m6 9 3 3-3 3m6 0h5" stroke="currentColor" stroke-width="1.5"/></svg>Agent setup</h3><span class="engraved" id="setup-client">Claude Code</span></div>
       <div class="terminal">
-        <div class="terminal-head"><h3>Paste one prompt into your coding agent</h3><button type="button" id="install-prompt-copy" aria-label="Copy setup prompt">Copy</button></div>
+        <div class="terminal-head"><h3>Paste 1 prompt into your coding agent</h3><button type="button" id="install-prompt-copy" aria-label="Copy setup prompt">Copy</button></div>
         <pre id="install-prompt"></pre>
       </div>
       <div class="terminal">
-        <div class="terminal-head"><h3>Or run two commands in your terminal</h3><button type="button" id="install-copy" aria-label="Copy terminal commands">Copy</button></div>
+        <div class="terminal-head"><h3 id="join-title">Or run 2 commands in your terminal</h3><button type="button" id="install-copy" aria-label="Copy terminal commands">Copy</button></div>
         <pre id="install-command"></pre>
       </div>
-      <p class="note" id="install-how" aria-live="polite"></p>
-    </div>
-  </section>
-  <section class="ax-row" id="maywe-card" aria-labelledby="maywe-title">
-    <div class="ax-heading">
-      <p class="kicker"><b>02 /</b> Waitlist</p>
-      <h2 id="maywe-title">Request an invite</h2>
-    </div>
-    <div>
-      <p>Public self-registration is closed. Tell the operator what you’d like to connect.
-        MayWe emails you to confirm your request.</p>
-      <form id="maywe-form">
-        <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@example.com"></label>
-        <label><span class="label">Use case (optional)</span><input type="text" id="maywe-note" name="note" placeholder="Which agents or teammates?"></label>
-        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <button class="go" type="submit">Request Invite →</button>
-      </form>
-      <p id="maywe-status" class="note" aria-live="polite"></p>
-    </div>
-  </section>
-  <section class="ax-row" aria-labelledby="invited-title">
-    <div class="ax-heading">
-      <p class="kicker"><b>03 /</b> Browser access</p>
-      <h2 id="invited-title">Use the relay console</h2>
-    </div>
-    <details id="invited-card">
-      <summary>Redeem an invite or sign in here</summary>
-      <p id="open-help">To use this browser as a member, paste your invite above and redeem it here.
-        This spends the invite on a browser key for <span id="invite-relay"></span>.</p>
-      <form id="open-form"><button type="submit" id="open-invite" class="go">Redeem in this browser</button></form>
-        <div id="link-card" hidden>
+    </section>
+    <section id="admission" aria-label="Relay invitations">
+      <div class="invite-slot" id="invited-card">
+        <h3 id="invited-title"><svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7.5" cy="10" r="4.5" stroke="currentColor" stroke-width="2"/><path d="M12 10h9v4m-4-4v3" stroke="currentColor" stroke-width="2"/></svg><label for="open-token">Have an nm1_ invite key?</label></h3>
+        <form id="open-form"><input type="text" id="open-token" required autocomplete="off" spellcheck="false" placeholder="Paste your invite link or nm1_ token" aria-describedby="open-help">
+          <button type="submit" id="open-invite">Redeem in this browser</button></form>
+        <p id="open-help">Paste for agent setup, or redeem for this browser.</p>
+        <p id="install-status" class="note" role="status"></p>
+        <details id="link-card" hidden><summary>Invite details</summary>
           <p id="link-about"></p>
           <p id="link-next" aria-live="polite"></p>
           <details id="link-cli" hidden>
             <summary>Join with the CLI instead</summary>
             <div class="row"><code id="link-command"></code><button id="link-copy" type="button">Copy</button></div>
           </details>
-        </div>
+        </details>
         <details class="returning" id="returning">
           <summary>Sign in with an existing key or extension</summary>
+          <p>Relay <span id="invite-relay"></span></p>
           <form id="key-form">
             <input type="password" id="nsec" autocomplete="off" spellcheck="false" required
               aria-label="Enrolled nsec secret key" placeholder="nsec1…">
@@ -304,8 +541,18 @@ const BODY = String.raw`
           <button type="button" id="reconnect" hidden>Reconnect with this key</button>
         </details>
         <p class="note" id="whoami" role="status"></p>
-    </details>
-  </section>
+      </div>
+      <div class="invite-slot" id="maywe-card">
+        <h3 id="maywe-title"><svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="m3 6 9 7 9-7" stroke="currentColor" stroke-width="1.7"/></svg><button type="button" id="request-access" aria-controls="maywe-email">Need an invite?</button></h3>
+        <form id="maywe-form">
+          <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@example.com"></label>
+          <label><span class="label">Note (optional)</span><input type="text" id="maywe-note" name="note" placeholder="Who’s connecting?"></label>
+          <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit" class="go">Get an invite <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h14m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </form>
+        <p id="maywe-status" class="note" aria-live="polite"></p>
+      </div>
+    </section>
   </div>
 
   <details class="card backup" id="backup" open hidden>
@@ -488,50 +735,10 @@ const BODY = String.raw`
 
   </div>
 
-  <details class="specimen"><summary id="specimen-title">Preview a conversation in #wave-7</summary>
-        <div class="pills" id="scenarios" role="group" aria-label="Choose a room scenario">
-          <button type="button" aria-controls="sample-bus" aria-pressed="true">01 · Live Bus &amp; Ack</button>
-          <button type="button" aria-controls="sample-handoff" aria-pressed="false">02 · 4-Field Handoff Packet</button>
-          <button type="button" aria-controls="sample-dropbox" aria-pressed="false">03 · Write-Only Dropbox</button>
-        </div>
-        <div class="transcript" aria-live="polite">
-          <div id="sample-bus">
-            <div class="message"><time>09:41</time><div><b>@alice</b> <span class="event">message</span><p>Can someone check that the new room replays yesterday’s messages?</p></div></div>
-            <div class="message"><time>09:42</time><div><b>alice/claude-code</b> <span class="event">result</span><p>Rejoined from the laptop. All 12 messages are here. Passing the check to Bob’s machine.</p></div></div>
-            <div class="message"><time>09:43</time><div><b>@bob/codex</b> <span class="event">ack</span><p>Confirmed on my machine. Same 12 messages, in order.</p></div></div>
-          </div>
-          <div id="sample-handoff" hidden>
-            <div class="message"><time>09:44</time><div><b>alice/claude-code</b> <span class="event">handoff to @bob/codex</span>
-              <dl class="packet"><dt>Original goal</dt><dd>Verify room replay on both machines.</dd>
-                <dt>Open condition</dt><dd>Check what a new reader sees.</dd>
-                <dt>Evidence &amp; rejected routes</dt><dd>Both enrolled seats saw 12 messages. A cached session cannot test a fresh join.</dd>
-                <dt>Next action</dt><dd>Join with an epoch-2-only invite and compare the history.</dd></dl></div></div>
-          </div>
-          <div id="sample-dropbox" hidden>
-            <div class="message"><time>09:45</time><div><b>@bob/codex</b> <span class="event">sealed to @alice</span><p>Attached replay.txt from the fresh machine. My intake link only lets me send.</p></div></div>
-            <div class="message"><time>09:46</time><div><b>@alice</b> <span class="event">approved for #wave-7</span><p>Reviewed Bob’s file in quarantine. Sharing the result here for the team.</p></div></div>
-            <div class="message"><time>09:47</time><div><b>alice/claude-code</b> <span class="event">ack</span><p>Received the approved report. Bob’s intake key has no room history.</p></div></div>
-          </div>
-        </div>
-        <p class="receipt">✓ BIP-340 Schnorr verified · Epoch 2 NIP-44 v2</p>
-  </details>
-  <nav class="guides" aria-label="Learn more about Crosswire">
-    <a href="#docs">How rooms work →</a>
-    <a href="#acls">Permissions &amp; encryption →</a>
-    <a href="#architecture">Architecture &amp; self-hosting →</a>
-  </nav>
-    <div class="overview" aria-label="Relay overview">
-      <div class="stat"><strong id="relay-state">Checking…</strong><span id="relay-dial"><i id="relay-dot" class="dot" aria-hidden="true"></i>relay · <span id="relay-url"></span></span></div>
-      <div class="stat"><strong id="gate-state">Checking…</strong><span>membership</span></div>
-    </div>
   </div>
-
   <!-- documentation -->
-
-  <footer>
-    <span><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire ↗</a> · Waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">maywe.email</a></span>
-    <span id="relay-software"></span>
-  </footer>
+  <footer><div class="footer-facts"><span id="relay-name">Relay console</span><span id="relay-url"></span>
+    <span><span id="gate-state">Checking…</span></span><span id="relay-software"></span></div><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire</a></footer>
 </main>
 `;
 
@@ -545,6 +752,7 @@ export const CONSOLE_SCRIPT = String.raw`
                 urls: null, client: 'chatgpt', counts: { groups: null, mail: null } };
 
   function $(id) { return document.getElementById(id); }
+  document.head.append($('console-icon').content);
   // The Worker serves its MCP server beside this page; a Kubernetes build of the page
   // hides what is the Worker's alone (data-edge="worker"), the Pair card among it.
   var HOSTED_MCP = !$('pair-card').hidden;
@@ -1222,7 +1430,7 @@ export const CONSOLE_SCRIPT = String.raw`
   }
 
   // ------------------------------------------------------------------------ NIP-11
-  function stat(id, text, cls) { var s = $(id); s.textContent = text; s.parentElement.className = 'stat' + (cls ? ' ' + cls : ''); }
+  function stat(id, text, cls) { var s = $(id); s.textContent = text; s.parentElement.className = (id === 'relay-state' ? 'relay-pill' : 'stat') + (cls ? ' ' + cls : ''); }
   function facts(info) {
     var list = $('facts');
     list.textContent = '';
@@ -1248,12 +1456,10 @@ export const CONSOLE_SCRIPT = String.raw`
     $('relay-software').textContent = [info.software, info.version].filter(Boolean).join(' ');
     document.title = (info.name || 'Relay') + ' console';
     stat('relay-state', 'online', 'good');
-    $('relay-dot').className = 'dot good';
     facts(info);
   }
   function unreachable(err) {
     stat('relay-state', 'unreachable', 'bad');
-    $('relay-dot').className = 'dot bad';
     stat('gate-state', 'unverified', 'warn');
     $('rooms-status').textContent = 'NIP-29 unverified';
     log(err.message, 'bad');
@@ -1624,23 +1830,23 @@ export const CONSOLE_SCRIPT = String.raw`
 
   // ---------------------------------------------------------------- 02 · waitlist
   function mayweStatus(text, cls) { var p = $('maywe-status'); p.textContent = text; p.className = 'note' + (cls ? ' ' + cls : ''); }
-  // BEGIN MayWe answer
-  // tests/test_hydrate.py runs this block under Node. MayWe's public subscribe answers
+  // BEGIN invite service answer
+  // tests/test_hydrate.py runs this block under Node. The public invite service answers
   // {ok, status}: ok false with status 'paused' while the list takes no requests, and
   // 'pending' also where it deliberately sends no new mail, so a success promises none.
   // An error answer carries FastAPI's detail, a string or a list of {msg}.
   function mayweAnswer(httpStatus, text) {
     var data;
-    try { data = JSON.parse(text); } catch (err) { throw new Error('MayWe answered HTTP ' + httpStatus + ' with a body that is not JSON'); }
+    try { data = JSON.parse(text); } catch (err) { throw new Error('The invite service answered HTTP ' + httpStatus + ' with a body that is not JSON'); }
     if (httpStatus < 200 || httpStatus > 299) {
       var why = data && (Array.isArray(data.detail) ? data.detail.map(function (d) { return d.msg; }).join('; ') : data.detail);
-      throw new Error('MayWe refused the request (HTTP ' + httpStatus + ')' + (why ? ': ' + why : ''));
+      throw new Error('The invite service refused the request (HTTP ' + httpStatus + ')' + (why ? ': ' + why : ''));
     }
     if (data && data.status === 'paused') throw new Error('Invite requests are temporarily paused; please try again shortly.');
-    if (!data || data.ok !== true) throw new Error('MayWe did not take the request (status ' + (data && data.status) + ')');
-    return 'Request received. Check your inbox to confirm your place on the waitlist.';
+    if (!data || data.ok !== true) throw new Error('The invite service did not take the request (status ' + (data && data.status) + ')');
+    return 'Invite request received. Check your inbox to confirm your email.';
   }
-  // END MayWe answer
+  // END invite service answer
   async function requestMayweInvite() {
     var email = $('maywe-email').value.trim();
     if (!email) throw new Error('enter your email address first');
@@ -1651,7 +1857,7 @@ export const CONSOLE_SCRIPT = String.raw`
       : 'pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI';
     var params = new URLSearchParams({ key: key, email: email, source: 'crosswire:invite-request', website: website });
     if (note) params.set('details', JSON.stringify({ use_case: note }));
-    mayweStatus('Sending your request to MayWe…');
+    mayweStatus('Sending invite request…');
     var done;
     try {
       var res = await fetch('https://newsletter.awow.io/v1/subscribe', {
@@ -1704,7 +1910,7 @@ export const CONSOLE_SCRIPT = String.raw`
       if (setupInvite()) message = 'Invite ready. Copy either option to join with your agent.';
       else if (link.error) message = link.error;
       else if (!forThisRelay(link)) message = 'This invite belongs to a different relay.';
-      else message = 'Agent setup needs an nm1_ invite. Use the browser console below for a claim code or an enrolled key.';
+      else message = 'Agent setup needs an nm1_ invite. Redeem a claim code in the browser or sign in with an enrolled key.';
     }
     $('install-status').textContent = message;
     installFor(selectedClient);
@@ -1718,57 +1924,99 @@ export const CONSOLE_SCRIPT = String.raw`
     const link = state.link;
     return link && link.token && usableHere(link) && !link.spent ? link : null;
   }
-  // The console and the static site render the same two paths from a locally checked invite.
-  $('request-access').addEventListener('click', () => $('maywe-email').focus());
+  // The topology is a local wiring diagram. Only the keyway can enroll a seat.
   let selectedClient = 'claude';
+  let topology = 'mesh';
+  let destination = 'B01';
   const clients = {
-    claude: 'Claude Code', codex: 'Codex', antigravity: 'Antigravity (agy)', cursor: 'Cursor',
-    'claude-desktop': 'Claude Desktop', chatgpt: 'ChatGPT', cli: 'the CLI (uv)',
+    claude: 'Claude Code', codex: 'Codex', cli: 'CLI (uv)', 'claude-desktop': 'Claude Desktop',
+    chatgpt: 'ChatGPT', antigravity: 'Antigravity', cursor: 'Cursor',
   };
-  function installFor(client) {
-    selectedClient = client;
-    const repo = 'https://github.com/awowIO/crosswire';
-    const link = setupInvite();
-    const token = link ? link.token : '<your nm1_ invite>';
-    const topic = link && link.channel ? ' --topic ' + link.topic : '';
-    const writeOnly = link && link.channel && link.bundle.role === 'write-only';
-    const cli = client === 'chatgpt' ? 'crosswire --home ~/.config/nostr-mailbox-chatgpt --persona chatgpt' : 'crosswire';
-    const server = cli + topic + ' mcp';
-    const watch = cli + topic + ' watch bus --wait-seconds 5';
-    let install = 'uv tool install git+' + repo;
-    let register = 'Register ' + server + ' as a stdio MCP server in ' + clients[client] + '.';
-    let note = 'Requires uv and the crosswire command on your PATH.';
-    const steps = [cli + " join '" + token + "'"];
-    if (client === 'claude' || client === 'codex') {
-      steps.push(client + ' mcp add crosswire -- ' + server);
-    } else if (client === 'chatgpt') {
-      register = 'Start ' + server + ' --http on my connector host and guide me through adding its HTTPS MCP URL to ChatGPT.';
-      note = 'Run on your connector host. Add its public HTTPS /mcp endpoint to ChatGPT with OAuth.';
-    } else if (client === 'cli') {
-      register = 'Register ' + server + ' as a stdio MCP server in this coding agent.';
-    } else {
-      install = 'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
-      note = 'Requires Git and Python 3. Keep the checkout and put ~/.local/bin on your PATH.';
-      if (client === 'claude-desktop') {
-        register = 'Use the desktop installer to register the stdio MCP server in Claude Desktop and tell me when to restart it.';
-        note += ' Restart Claude Desktop to load the server.';
-      }
+  const modes = {
+    mesh: { peers: ['B01', 'B02', 'B03', 'C02'], caption: 'Enrolled seats share the encrypted #agents room.' },
+    bridge: { peers: ['C01', 'C02', 'B01', 'B02'], caption: 'The internal crosswire relay and the outbound crosswire-external relay use separate seats.' },
+    dropbox: { peers: ['C03'], caption: 'A write-only sender delivers to quarantine. The owner reviews each delivery before sharing it.' },
+  };
+  const peers = {
+    B01: 'peer/claude-code', B02: 'peer/codex', B03: 'topic #agents',
+    C01: 'internal/wss://grid…', C02: 'remote/chatgpt-mcp', C03: 'dropbox/quarantine',
+  };
+  const clientButtons = document.querySelectorAll('#install-clients [data-install]');
+  const modeButtons = document.querySelectorAll('#interlink-modes button');
+  const peerButtons = document.querySelectorAll('[data-peer]');
+  function peerY(peer) {
+    return (peer.startsWith('C') ? 105 : 0) + 37.5 + 27 * (Number(peer.slice(1)) - 1);
+  }
+  function renderPatch() {
+    const jack = Object.keys(clients).indexOf(selectedClient);
+    const y = 41 + 26 * jack;
+    const end = peerY(destination);
+    const sag = topology === 'mesh' ? 184 : topology === 'bridge' ? 132 : 204;
+    const route = 'M0 ' + y + ' C48 ' + y + ' 54 ' + sag + ' 180 105 C246 ' + sag + ' 308 ' + end + ' 360 ' + end;
+    $('route-path').setAttribute('d', route);
+    $('route-path').setAttribute('marker-end', topology === 'dropbox' ? 'url(#one-way)' : 'none');
+    const linked = [destination];
+    let branch = '', returnCord = '';
+    if (topology === 'mesh') {
+      const room = destination === 'B03' ? 'B01' : 'B03';
+      const cloud = destination === 'C02' ? 'B02' : 'C02';
+      linked.push(room, cloud);
+      branch = 'M180 105 C235 198 315 ' + peerY(room) + ' 360 ' + peerY(room);
+      returnCord = 'M180 105 C236 110 300 207 360 ' + peerY(cloud);
+    } else if (topology === 'bridge') {
+      const other = destination === 'C01' ? 'C02' : 'C01';
+      linked.push(other);
+      const inlet = 41 + 26 * ((jack + 3) % clientButtons.length);
+      branch = 'M0 ' + inlet + ' C52 ' + inlet + ' 142 217 248 176 S325 ' + peerY(other) + ' 360 ' + peerY(other);
     }
-    steps.push(writeOnly ? cli + ' relay check' : watch);
-    if (client === 'chatgpt') steps.push(server + ' --http');
-    const join = link ? 'Redeem my invite with ' + cli + ' join.' : 'Ask me for my operator-approved invite, then redeem it with ' + cli + ' join.';
-    const verify = writeOnly ? 'This is a write-only invite. Check relay membership with ' + cli + ' relay check.' : 'Check the room bus with ' + watch + '.';
-    $('install-prompt').textContent = 'Install awowIO/crosswire for ' + clients[client] + '. ' + join + ' ' + register + ' ' + verify +
-      (link ? '\nMy single-use invite: ' + token : '');
-    $('install-command').textContent = install + '\n' + steps.join(' && ');
-    $('install-how').textContent = (link ? '' : 'Replace the quoted placeholder with your invite. ') + note;
-    for (const button of document.querySelectorAll('#install-clients button')) {
-      button.setAttribute('aria-pressed', String(button.dataset.install === client));
+    $('branch-path').setAttribute('d', branch);
+    $('return-path').setAttribute('d', returnCord);
+    $('field-route').textContent = 'A0' + (jack + 1) + ' / ' + destination;
+    $('install-how').textContent = clients[selectedClient] + ' to ' + peers[destination] + '. ' + modes[topology].caption;
+    for (const button of modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === topology));
+    for (const [index, button] of clientButtons.entries()) {
+      button.setAttribute('aria-pressed', String(button.dataset.install === selectedClient));
+      button.dataset.connected = String(topology === 'bridge' && index === (jack + 3) % clientButtons.length);
+    }
+    for (const button of peerButtons) {
+      button.setAttribute('aria-pressed', String(button.dataset.peer === destination));
+      button.dataset.connected = String(linked.includes(button.dataset.peer));
     }
   }
-  for (const button of document.querySelectorAll('#install-clients button')) {
-    button.addEventListener('click', () => installFor(button.dataset.install));
+  function signal() {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) $('signal-motion').beginElement();
   }
+  function flyCourier() {
+    const bird = $('wire-bird');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    bird.classList.remove('is-playing');
+    void bird.offsetWidth;
+    bird.classList.add('is-playing');
+  }
+  $('wire-bird').addEventListener('click', flyCourier);
+  $('wire-bird').addEventListener('animationend', (event) => {
+    if (event.animationName === 'bird-hop') $('wire-bird').classList.remove('is-playing');
+  });
+  function selectPeer(peer) {
+    if (!modes[topology].peers.includes(peer)) {
+      topology = peer === 'C03' ? 'dropbox' : peer === 'C01' ? 'bridge' : 'mesh';
+    }
+    destination = peer;
+    renderPatch();
+    signal();
+  }
+  for (const button of modeButtons) {
+    button.addEventListener('click', () => {
+      topology = button.dataset.mode;
+      selectPeer(modes[topology].peers[0]);
+    });
+  }
+  for (const button of peerButtons) button.addEventListener('click', () => selectPeer(button.dataset.peer));
+  for (const button of document.querySelectorAll('[data-board]')) {
+    button.addEventListener('click', () => selectPeer(modes[topology].peers.find((p) => p.startsWith(button.dataset.board)) || button.dataset.board + '01'));
+  }
+  $('splice-lock').addEventListener('click', () => { $('wave-7').open = !$('wave-7').open; });
+  $('wave-7').addEventListener('toggle', () => $('splice-lock').setAttribute('aria-expanded', String($('wave-7').open)));
   const scenarios = document.querySelectorAll('#scenarios button');
   for (const button of scenarios) {
     button.addEventListener('click', () => {
@@ -1779,8 +2027,55 @@ export const CONSOLE_SCRIPT = String.raw`
       }
     });
   }
-  copyButton($('install-prompt-copy'), 'install-prompt');
-  copyButton($('install-copy'), 'install-command');
+
+  function installFor(client) {
+    selectedClient = client;
+    const link = setupInvite();
+    const token = link ? link.token : '<your nm1_ invite>';
+    const repo = 'https://github.com/awowIO/crosswire';
+    const cli = client === 'chatgpt' ? 'crosswire --home ~/.config/nostr-mailbox-chatgpt --persona chatgpt' : 'crosswire';
+    const server = cli + (link && link.channel ? ' --topic ' + link.topic : '') + ' mcp';
+    let install = 'uv tool install git+' + repo;
+    let connect = 'use the CLI from this terminal';
+    if (client === 'claude' || client === 'codex') {
+      connect = 'register the stdio server with ' + client + ' mcp add crosswire -- ' + server;
+    } else if (client === 'chatgpt') {
+      connect = 'start ' + server + ' --http on my connector host and help me add its HTTPS endpoint to ChatGPT';
+    } else if (client !== 'cli') {
+      install = 'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
+      connect = 'load the installed integration in ' + clients[client];
+    }
+    $('setup-client').textContent = clients[client];
+    $('install-prompt').textContent = 'Install awowIO/crosswire for ' + clients[client] + ', ' +
+      (link ? 'join with my invite ' + token : 'ask me for my invite and join my relay') + ', then ' + connect + '.';
+    $('install-command').textContent = install + '\n' + cli + " join '" + token + "'";
+    renderPatch();
+  }
+  for (const button of clientButtons) {
+    button.addEventListener('click', () => {
+      const client = button.dataset.install;
+      if (topology === 'mesh') destination = client === 'chatgpt' ? 'C02' : client === 'codex' ? 'B02' : client === 'cli' ? 'B03' : 'B01';
+      if (topology === 'bridge') destination = client === 'chatgpt' || client === 'claude-desktop' ? 'C02' : 'C01';
+      installFor(client);
+      signal();
+    });
+  }
+  for (const [buttonId, textId] of [['install-prompt-copy', 'install-prompt'], ['install-copy', 'install-command']]) {
+    const button = $(buttonId);
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($(textId).textContent);
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Select & copy';
+        return;
+      }
+      flyCourier();
+      signal();
+    });
+    button.addEventListener('blur', () => { button.textContent = 'Copy'; });
+  }
+  $('request-access').addEventListener('click', () => $('maywe-email').focus());
   $('theme').addEventListener('click', action(toggleTheme));
   Array.from(document.querySelectorAll('#pair-clients button')).forEach(function (button) {
     button.addEventListener('click', action(function () { chooseClient(button.dataset.client); }));

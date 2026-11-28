@@ -19,7 +19,7 @@ What is exercised for real, and how:
     Worker's page and headers.
   - Both pages' whole scripts run under Node against a stand-in DOM and fetch (a test
     double, named as one): what they send at boot, on a pasted invite, on the Pair form,
-    and how they read each MayWe answer.
+    and how they show each invite-service response.
   - When a Docker daemon answers, the pinned ncli release itself: `ncli relay --check`
     on the hydrated relay.yaml, and a live ncli relay booted on it. The self-service
     scenarios (member-minted invites, NIP-29 groups, recipient-only kinds, what `/`
@@ -1008,34 +1008,37 @@ class _Collect(html.parser.HTMLParser):
             self.style += data
 
 
-# What both pages link to, and where their invite-request form posts: the source on GitHub, and
-# MayWe, which runs the waitlist (with a second publishable key for pages served from docs.awow.io).
+# Source links and the two origin-specific publishable keys for the invite form.
 SOURCE_URL = "https://github.com/awowIO/crosswire"
-MAYWE_URL = "https://maywe.email"
 SUBSCRIBE_URL = "https://newsletter.awow.io/v1/subscribe"
 DOCS_ORIGIN = "https://docs.awow.io"
-MAYWE_KEY, DOCS_MAYWE_KEY = "pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI", "pk_6ZNZP0jBeKTpu22jfUQfQ6Dhcu6faq7iSzeEJsMMy78"
+SUBSCRIBE_KEY, DOCS_SUBSCRIBE_KEY = "pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI", "pk_6ZNZP0jBeKTpu22jfUQfQ6Dhcu6faq7iSzeEJsMMy78"
 
 
 def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
-    """No script, stylesheet or image from anywhere; links to the source on GitHub (header and
-    footer) and to MayWe only; and the MayWe invite-request form. `q` is the script's quote."""
-    assert not [(t, a) for t, a in parsed.tags if "src" in a or t == "link"]
+    """Both pages ship their artwork locally and enroll through the same invite service."""
+    assert not [(t, a) for t, a in parsed.tags if "src" in a]
+    icons = [a for t, a in parsed.tags if t == "link"]
+    assert len(icons) == 1 and icons[0]["rel"] == "icon"
+    media, svg = icons[0]["href"].split(",", 1)
+    assert media == "data:image/svg+xml" and urllib.parse.unquote(svg).startswith("<svg ")
+    assert "MayWe" not in page and "maywe.email" not in page
     console_page = any(a.get("id") == "workspace" for _, a in parsed.tags)
-    links = [(t, a) for t, a in parsed.tags if "href" in a and not a["href"].startswith("#")]
-    expected = {("a", SOURCE_URL), ("a", MAYWE_URL)}
-    if console_page:
-        expected.add(("a", "https://github.com/awowIO/nostr-relay-deploy"))
-    assert {(t, a["href"]) for t, a in links} == expected
-    anchors = [a["href"] for _, a in parsed.tags if a.get("href", "").startswith("#")]
-    assert anchors == (["#switchboard", "#docs", "#acls", "#architecture",
-                        "#docs", "#acls", "#architecture"] if console_page else [])
-    assert all(a.get("target") == "_blank" and a.get("rel") == "noopener noreferrer" for _, a in links)
-    header = re.search(r"<header .*?</header>", page, re.DOTALL).group(0)
-    link = re.search(rf'<a class="hdr-link" href="{re.escape(SOURCE_URL)}"[^>]*>(.*?)</a>', header, re.DOTALL)
-    assert link and re.sub(r"<[^>]+>", "", link.group(1)) == "GitHub · awowIO/crosswire ↗"
-    assert '<span class="hdr-repo"> · awowIO/crosswire</span>' in link.group(1), "what a narrow header drops"
-    assert f'<a href="{SOURCE_URL}"' in re.search(r"<footer>.*?</footer>", page, re.DOTALL).group(0)
+    links = [a for t, a in parsed.tags if t == "a" and not a["href"].startswith("#")]
+    relay_console = f"https://{RELAY_HOST}/"
+    assert {a["href"] for a in links} == {
+        SOURCE_URL, "https://github.com/awowIO/nostr-relay-deploy" if console_page else relay_console}
+    assert all(a.get("target") == "_blank" and a.get("rel") == "noopener noreferrer"
+               for a in links if a["href"] != relay_console)
+    assert [a["href"] for t, a in parsed.tags if t == "a" and "data-tab" in a] == [
+        "#switchboard", "#docs", "#acls", "#architecture"]
+    header = re.search(r"<header .*?</header>", page, re.DOTALL)[0]
+    github = next(a for tag, a in _parsed(header).tags if tag == "a" and a.get("class") == "hdr-link")
+    assert github["href"] == SOURCE_URL and github["aria-label"] == "GitHub · awowIO/crosswire"
+    icon = re.search(r'<a class="hdr-link"[^>]*>(.*?)</a>', header, re.DOTALL)[1]
+    assert re.sub(r"<[^>]+>", "", icon).strip() == ""
+    assert any(tag == "svg" and a["width"] == a["height"] == "16" for tag, a in _parsed(icon).tags)
+    assert f'<a href="{SOURCE_URL}"' in re.search(r"<footer>.*?</footer>", page, re.DOTALL)[0]
     # No style attribute anywhere: the console's hash-only style-src refuses inline styles, so
     # a hidden field styled that way would show. The honeypot is hidden by a rule instead.
     assert not [(t, a) for t, a in parsed.tags if "style" in a]
@@ -1043,17 +1046,22 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
                      r"pointer-events: none; \}", parsed.style)
     choices = [a for t, a in parsed.tags if t == "button" and "data-install" in a]
     assert [a["data-install"] for a in choices] == [
-        "claude", "codex", "antigravity", "cursor", "claude-desktop", "chatgpt", "cli"]
+        "claude", "codex", "cli", "claude-desktop", "chatgpt", "antigravity", "cursor"]
     assert [a["data-install"] for a in choices if a["aria-pressed"] == "true"] == ["claude"]
     ids = [a["id"] for _, a in parsed.tags if "id" in a]
     assert len(ids) == len(set(ids))
-    order = [ids.index(name) for name in ("install-clients", "open-token", "install-prompt", "install-command", "maywe-card")]
-    assert order == sorted(order), "choose an agent, prepare an invite, copy a setup path, or request access"
+    order = [ids.index(name) for name in ("interlink-modes", "install-clients", "splice-lock", "wave-7", "install-prompt",
+                                         "install-command", "admission", "open-token", "maywe-card")]
+    assert order == sorted(order)
+    assert [a["data-mode"] for _, a in parsed.tags if "data-mode" in a] == ["mesh", "bridge", "dropbox"]
+    assert [a["data-peer"] for _, a in parsed.tags if "data-peer" in a] == ["B01", "B02", "B03", "C01", "C02", "C03"]
+    assert any(t == "svg" and a.get("viewbox") == "0 0 360 210" for t, a in parsed.tags)
+    assert {"wire-bird", "scenarios", "signal-motion", "open-invite", "returning"} <= set(ids)
     for button in ("install-copy", "install-prompt-copy"):
         assert any(t == "button" and a.get("id") == button and a["type"] == "button" for t, a in parsed.tags)
     if console_page:
         admission = page[page.index('id="admission"'):page.index('id="workspace"')]
-        assert admission.index('id="maywe-card"') < admission.index('<details id="invited-card">')
+        assert admission.index('id="invited-card"') < admission.index('id="maywe-card"')
         drawer = re.search(r'<details class="returning" id="returning">(.*?)</details>', admission, re.DOTALL)
         assert drawer and all(f'id="{field}"' in drawer[1] for field in
                               ("key-form", "nsec", "signin", "reconnect", "extension-choice", "use-extension"))
@@ -1072,7 +1080,7 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
                    f"source: {q}crosswire:invite-request{q}",
                    f"if (note) params.set({q}details{q}, JSON.stringify({{ use_case: note }}));"):
         assert needle in page, needle
-    assert re.search(rf"location\.origin === {q}{DOCS_ORIGIN}{q}\)\s*\?\s*{q}{DOCS_MAYWE_KEY}{q}\s*:\s*{q}{MAYWE_KEY}{q}",
+    assert re.search(rf"location\.origin === {q}{DOCS_ORIGIN}{q}\)\s*\?\s*{q}{DOCS_SUBSCRIBE_KEY}{q}\s*:\s*{q}{SUBSCRIBE_KEY}{q}",
                      page), "docs.awow.io posts with its own key, every other origin with the relay's"
     assert re.search(r"new URLSearchParams\(\{[^}]*\bemail\b[^}]*\bwebsite\b[^}]*\}\)", page)
 
@@ -1092,7 +1100,6 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     csp = next(a["content"] for a in metas if a.get("http-equiv") == "Content-Security-Policy")
     assert "default-src 'none'" in csp and f"connect-src https://{RELAY_HOST} https://newsletter.awow.io;" in csp
     assert "form-action 'none'" in csp
-    # Self-contained: no stylesheet, script or image from anywhere, and links to GitHub and MayWe only.
     _assert_links_and_invite_form(parsed, page, '"')
     style = re.sub(r"/\*.*?\*/", "", parsed.style, flags=re.DOTALL)
     page_rule = re.search(r"\.page\s*\{([^}]*)\}", style).group(1)
@@ -1105,8 +1112,9 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     assert f'const RELAY_HOST = "{RELAY_HOST}";' in page
     assert 'fetch(url, { headers: { Accept: "application/nostr+json" }' in page
     assert "awowIO/nostr-mailbox" not in page, "the repository is awowIO/crosswire now"
-    for command in ("nostr-mailbox relay check", f"nostr-mailbox setup --relay wss://{RELAY_HOST} "
-                    "--campaign my-campaign --kubectl", "nostr-mailbox invite --kubectl"):
+    for command in ("nostr-mailbox relay check",
+                    f"nostr-mailbox setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl",
+                    "nostr-mailbox invite --kubectl"):
         assert command in page, command
     # An invite link opens this page at / or /join/ (GitHub Pages sends /join there): the
     # page reads the token from the fragment, then takes the fragment off the address bar.
@@ -1584,13 +1592,11 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     metas = [a for t, a in parsed.tags if t == "meta"]
     assert {"charset": "utf-8"} in metas
     assert any(a.get("name") == "viewport" and "width=device-width" in a.get("content", "") for a in metas)
-    # Self-contained: no stylesheet, script or image from anywhere, links to GitHub and MayWe only,
-    # and no other site named.
     _assert_links_and_invite_form(parsed, page, "'")
     assert "http://" not in page.replace('xmlns="http://www.w3.org/2000/svg"', "")
     script_urls = re.findall(r"https://[^\s'\"<>]+", re.search(r"<script>(.*?)</script>", page, re.DOTALL)[1])
     assert set(script_urls) == {SOURCE_URL, SUBSCRIBE_URL, DOCS_ORIGIN}
-    # The CSP admits this script and this style, by hash, and connects to this relay and MayWe only.
+    # The CSP admits this script and this style, by hash, and connects to this relay and the invite service only.
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
     style = re.search(r"<style>(.*?)</style>", page, re.DOTALL).group(1)
     policy = dict(part.strip().split(" ", 1) for part in headers["Content-Security-Policy"].split(";"))
@@ -1751,30 +1757,28 @@ def test_both_pages_share_one_design_system(worker, build):
     scripts = [re.search(r"<script>(.*?)</script>", p, re.DOTALL).group(1) for p in (console, pages)]
     found = [palettes(s) for s in styles]
     assert found[0] == found[1], "one palette on both pages"
-    colours = {"--bg", "--panel", "--ink", "--muted", "--line", "--soft", "--accent", "--green", "--red", "--amber",
-               "--head", "--hover", "--paper", "--stone", "--quiet", "--rule", "--rule-strong", "--teal",
-               "--terracotta", "--terracotta-ink", "--sage"}
-    for theme in ("light", "dark"):
-        assert colours <= set(found[0][theme]), theme
-    assert found[0]["dark"] == found[0]["system dark"], "the toggle's dark is the system's dark"
-    assert (found[0]["light"]["--paper"], found[0]["dark"]["--paper"]) == ("#faf9f6", "#14171c")
+    expected = {
+        "paper bg": ("#faf9f6", "#111518"), "stone head": ("#f1f0ec", "#171c21"),
+        "soft": ("#f1f0ec", "#1e252b"), "panel": ("#ffffff", "#171c21"),
+        "ink": ("#181c20", "#eaeef2"), "muted": ("#586068", "#9da7b2"), "quiet": ("#6d757d", "#7c8691"),
+        "line rule": ("#e2e0d8", "#273038"), "rule-strong": ("#c5c2b8", "#394550"),
+        "accent cobalt": ("#244b7a", "#7fa6d6"), "green sage": ("#28664b", "#7ec2a0"),
+        "amber brass": ("#b8892e", "#d8ae5e"), "red": ("#9e3b42", "#e08b92"), "hover": ("#e6eef2", "#1f2831"),
+    }
+    for names, pair in expected.items():
+        for name in names.split():
+            assert tuple(found[0][theme]["--" + name] for theme in ("light", "dark")) == pair
+    assert found[0]["dark"] == found[0]["system dark"]
     for style, script, page in zip(styles, scripts, (console, pages), strict=True):
-        assert "font: 16px/1.55 var(--sans)" in style
-        assert "--serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif" in style
+        assert "font: 13.5px/1.5 var(--sans)" in style and "terracotta" not in style
         assert "--mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace" in style
         assert "font-variant-numeric: tabular-nums" in style
-        top = re.search(r"\.top\s*\{([^}]*)\}", style).group(1)
-        assert "height: 61px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
-        assert "position: sticky; top: 0; z-index: 10;" in top, "the header stays while the page scrolls"
-        # A narrow screen never scrolls sideways: the right side keeps its width, the wordmark
-        # gives way, and below 760px the repository's name and the long fields drop out.
-        assert "flex: 0 0 auto;" in re.search(r"\.header-right\s*\{([^}]*)\}", style).group(1)
-        assert re.search(r"\.wordmark\s*\{[^}]*flex: 1 1 auto;[^}]*min-width: 0;[^}]*text-overflow: ellipsis",
-                         style)
-        narrow = style[style.index("@media (width <= 760px)"):]
-        assert re.search(r"[^{}]*\.hdr-repo[^{}]*\{ display: none; \}", narrow)
-        assert '<button id="theme" type="button" aria-label="Switch color theme">◐</button>' in page
-        assert '<span class="mark" aria-hidden="true">⨉</span>' in page
+        top = re.search(r"\.top\s*\{([^}]*)\}", style)[1]
+        assert "height: 48px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
+        assert "position: sticky; top: 0; z-index: 10;" in top
+        assert re.search(r'<button id="theme"[^>]*><svg ', page)
+        assert re.search(r'<h1 class="wordmark"><svg .*?</svg>crosswire.sh</h1>', page)
+        assert not any(glyph in page for glyph in "🐦🔒🔑●◐⨉✓↗")
         assert re.search(r"""THEME_KEY = ['"]nostr-relay-deploy/theme['"];""", script)
         assert '<meta name="color-scheme" content="light dark">' in page
 
@@ -3511,22 +3515,33 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const [scriptPath, scenarioPath] = process.argv.slice(2);
 const scenario = JSON.parse(fs.readFileSync(scenarioPath, 'utf8'));
-const elements = new Map(), requests = [], snapshots = {};
+const elements = new Map(), requests = [];
 function element(id) {
   if (!elements.has(id)) {
     const node = { id: id, textContent: '', value: '', className: '', checked: false, dataset: {}, type: 'button',
       hidden: scenario.hidden.includes(id), listeners: {}, parentElement: { className: '' },
       addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
-      setAttribute() {}, appendChild() {}, prepend() {}, reset() {} };
+      attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); },
+      beginElement() { requests.push({ signal: this.id }); },
+      appendChild() {}, prepend() {}, reset() {} };
     elements.set(id, node);
   }
   return elements.get(id);
 }
+// Use the controls from the served markup for the patchbay's selector-based listeners.
+const controls = {};
+for (const [selector, key, values] of scenario.controls) {
+  controls[selector] = values.map(value => {
+    const button = element(key + '=' + value);
+    button.dataset[key] = value;
+    return button;
+  });
+}
 let fresh = 0;
 const sandbox = {
-  document: { getElementById: element, querySelectorAll: () => [], createElement: () => element('#new' + (++fresh)),
+  document: { head: { append() {} }, getElementById: element, querySelectorAll: selector => controls[selector] || [], createElement: () => element('#new' + (++fresh)),
               createTextNode: () => ({}), documentElement: { dataset: {} }, title: '' },
-  location: { hash: scenario.hash, host: scenario.host, origin: 'https://' + scenario.host, pathname: scenario.path, search: '', reload() { requests.push({ reload: true }); } },
+  location: { hash: scenario.hash, host: scenario.host, origin: 'https://' + scenario.host, pathname: scenario.path, search: '', assign(url) { requests.push({ navigate: url }); }, reload() { requests.push({ reload: true }); } },
   history: { replaceState(_state, _title, url) { requests.push({ replaceState: url }); } },
   localStorage: { items: new Map(), getItem(k) { return this.items.get(k) ?? null; },
     setItem(k, v) { this.items.set(k, v); requests.push({ stored: k, value: v }); },
@@ -3577,7 +3592,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     await settle();
   }
   const seen = {};
-  for (const [id, node] of elements) if (!id.startsWith('#new')) seen[id] = { text: node.textContent, value: node.value, hidden: node.hidden, className: node.className };
+  for (const [id, node] of elements) if (!id.startsWith('#new')) seen[id] = { text: node.textContent, value: node.value, hidden: node.hidden, className: node.className, attrs: node.attrs, dataset: node.dataset };
   process.stdout.write(JSON.stringify({ requests: requests, elements: seen }) + "\n", () => process.exit(0));
 })().catch((err) => { console.error(err); process.exit(1); });
 """
@@ -3588,11 +3603,16 @@ def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = 
              extension: str | None = None) -> dict:
     """Run `page`'s script under PAGE_RUNNER: what it requested, and its elements after."""
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
-    hidden = sorted({a["id"] for _, a in _parsed(page).tags if "hidden" in a and "id" in a})
+    tags = _parsed(page).tags
+    hidden = sorted({a["id"] for _, a in tags if "hidden" in a and "id" in a})
+    selectors = {"install": "#install-clients [data-install]", "mode": "#interlink-modes button",
+                 "board": "[data-board]", "peer": "[data-peer]"}
+    controls = [(selector, key, [a["data-" + key] for t, a in tags if t == "button" and "data-" + key in a])
+                for key, selector in selectors.items()]
     (tmp_path / "page.js").write_text(script)
     (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
     (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
-                                                        "steps": steps or [], "replies": replies or {}, "path": path,
+                                                        "steps": steps or [], "replies": replies or {}, "path": path, "controls": controls,
                                                         "port": relay_port, "extension": extension,
                                                         "nostr": str(REPO / "templates/cloudflare/src/nostr.ts")}))
     done = subprocess.run(["node", str(tmp_path / "runner.cjs"), str(tmp_path / "page.js"),
@@ -3642,7 +3662,7 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
             assert token in preview["elements"]["install-prompt"]["text"]
             install, join = preview["elements"]["install-command"]["text"].splitlines()
             assert install == f"uv tool install git+{SOURCE_URL}"
-            assert f"crosswire join '{token}'" in join and "crosswire watch bus" in join
+            assert join == f"crosswire join '{token}'"
     for given in (f"https://{RELAY_HOST}/join/#{token}", token, f"#join={token}"):
         seen = run_page(tmp_path, worker.http("GET", "/")[2].decode(),
                         steps=[["set", "open-token", given], ["submit", "open-form"]])
@@ -3662,6 +3682,32 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
     assert (els["invite"]["hidden"], els["invite-join"]["hidden"]) == (False, False)
     assert els["invite-command"]["text"] == f"nostr-mailbox join {token}" and els["open-token"]["value"] == ""
     assert [r["url"] for r in seen["requests"] if "url" in r] == [f"https://{RELAY_HOST}/"], "NIP-11 only"
+    assert [r["navigate"] for r in seen["requests"] if "navigate" in r] == [f"https://{RELAY_HOST}/join/#{token}"]
+
+
+def test_patchbay_routes_sockets_without_spending_an_invite(worker, build, tmp_path):
+    pages = (worker.http("GET", "/")[2].decode(), (build / "github-pages/index.html").read_text())
+    for page in pages:
+        previous = None
+        for steps, client, mode, peer, signals in (
+                ([], "claude", "mesh", "B01", 0),
+                ([["click", "install=codex"]], "codex", "mesh", "B02", 1),
+                ([["click", "mode=bridge"], ["click", "peer=C02"]], "claude", "bridge", "C02", 2),
+                ([["click", "peer=C03"]], "claude", "dropbox", "C03", 1)):
+            seen = run_page(tmp_path, page, steps=steps)
+            els = seen["elements"]
+            assert [key for key in els if key.startswith("peer=") and els[key]["attrs"]["aria-pressed"] == "true"] == ["peer=" + peer]
+            assert els["install=" + client]["attrs"]["aria-pressed"] == els["mode=" + mode]["attrs"]["aria-pressed"] == "true"
+            assert els["peer=" + peer]["dataset"]["connected"] == "true"
+            assert els["field-route"]["text"].endswith(peer) and els["install-how"]["text"]
+            cord = els["route-path"]["attrs"]["d"]
+            assert cord.startswith("M0 ") and cord != previous
+            previous = cord
+            assert bool(els["branch-path"]["attrs"]["d"]) == (mode != "dropbox")
+            assert bool(els["return-path"]["attrs"]["d"]) == (mode == "mesh")
+            assert seen["requests"].count({"signal": "signal-motion"}) == signals
+            assert len([r for r in seen["requests"] if "url" in r]) == 1
+            assert not any("dial" in r or "navigate" in r or "stored" in r for r in seen["requests"])
 
 
 def test_console_admission_uses_the_authenticated_relay(relay, worker, console_ws, tmp_path):
@@ -3764,27 +3810,27 @@ def test_console_documentation_deep_links(worker, tmp_path, path, fragment, acti
     assert not any("replaceState" in request for request in seen["requests"])
     assert seen["elements"]["workspace"]["hidden"]
     assert re.findall(r'<svg role="img".*?viewBox="([^"]+)"', page) == ["0 0 1120 320"] * 2
-    for svg in re.findall(r"<svg .*?</svg>", page, re.DOTALL):
+    for svg in re.findall(r'<svg role="img".*?</svg>', page, re.DOTALL):
         assert 'var(--' in svg and not re.search(r'(?:fill|stroke)="#', svg)
 
 
-MAYWE_ANSWERS = [
-    (200, {"ok": True, "status": "pending"}, "good", "Request received. Check your inbox to confirm your place on the waitlist."),
+INVITE_ANSWERS = [
+    (200, {"ok": True, "status": "pending"}, "good", "Invite request received. Check your inbox to confirm your email."),
     (200, {"ok": False, "status": "paused"}, "bad", "Invite requests are temporarily paused; please try again shortly."),
     (401, {"detail": "unknown key, or this key is not valid for this origin"}, "bad",
-     "MayWe refused the request (HTTP 401): unknown key, or this key is not valid for this origin"),
+     "The invite service refused the request (HTTP 401): unknown key, or this key is not valid for this origin"),
     (422, {"detail": [{"msg": "value is not a valid email address"}]}, "bad",
-     "MayWe refused the request (HTTP 422): value is not a valid email address"),
+     "The invite service refused the request (HTTP 422): value is not a valid email address"),
 ]
 
 
-@pytest.mark.parametrize("status, answer, cls, said", MAYWE_ANSWERS, ids=["pending", "paused", "401", "422"])
-def test_both_pages_say_what_maywe_answered_beside_the_email_field(worker, build, tmp_path, status, answer, cls, said):
-    """MayWe's subscribe answers {ok, status}, ok false with 'paused' while the list takes
+@pytest.mark.parametrize("status, answer, cls, said", INVITE_ANSWERS, ids=["pending", "paused", "401", "422"])
+def test_both_pages_show_the_invite_response_beside_the_email_field(worker, build, tmp_path, status, answer, cls, said):
+    """The invite endpoint answers {ok, status}, ok false with 'paused' while the list takes
     no requests (newsletter app/routes/subscribe.py); 'pending' is also its answer where it
     sends no new mail, so success promises none. Both pages carry one answer reader."""
     console, pages = worker.http("GET", "/")[2].decode(), (build / "github-pages" / "index.html").read_text()
-    block = re.compile(r"^  // BEGIN MayWe answer\n.*?^  // END MayWe answer\n", re.DOTALL | re.MULTILINE)
+    block = re.compile(r"^  // BEGIN invite service answer\n.*?^  // END invite service answer\n", re.DOTALL | re.MULTILINE)
     assert block.search(console).group(0) == block.search(pages).group(0), "one reader on both pages"
     steps = [["set", "maywe-email", "someone@example.org"], ["set", "maywe-note", "Claude Code"],
              ["submit", "maywe-form"]]
