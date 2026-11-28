@@ -1,5 +1,6 @@
 # Local operator configuration and hydrated output (never commit cluster/domain traces)
 *.local.toml
+.thisbit.json
 .build/
 .env
 *.invite

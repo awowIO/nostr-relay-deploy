@@ -538,35 +538,60 @@ def console_parts() -> dict[str, str]:
     return {name: parts[name] for name in _CONSOLE_PARTS}
 
 
-def console_html(parts: dict[str, str], *, hosted_mcp: bool) -> str:
+def _thisbit_site_key(cfg: Config) -> str | None:
+    path = cfg.path.parent / ".thisbit.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(data, dict) and data.get("origin") == f"https://{cfg['relay']['relay_host']}":
+        key = data.get("site_key")
+        if isinstance(key, str) and re.fullmatch(r"pk_[A-Za-z0-9_-]+", key):
+            return key
+    return None
+
+
+def console_html(parts: dict[str, str], *, hosted_mcp: bool, thisbit_key: str | None = None) -> str:
     """The page consoleHtml() in console.ts builds. Without the Worker's MCP server
     (`hosted_mcp` false), what BODY marks as the Worker's alone is hidden."""
     body = parts["BODY"] if hosted_mcp else parts["BODY"].replace(WORKER_ONLY_MARK, f"{WORKER_ONLY_MARK} hidden")
     body = body.replace("<!-- documentation -->", parts["DOCUMENTATION"])
+    thisbit = f'<script src="https://api.thisbit.ai/w/{thisbit_key}.js" defer></script>' if thisbit_key else ""
     return ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             '<meta name="color-scheme" content="light dark">\n'
             '<meta name="referrer" content="no-referrer">\n<title>Relay console</title>\n'
             f'<style>{parts["CONSOLE_STYLE"]}</style>\n</head>\n<body>{body}'
-            f'<script>{parts["CONSOLE_SCRIPT"]}</script>\n</body>\n</html>\n')
+            f'<script>{parts["CONSOLE_SCRIPT"]}</script>{thisbit}\n</body>\n</html>\n')
 
 
 def _sha256_source(text: str) -> str:
     return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
 
 
-def console_policy(parts: dict[str, str], relay_host: str) -> str:
+def console_policy(parts: dict[str, str], relay_host: str, *, thisbit: bool = False) -> str:
     """The Content-Security-Policy consolePage() in worker.ts sends with the page."""
-    return "; ".join([
+    thisbit_src = " https://api.thisbit.ai" if thisbit else ""
+    directives = [
         "default-src 'none'",
-        f"script-src {_sha256_source(parts['CONSOLE_SCRIPT'])}",
-        f"style-src {_sha256_source(parts['CONSOLE_STYLE'])}",
-        "img-src 'self' data:",
-        f"connect-src 'self' wss://{relay_host} {MAYWE_ORIGIN}",
+        f"script-src {_sha256_source(parts['CONSOLE_SCRIPT'])}{thisbit_src}",
+        f"style-src {_sha256_source(parts['CONSOLE_STYLE'])}{thisbit_src}",
+        "img-src 'self' data: blob:" if thisbit else "img-src 'self' data:",
+        f"connect-src 'self' wss://{relay_host} {MAYWE_ORIGIN}{thisbit_src}",
+    ]
+    if thisbit:
+        directives.extend([
+            "font-src https://api.thisbit.ai",
+            "frame-src https://workspace.studio.awow.io",
+        ])
+    directives.extend([
         "base-uri 'none'",
         "form-action 'none'",
         "frame-ancestors 'none'",
     ])
+    return "; ".join(directives)
 
 
 # `GET`/`HEAD /` on the IngressRoute. With the relay alone behind it, one route: ncli tells a
@@ -652,10 +677,12 @@ def kubernetes_files(cfg: Config) -> dict[str, str]:
     files["relay.yaml"] = render(_template("shared", "relay.yaml"), values, source="shared/relay.yaml")
     if console:
         parts = console_parts()
-        files["console/index.html"] = console_html(parts, hosted_mcp=False)
+        thisbit_key = _thisbit_site_key(cfg)
+        files["console/index.html"] = console_html(parts, hosted_mcp=False, thisbit_key=thisbit_key)
         files["console/nginx.conf"] = render(
             _template("kubernetes", "console-nginx.conf"),
-            {"console_policy": console_policy(parts, cfg["relay"]["relay_host"]), "console_port": str(CONSOLE_PORT)},
+            {"console_policy": console_policy(parts, cfg["relay"]["relay_host"], thisbit=bool(thisbit_key)),
+             "console_port": str(CONSOLE_PORT)},
             source="kubernetes/console-nginx.conf")
     return files
 
