@@ -1038,6 +1038,8 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     icon = re.search(r'<a class="hdr-link"[^>]*>(.*?)</a>', header, re.DOTALL)[1]
     assert re.sub(r"<[^>]+>", "", icon).strip() == ""
     assert any(tag == "svg" and a["width"] == a["height"] == "16" for tag, a in _parsed(icon).tags)
+    assert "wire-bird" not in page and "flyCourier" not in page
+    assert "relay-pill" not in header and "Relay checking" not in header
     assert f'<a href="{SOURCE_URL}"' in re.search(r"<footer>.*?</footer>", page, re.DOTALL)[0]
     # No style attribute anywhere: the console's hash-only style-src refuses inline styles, so
     # a hidden field styled that way would show. The honeypot is hidden by a rule instead.
@@ -1046,17 +1048,34 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
                      r"pointer-events: none; \}", parsed.style)
     choices = [a for t, a in parsed.tags if t == "button" and "data-install" in a]
     assert [a["data-install"] for a in choices] == [
-        "claude", "codex", "cli", "claude-desktop", "chatgpt", "antigravity", "cursor"]
+        "claude", "codex", "chatgpt", "claude-desktop", "antigravity", "cursor"]
     assert [a["data-install"] for a in choices if a["aria-pressed"] == "true"] == ["claude"]
     ids = [a["id"] for _, a in parsed.tags if "id" in a]
     assert len(ids) == len(set(ids))
-    order = [ids.index(name) for name in ("interlink-modes", "install-clients", "splice-lock", "wave-7", "install-prompt",
-                                         "install-command", "admission", "open-token", "maywe-card")]
+    order = [ids.index(name) for name in ("install-clients", "interlink-modes", "interlink-map", "wave-7",
+                                          "install-prompt", "install-command", "admission", "open-token", "maywe-card")]
     assert order == sorted(order)
-    assert [a["data-mode"] for _, a in parsed.tags if "data-mode" in a] == ["mesh", "bridge", "dropbox"]
-    assert [a["data-peer"] for _, a in parsed.tags if "data-peer" in a] == ["B01", "B02", "B03", "C01", "C02", "C03"]
-    assert any(t == "svg" and a.get("viewbox") == "0 0 360 210" for t, a in parsed.tags)
-    assert {"wire-bird", "scenarios", "signal-motion", "open-invite", "returning"} <= set(ids)
+    assert [a["data-mode"] for t, a in parsed.tags if t == "button" and "data-mode" in a] == ["mesh", "bridge", "dropbox"]
+    diagram = re.search(r'<svg class="interlink-map".*?</svg>', page, re.DOTALL)[0]
+    tags = _parsed(diagram).tags
+    assert [a["viewbox"] for t, a in tags if t == "svg"] == ["0 0 960 148"]
+    sockets = {(a["cx"], a["cy"]) for t, a in tags if t == "circle" and a.get("class") == "socket"}
+    wires = [a["d"] for t, a in tags if t == "path" and "wire" in a.get("class", "").split()]
+    assert len(wires) == 3 and len(sockets) == 5
+    endpoints = set()
+    for wire in wires:
+        coordinates = re.findall(r"-?\d+(?:\.\d+)?", wire)
+        endpoints.update((tuple(coordinates[:2]), tuple(coordinates[-2:])))
+    assert endpoints == sockets, "each wire terminates at the center of a socket inside the same SVG"
+    hidden = {a["id"] for _, a in parsed.tags if "hidden" in a and "id" in a}
+    assert {"install-command", "install-copy"} <= hidden
+    assert {"scenarios", "open-invite", "returning"} <= set(ids)
+    if console_page:
+        assert {"relay-state", "relay-dot", "relay-url", "gate-state", "persona-npub", "signout"} <= hidden
+    switchboard = page[page.index('<section class="patchbay"'):page.index('id="maywe-card"')]
+    for term in ("nm1_", "NIP-44", "NIP-42", "NIP-43", "BIP-340", "nostr-mailbox", "CLI (uv)"):
+        assert term not in switchboard
+    assert "Have an invite link?" in switchboard
     for button in ("install-copy", "install-prompt-copy"):
         assert any(t == "button" and a.get("id") == button and a["type"] == "button" for t, a in parsed.tags)
     if console_page:
@@ -1069,6 +1088,7 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert "action" not in opener
     pasted = next(a for t, a in parsed.tags if t == "input" and a.get("id") == "open-token")
     assert "required" in pasted and pasted["autocomplete"] == "off"
+    assert pasted["placeholder"] == "Paste your invite link or code"
     form = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "maywe-form")
     assert "action" not in form, "the script posts it, and form-action 'none' stops a plain submit"
     fields = {a["id"]: a for t, a in parsed.tags if t == "input" and a.get("id", "").startswith("maywe-")}
@@ -1112,9 +1132,9 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     assert f'const RELAY_HOST = "{RELAY_HOST}";' in page
     assert 'fetch(url, { headers: { Accept: "application/nostr+json" }' in page
     assert "awowIO/nostr-mailbox" not in page, "the repository is awowIO/crosswire now"
-    for command in ("nostr-mailbox relay check",
-                    f"nostr-mailbox setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl",
-                    "nostr-mailbox invite --kubectl"):
+    for command in ("crosswire relay check",
+                    f"crosswire setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl",
+                    "crosswire invite --kubectl"):
         assert command in page, command
     # An invite link opens this page at / or /join/ (GitHub Pages sends /join there): the
     # page reads the token from the fragment, then takes the fragment off the address bar.
@@ -1626,7 +1646,7 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     assert "padding-inline: clamp(20px, 3vw, 48px)" in page_rule
     assert re.findall(r"max-width\s*:\s*([^;}]+)", css) == ["none"], "no boxed max-width container anywhere"
     assert "@media (prefers-color-scheme: dark)" in css and "color-scheme: light dark" in css
-    # The header names this relay and the key signed in, and the Mint button is in the controls bar.
+    # Relay metadata and authenticated membership controls remain available to the console script.
     for needle in ('id="relay-url"', 'id="persona-npub"', 'id="theme"', 'id="room"', 'id="mint"', 'id="open-token"'):
         assert needle in page, needle
     assert page.index('id="maywe-card"') < page.index('id="pair-card"'), "the ways in before pairing"
@@ -1727,9 +1747,9 @@ def test_both_pages_read_nostr_mailbox_invite_links_alike(worker, build, tmp_pat
     assert got[6] == {"token": None, "code": code, "topic": None, "role": None}
     assert got[7:10] == [None, None, None]
     assert [g["error"] for g in got[10:]] == [
-        "the link carries no readable nm1_ token", "the nm1_ token is not base64url JSON",
-        "the nm1_ token holds no invite", "the nm1_ token carries no invite code",
-        "the nm1_ token is not a cf.transport/1 invite", "the nm1_ token names no ws:// or wss:// relay"]
+        "the invite link is incomplete", "the invite could not be decoded",
+        "the link contains no invite", "the invite code is missing",
+        "this invite format is unsupported", "the invite uses an unsupported relay address"]
 
 
 # The palettes a page declares: its light :root, the dark theme its toggle sets, and the
@@ -3518,11 +3538,10 @@ const scenario = JSON.parse(fs.readFileSync(scenarioPath, 'utf8'));
 const elements = new Map(), requests = [];
 function element(id) {
   if (!elements.has(id)) {
-    const node = { id: id, textContent: '', value: '', className: '', checked: false, dataset: {}, type: 'button',
+    const node = { id: id, textContent: '', value: '', className: '', checked: false, dataset: scenario.datasets[id] || {}, type: 'button',
       hidden: scenario.hidden.includes(id), listeners: {}, parentElement: { className: '' },
       addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
       attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); },
-      beginElement() { requests.push({ signal: this.id }); },
       appendChild() {}, prepend() {}, reset() {} };
     elements.set(id, node);
   }
@@ -3548,7 +3567,9 @@ const sandbox = {
     removeItem(k) { this.items.delete(k); }, get length() { return this.items.size; },
     key(i) { return Array.from(this.items.keys())[i]; } },
   matchMedia: () => ({ matches: false }),
-  addEventListener() {}, clearTimeout, navigator: {}, console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
+  addEventListener() {}, clearTimeout,
+  navigator: { clipboard: { writeText: async text => requests.push({ copied: text }) } },
+  console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
   atob, btoa, setTimeout, Promise, JSON, Uint8Array, Array, Object, Map, Error, String, Math, Date,
   fetch: async (url, init) => {
     init = init || {};
@@ -3605,14 +3626,15 @@ def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = 
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
     tags = _parsed(page).tags
     hidden = sorted({a["id"] for _, a in tags if "hidden" in a and "id" in a})
-    selectors = {"install": "#install-clients [data-install]", "mode": "#interlink-modes button",
-                 "board": "[data-board]", "peer": "[data-peer]"}
+    datasets = {a["id"]: {k[5:]: v for k, v in a.items() if k.startswith("data-")} for _, a in tags if "id" in a}
+    selectors = {"install": "#install-clients [data-install]", "mode": "#interlink-modes button"}
     controls = [(selector, key, [a["data-" + key] for t, a in tags if t == "button" and "data-" + key in a])
                 for key, selector in selectors.items()]
     (tmp_path / "page.js").write_text(script)
     (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
     (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
-                                                        "steps": steps or [], "replies": replies or {}, "path": path, "controls": controls,
+                                                        "steps": steps or [], "replies": replies or {}, "path": path,
+                                                        "controls": controls, "datasets": datasets,
                                                         "port": relay_port, "extension": extension,
                                                         "nostr": str(REPO / "templates/cloudflare/src/nostr.ts")}))
     done = subprocess.run(["node", str(tmp_path / "runner.cjs"), str(tmp_path / "page.js"),
@@ -3680,32 +3702,36 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
                                             ["submit", "open-form"]])
     els = seen["elements"]
     assert (els["invite"]["hidden"], els["invite-join"]["hidden"]) == (False, False)
-    assert els["invite-command"]["text"] == f"nostr-mailbox join {token}" and els["open-token"]["value"] == ""
+    assert els["invite-command"]["text"] == f"crosswire join {token}" and els["open-token"]["value"] == ""
     assert [r["url"] for r in seen["requests"] if "url" in r] == [f"https://{RELAY_HOST}/"], "NIP-11 only"
     assert [r["navigate"] for r in seen["requests"] if "navigate" in r] == [f"https://{RELAY_HOST}/join/#{token}"]
 
 
-def test_patchbay_routes_sockets_without_spending_an_invite(worker, build, tmp_path):
+def test_switchboard_selects_topologies_and_copies_agent_prompts_locally(worker, build, tmp_path):
     pages = (worker.http("GET", "/")[2].decode(), (build / "github-pages/index.html").read_text())
     for page in pages:
-        previous = None
-        for steps, client, mode, peer, signals in (
-                ([], "claude", "mesh", "B01", 0),
-                ([["click", "install=codex"]], "codex", "mesh", "B02", 1),
-                ([["click", "mode=bridge"], ["click", "peer=C02"]], "claude", "bridge", "C02", 2),
-                ([["click", "peer=C03"]], "claude", "dropbox", "C03", 1)):
+        for client, agent, mode, primary, secondary in (
+                ("claude", "Claude Code", "mesh", "Teammate", "Cloud agent"),
+                ("codex", "Codex", "bridge", "Team board", "Partner board"),
+                ("chatgpt", "ChatGPT", "dropbox", "Inbox owner", ""),
+                ("claude-desktop", "Claude Desktop", "mesh", "Teammate", "Cloud agent"),
+                ("antigravity", "Antigravity", "bridge", "Team board", "Partner board"),
+                ("cursor", "Cursor", "dropbox", "Inbox owner", "")):
+            steps = [["click", "mode=" + mode], ["click", "install=" + client], ["click", "install-prompt-copy"]]
             seen = run_page(tmp_path, page, steps=steps)
             els = seen["elements"]
-            assert [key for key in els if key.startswith("peer=") and els[key]["attrs"]["aria-pressed"] == "true"] == ["peer=" + peer]
-            assert els["install=" + client]["attrs"]["aria-pressed"] == els["mode=" + mode]["attrs"]["aria-pressed"] == "true"
-            assert els["peer=" + peer]["dataset"]["connected"] == "true"
-            assert els["field-route"]["text"].endswith(peer) and els["install-how"]["text"]
-            cord = els["route-path"]["attrs"]["d"]
-            assert cord.startswith("M0 ") and cord != previous
-            previous = cord
-            assert bool(els["branch-path"]["attrs"]["d"]) == (mode != "dropbox")
-            assert bool(els["return-path"]["attrs"]["d"]) == (mode == "mesh")
-            assert seen["requests"].count({"signal": "signal-motion"}) == signals
+            for prefix, selected in (("install=", client), ("mode=", mode)):
+                assert [k for k, v in els.items() if k.startswith(prefix)
+                        and v["attrs"]["aria-pressed"] == "true"] == [prefix + selected]
+            assert els["interlink-map"]["dataset"]["mode"] == mode
+            assert (els["map-primary"]["text"], els["map-secondary"]["text"]) == (primary, secondary)
+            assert els["map-client"]["text"] == els["setup-client"]["text"] == agent
+            assert els["map-title"]["text"].startswith(agent) and els["install-how"]["text"]
+            prompt = els["install-prompt"]["text"]
+            assert agent in prompt and "invite link" in prompt
+            assert all(term not in prompt for term in ("uv ", "mcp add", "git clone", "nostr-mailbox", "nm1_"))
+            assert [r["copied"] for r in seen["requests"] if "copied" in r] == [prompt]
+            assert els["install-command"]["hidden"] and els["install-copy"]["hidden"]
             assert len([r for r in seen["requests"] if "url" in r]) == 1
             assert not any("dial" in r or "navigate" in r or "stored" in r for r in seen["requests"])
 
