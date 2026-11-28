@@ -28,6 +28,7 @@ spec:
       automountServiceAccountToken: false
       {{ priority_class_block }}
       {{ affinity_block }}
+      {{ relay_node_selector_block }}
       # Not root. The pinned image declares no user, so it would run as UID 0. The relay
       # writes only its store, logs and blobs (all under the data mount), stages uploads
       # in /tmp, and its admin CLI wants a home for its log directory: hence HOME on the

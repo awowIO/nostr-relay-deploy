@@ -374,6 +374,8 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "cert_resolver": Field(plain_name, identifying=True),
         "ingress_priority": Field(positive_int),
         "avoid_control_plane": Field(boolean),
+        "relay_node_selector": Field(optional(label_selector), identifying=True),
+        "console_node_selector": Field(optional(label_selector), identifying=True),
         "traefik_namespace": Field(dns_label, identifying=True),
         "traefik_pod_selector": Field(optional(label_selector), identifying=True),
         "traefik_egress_network_policy": Field(boolean),
@@ -453,6 +455,9 @@ def load_config(path: Path) -> Config:
         if quantity_value(k8s["memory_request"]) > quantity_value(k8s["memory_limit"]):
             problems.append(f"kubernetes.memory_request ({k8s['memory_request']}) is larger than "
                             f"kubernetes.memory_limit ({k8s['memory_limit']}); Kubernetes refuses that")
+        if k8s["console_node_selector"] and not k8s["web_console"]:
+            problems.append("kubernetes.console_node_selector is set but kubernetes.web_console is false: "
+                            "there is no console pod for it to place")
     if problems:
         raise ConfigError(f"{path} is not a valid relay configuration:\n  - " + "\n  - ".join(problems))
     return cfg
@@ -511,6 +516,12 @@ affinity:
             - key: node-role.kubernetes.io/control-plane
               operator: DoesNotExist
 """
+
+
+def _node_selector(selector: str) -> str:
+    """A required placement: the pod schedules only on a node carrying every label, and stays
+    Pending when none does. Unlike affinity_block it never falls back to another node."""
+    return f"nodeSelector: {{ {_flow_labels(selector)} }}" if selector else ""
 
 
 _CONSOLE_PART = re.compile(r"^(?:export )?const ([A-Z_]+) = String\.raw`(.*?)`;$", re.DOTALL | re.MULTILINE)
@@ -660,6 +671,8 @@ def kubernetes_files(cfg: Config) -> dict[str, str]:
         "priority_class_block": f"priorityClassName: {k8s['priority_class']}" if k8s["priority_class"] else "",
         "storage_class_block": f"storageClassName: {k8s['storage_class']}" if k8s["storage_class"] else "",
         "affinity_block": AVOID_CONTROL_PLANE if k8s["avoid_control_plane"] else "",
+        "relay_node_selector_block": _node_selector(k8s["relay_node_selector"]),
+        "console_node_selector_block": _node_selector(k8s["console_node_selector"]),
         "traefik_from_pod_selector_block":
             f"podSelector: {{ matchLabels: {{ {_flow_labels(selector)} }} }}" if selector else "",
         "traefik_pod_selector_flow": f"{{ matchLabels: {{ {_flow_labels(selector)} }} }}" if selector else "{}",

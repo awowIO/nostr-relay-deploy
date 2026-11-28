@@ -116,6 +116,16 @@ repository root unless a step names another directory.
    connections drop while the pod restarts. The StatefulSet's volume claim template,
    including its storage class and size, must match the live template on reapply.
 
+   `avoid_control_plane` is only a preference: when no other node fits, either pod may
+   still land anywhere, autoscaled nodes included. To keep each pod on nodes you choose, set
+   `relay_node_selector` and `console_node_selector` to the labels those nodes carry. They
+   render as each pod template's `nodeSelector`, a requirement. With no matching node the
+   pod stays Pending rather than moving elsewhere. The relay's volume must be attachable on
+   the selected node. A zonal volume attaches only in its own zone, which its
+   PersistentVolume's node affinity names. Changing the relay's selector is a template
+   change like any other. The pod moves when `nostr-relay-0` is next deleted, and the
+   console's Deployment rolls by itself.
+
 5. On the operator machine, point kubectl at the same cluster as the hydrator. The
    mailbox CLI has its own Kubernetes connection settings. Give it a kubeconfig whose
    current context selects this cluster, and supply the exact relay namespace. Replace

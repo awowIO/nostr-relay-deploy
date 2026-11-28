@@ -389,6 +389,9 @@ BAD_VALUES = [
     ("kubernetes", "cert_resolver", "le: injected"),
     ("kubernetes", "ingress_priority", 0),
     ("kubernetes", "avoid_control_plane", "yes"),
+    ("kubernetes", "relay_node_selector", "kubernetes.io/hostname"),
+    ("kubernetes", "relay_node_selector", {"kubernetes.io/hostname": "node-a"}),
+    ("kubernetes", "console_node_selector", "pool=Not A Value"),
     ("kubernetes", "traefik_pod_selector", "=traefik"),
     ("kubernetes", "traefik_pod_selector", "app.kubernetes.io/name"),
     ("kubernetes", "traefik_namespace", "traefik system"),
@@ -443,6 +446,11 @@ def test_unknown_missing_and_inconsistent_keys_are_refused(tmp_path):
     path.write_text(dump_toml(data))
     with pytest.raises(hydrate.ConfigError, match="memory_request .* larger than"):
         hydrate.load_config(path)
+    data = example_dict()
+    data["kubernetes"].update(web_console=False, console_node_selector="example.com/pool=static")
+    path.write_text(dump_toml(data))
+    with pytest.raises(hydrate.ConfigError, match="console_node_selector is set but kubernetes.web_console is false"):
+        hydrate.load_config(path)
 
 
 def test_npub_and_hex_public_keys_normalise_to_hex():
@@ -488,6 +496,7 @@ def test_kubernetes_hydrates_the_hardened_statefulset(build):
                  "- key: node-role.kubernetes.io/control-plane"):
         assert line in sts, line
     assert "storageClassName" not in sts and "priorityClassName" not in sts
+    assert "nodeSelector" not in sts, "no selector configured: the relay may schedule on any node"
     route = (k8s / "ingressroute.yaml").read_text()
     assert route.count(f"Host(`{RELAY_HOST}`)") == 3
     assert route.count("priority: 1500") == 3
@@ -738,6 +747,66 @@ def test_kustomize_builds_the_console_tree(console_ws):
     deployment = next(d for d in docs if d.startswith("apiVersion: apps/v1\nkind: Deployment"))
     assert deployment.count(f"name: {generated}") == 2, "both of the console's volumes mount the generated ConfigMap"
     assert f"namespace: {CONSOLE_NAMESPACE}" in deployment
+
+
+# A relay and its console pinned apart: each pod template carries its own required
+# nodeSelector, and only its own.
+RELAY_NODES = "kubernetes.io/hostname=zeta-relay-node"
+CONSOLE_NODES = "example.com/pool=static,topology.kubernetes.io/region=zeta-1"
+
+
+@pytest.fixture(scope="session")
+def placed_ws(tmp_path_factory) -> Path:
+    ws = copy_repo(tmp_path_factory.mktemp("placed"))
+    data = private_config(kubernetes={"web_console": True, "avoid_control_plane": False,
+                                      "relay_node_selector": RELAY_NODES, "console_node_selector": CONSOLE_NODES})
+    (ws / "relay.local.toml").write_text(dump_toml(data))
+    run_cli(ws, "--target", "kubernetes")
+    return ws
+
+
+def test_relay_and_console_each_render_their_own_required_node_selector(placed_ws):
+    k8s = placed_ws / ".build" / "kubernetes"
+    sts = (k8s / "statefulset.yaml").read_text()
+    deployment = (k8s / "console.yaml").read_text().split("\n---\n")[0]
+    relay_line = '      nodeSelector: { "kubernetes.io/hostname": "zeta-relay-node" }\n'
+    console_line = ('      nodeSelector: { "example.com/pool": "static", '
+                    '"topology.kubernetes.io/region": "zeta-1" }\n')
+    assert sts.count(relay_line) == 1 and "example.com/pool" not in sts
+    assert deployment.count(console_line) == 1 and "zeta-relay-node" not in deployment
+    assert "affinity:" not in sts and "affinity:" not in deployment, "avoid_control_plane is off here"
+
+
+@pytest.mark.skipif(shutil.which("kubectl") is None, reason="kubectl is not installed")
+def test_kustomize_places_each_node_selector_in_its_pod_spec(placed_ws):
+    """kustomize parses the flow mappings and writes them back in block style, so a
+    selector at the wrong depth or of the wrong shape shows here."""
+    out = subprocess.run(["kubectl", "kustomize", str(placed_ws / ".build" / "kubernetes")],
+                         capture_output=True, text=True, check=True).stdout
+    docs = out.split("\n---\n")
+    sts = next(d for d in docs if "\nkind: StatefulSet\n" in d)
+    deployment = next(d for d in docs if "\nkind: Deployment\n" in d)
+    for doc, want in ((sts, {"kubernetes.io/hostname": "zeta-relay-node"}),
+                      (deployment, {"example.com/pool": "static", "topology.kubernetes.io/region": "zeta-1"})):
+        assert pod_spec_node_selector(doc) == want, doc
+
+
+def pod_spec_node_selector(doc: str) -> dict[str, str] | None:
+    """spec.template.spec.nodeSelector of one kustomize-written (block style, two-space) workload."""
+    lines, path, found = doc.splitlines(), [], None
+    for i, line in enumerate(lines):
+        if not line.strip() or line.lstrip().startswith("- "):
+            continue
+        depth = (len(line) - len(line.lstrip())) // 2
+        path = path[:depth] + [line.strip().split(":", 1)[0]]
+        if path == ["spec", "template", "spec", "nodeSelector"]:
+            found = {}
+            for entry in lines[i + 1:]:
+                if not entry.startswith(" " * 8) or entry.startswith(" " * 9):
+                    break
+                key, _, value = entry.strip().partition(": ")
+                found[key] = value
+    return found
 
 
 # ========================================================================== compose

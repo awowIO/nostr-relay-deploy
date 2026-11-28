@@ -25,6 +25,7 @@ spec:
       automountServiceAccountToken: false
       {{ priority_class_block }}
       {{ affinity_block }}
+      {{ console_node_selector_block }}
       # Not root: the image's nginx user. Read-only root filesystem; nginx writes its pid
       # and temp directories to /tmp only (console-nginx.conf).
       securityContext:

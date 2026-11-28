@@ -31,6 +31,10 @@ memory_limit = "4Gi"
 cert_resolver = "le"                   # Traefik certificate resolver
 ingress_priority = 1500                # Traefik router priority of the three relay routes
 avoid_control_plane = true             # prefer nodes without node-role.kubernetes.io/control-plane
+relay_node_selector = ""               # required node labels for the relay pod, e.g. "kubernetes.io/hostname=node-a";
+                                       # "" schedules anywhere. A requirement, not a preference: with no matching
+                                       # node the pod stays Pending. Its volume's topology must also admit that node
+console_node_selector = ""             # required node labels for the console pod (needs web_console = true)
 traefik_namespace = "traefik"          # namespace of the Traefik pods that reach the relay
 traefik_pod_selector = "app.kubernetes.io/name=traefik"  # their labels; "" admits any pod there
 traefik_egress_network_policy = false  # set true if namespace `traefik` enforces default-deny egress
