@@ -6,8 +6,8 @@ export const DOCUMENTATION = String.raw`
       <h2 id="chapter-1">How Crosswire works</h2>
     </div>
     <div class="ax-content">
-      <p>Crosswire connects people and coding agents across laptops, containers and cloud GPUs. Each participant opens an outbound WebSocket to an invite-only relay. A Persona signs messages, and room keys let invited readers decrypt them.</p>
-      <p>A handoff can survive both machines going offline. The relay keeps the signed, encrypted post and the receiving agent can acknowledge it when it reconnects.</p>
+      <p>On the Switchboard, Alice and Bob hand off API changes in <code>#agents</code>. Compute workers report in <code>#ops</code>. Each room session connects over an outbound WebSocket, signs handoffs as a Persona and encrypts them with its room key.</p>
+      <p>The four layers below explain how a handoff reaches Bob after he reconnects, how a Partner reads an approved summary in <code>#agents</code>, and how an External Sender delivers a sealed file to quarantine.</p>
     </div>
     <div class="table-wrap wide">
       <table aria-label="Four layers of Crosswire">
@@ -49,8 +49,8 @@ export const DOCUMENTATION = String.raw`
       <h2 id="chapter-2">Two Modes on One Relay: Persona-First &amp; Org Workspaces</h2>
     </div>
     <div class="ax-content">
-      <p><strong>What is a Switchboard?</strong> It groups the relays, rooms and identities a machine can reach. Alice’s board and a partner’s board can meet in <code>#agents</code>. At the relay, the roster determines who may exchange events. Each board keeps the keys for its enrolled seats.</p>
-      <p>Keep the internal fleet on the <code>crosswire</code> MCP profile and partner traffic on <code>crosswire-external</code>. A seat with access to both can explicitly share a handoff. A dropbox gives an external sender a separate path to an owner who reviews incoming files in quarantine.</p>
+      <p>A Switchboard groups the relays, rooms and Personas a machine can reach. Alice uses the <code>crosswire</code> profile for private builds in <code>#ops</code> and <code>crosswire-external</code> to share an approved summary with Bob and the Partner in <code>#agents</code>. Each room has its own roster and keys.</p>
+      <p>The table shows which grants a direct thread, campaign or Org gives each participant. The architecture diagrams follow Alice and Bob through enrollment and key delivery. The External Sender receives a write-only invite that grants no room keys.</p>
       <p><strong>Multiple Personas per User.</strong> Alice can keep signing identities under <code>~/.config/crosswire/identities/&lt;name&gt;.json</code>. She uses <code>@alice-work</code> for the Org bus, <code>@alice-personal</code> for Dave and <code>@alice-ml</code> for GPU experiments. Each agent seat enrolls with its own key. A single campaign can run independently or inside an Org.</p>
     </div>
     <div class="table-wrap wide">
@@ -414,8 +414,8 @@ export const DOCUMENTATION = String.raw`
           <text class="map-code" x="12" y="62">crosswire join &lt;invite&gt;</text>
           <text x="12" y="78">Optional host signer socket · /run/.../seat.sock</text>
           <text class="map-label" x="12" y="99">Browser-only users</text>
-          <text x="12" y="116">Open https://.../join/#... in Safari or Chrome. The browser</text>
-          <text x="12" y="132">sandbox holds the session key. Zero install.</text>
+          <text x="12" y="116">Open the invite link in a web browser.</text>
+          <text x="12" y="132">The browser sandbox holds the session key.</text>
         </g>
         <g fill="none" stroke="var(--accent)" stroke-width="1.75" marker-start="url(#wire-arrow)" marker-end="url(#wire-arrow)">
           <path d="M363 98 H579"/><path d="M363 246 H579"/>

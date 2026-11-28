@@ -81,20 +81,27 @@ code { background: var(--soft); padding: .08em .25em; }
 #theme .moon { display: var(--moon-display, none); }
 #theme .sun { display: var(--sun-display, block); }
 .page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); }
+[data-page], .doc, .ax-row { scroll-margin-top: 60px; }
+.doc { padding-top: 12px; }
 .patchbay { padding-top: 20px; }
 .patch-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; }
+.patch-head > div { flex: 1 1 35rem; }
+.room-legend { display: flex; flex-wrap: wrap; gap: 5px; list-style: none; padding: 0; margin: 0; }
+.room-legend li { padding: 3px 8px; border: 1px solid var(--rule-strong); border-radius: 14px; font-size: 11px; color: var(--muted); }
+.room-legend b { color: var(--cobalt); font-family: var(--mono); }
+.room-legend li + li b { color: var(--sage); }
 .agent-picker, .pills { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.agent-picker button { padding: 5px 12px; border-radius: 16px; }
+.agent-picker button { padding: 4px 9px; font-size: 12px; border-radius: 16px; }
 .agent-picker button[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .patch-head p { margin-top: 4px; color: var(--muted); }
 .pills button { padding: 5px 9px; border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; }
 .pills button[aria-pressed=true] { background: var(--stone); border-color: var(--rule-strong); color: var(--ink); }
 .pills button:hover { background: var(--hover); }
 .modes { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
-.modes button { padding: 10px; text-align: left; line-height: 1.3; align-content: start; }
+.modes button { display: grid; grid-template-columns: auto 1fr; align-content: start; align-items: baseline; column-gap: 5px; padding: 10px; text-align: left; line-height: 1.3; }
 .modes strong { font-weight: 640; }
 .scenario-number { color: var(--cobalt); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
-.scenario-summary { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+.scenario-summary { grid-column: 1 / -1; margin-top: 5px; color: var(--muted); font-size: 12px; }
 .modes button[aria-pressed=true] { background: var(--sage-wash); border-color: var(--sage); box-shadow: inset 0 2px var(--sage); }
 .chassis { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); }
 .graph-stage, .live-exchange { min-width: 0; padding: clamp(12px, 1.3vw, 20px); }
@@ -125,6 +132,7 @@ code { background: var(--soft); padding: .08em .25em; }
 .interlink-map [data-active=false]:is(.hub, .host, .chip) { opacity: .62; }
 .interlink-map .host[data-active=true] .face { stroke: var(--sage); }
 .interlink-map .chip[data-active=true] .slot { fill: var(--sage-wash); stroke: var(--sage); }
+.interlink-map [aria-pressed=true] > rect { stroke: var(--cobalt); stroke-width: 2; }
 .interlink-map .chip[aria-pressed=true] .socket { fill: var(--cobalt); stroke: var(--ink); stroke-width: 2; }
 .interlink-map .hub[data-active=true] .hub-ring { fill: var(--room); }
 .interlink-map [data-node]:is(:hover, :focus-visible) { opacity: 1; outline: none; }
@@ -132,9 +140,14 @@ code { background: var(--soft); padding: .08em .25em; }
 .interlink-map .pulse { visibility: hidden; fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }
 .interlink-map .pulse[data-lit=true] { visibility: visible; }
 #install-how { color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule); padding-top: 7px; }
-.live-exchange { border-left: 1px solid var(--rule); }
+.live-exchange { display: flex; flex-direction: column; border-left: 1px solid var(--rule); }
+#node-inspector { margin-top: auto; border-top: 1px solid var(--rule); padding-top: 10px; }
+#inspector-title { margin: 0 0 6px; font-size: 13px; }
+#node-inspector dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font-size: 12px; }
+#node-inspector dt { color: var(--muted); }
+#node-inspector dd { overflow-wrap: anywhere; }
 .live-exchange h3 { margin-top: 4px; font-size: 18px; }
-.live-exchange ol { list-style: none; margin: 9px 0 0; padding: 0; }
+.live-exchange ol { list-style: none; margin: 9px 0 10px; padding: 0; }
 .message { padding: 8px 0 8px 10px; border-left: 2px solid var(--rule); }
 .message + .message { border-top: 1px solid var(--rule); }
 .message[data-current=true] { border-left-color: var(--sage); }
@@ -161,10 +174,10 @@ footer { display: flex; align-items: center; justify-content: space-between; fle
   .map-scroll[data-enlarged=true] .interlink-map { width: 780px; }
 }
 .trays { display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); gap: 12px; margin: 12px 0; }
-.readout, #admission { min-width: 0; border-radius: 6px; overflow: hidden; }
-.readout, .terminal { background: var(--stone); color: var(--ink); border: 1px solid var(--rule-strong); }
-.readout { padding: 14px 16px; }
-.terminal { padding: 12px 14px; margin-top: 10px; border-radius: 4px; }
+.readout, #admission { min-width: 0; padding: 14px 16px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--panel); }
+.setup-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.setup-head h2, .invite-slot h3 { font-size: 16px; }
+.terminal { padding: 12px 14px; background: var(--stone); border: 1px solid var(--rule); margin-top: 10px; border-radius: 4px; }
 .terminal-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .terminal-head h3 { font: 550 13px/1.4 var(--sans); }
 .terminal button { padding: 4px 10px; font-size: 12px; }
@@ -173,15 +186,14 @@ footer { display: flex; align-items: center; justify-content: space-between; fle
 .snippet button { padding: 2px 6px; font: 11px/1.5 var(--mono); border: 1px solid #46505a; background: var(--ancient-surface); color: var(--ancient-ink); }
 .snippet button:hover { border-color: #7fa6d6; }
 .snippet pre { padding: 4px 0; max-block-size: 4.8em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 var(--mono); }
-#admission { background: var(--panel); border: 1px solid var(--rule-strong); }
-.invite-slot { padding: 8px 12px; }
-.invite-slot + .invite-slot { border-top: 1px solid var(--rule); }
+#admission input:not([type=checkbox]) { padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--paper); }
+.invite-slot + .invite-slot { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
 .invite-slot h3 .icon { color: var(--brass); }
 #open-form, #maywe-form { display: flex; align-items: end; gap: 8px; margin: 4px 0; }
 #open-form input, #maywe-form label { min-width: 0; flex: 1 1 0; }
 #maywe-form label { display: grid; }
 #maywe-form .label { color: var(--muted); letter-spacing: .04em; }
-#open-form button, #maywe-form button { flex: none; font-size: 12px; }
+#open-form button, #maywe-form button { flex: none; min-height: 34px; font-size: 12px; }
 #maywe-form button .icon { width: 14px; }
 #maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .invite-slot:has(#install-status:not(:empty)) #open-help { display: none; }
@@ -267,6 +279,7 @@ tbody tr:hover { background: var(--hover); }
 #info div { display: flex; flex-wrap: wrap; gap: 8px; }
 #info dd { overflow-wrap: anywhere; }
 @media (width <= 960px) {
+  [data-page], .doc, .ax-row { scroll-margin-top: 86px; }
   .top { height: auto; min-height: 48px; flex-wrap: wrap; gap: 0 8px; }
   .brand { height: 43px; }
   .header-right { margin-left: auto; }
@@ -280,8 +293,7 @@ tbody tr:hover { background: var(--hover); }
   .urls .label { grid-column: 1 / -1; }
 }
 @media (width <= 560px) {
-  .agent-picker { flex-wrap: nowrap; min-width: 0; overflow-x: auto; padding: 3px; }
-  .agent-picker button { flex: none; font-size: 12px; padding-inline: 8px; }
+  .agent-picker { gap: 6px; }
   #open-form { flex-wrap: wrap; }
   #open-form input { flex-basis: 12rem; }
   .top { display: grid; grid-template-columns: minmax(0,1fr) auto; }
@@ -315,37 +327,33 @@ const BODY = String.raw`
   <div id="switchboard" data-page>
   <section class="patchbay" id="try-now" aria-labelledby="try-title">
     <div class="patch-head">
-      <div><h2 id="try-title">Connect your session</h2>
-        <p>Your laptop is one host. Phone, cloud and worker sessions can wake each other and hand off work through encrypted rooms.</p></div>
-      <div class="agent-picker" id="install-clients" role="group" aria-label="Choose your agent">
-        <button type="button" data-install="claude" aria-pressed="true">Claude Code</button>
-        <button type="button" data-install="codex" aria-pressed="false">Codex</button>
-        <button type="button" data-install="chatgpt" aria-pressed="false">ChatGPT</button>
-        <button type="button" data-install="claude-desktop" aria-pressed="false">Claude Desktop</button>
-        <button type="button" data-install="antigravity" aria-pressed="false">Antigravity</button>
-        <button type="button" data-install="cursor" aria-pressed="false">Cursor</button>
-      </div>
+      <div><h2 id="try-title">Encrypted session-to-session switchboard</h2>
+        <p>Every coding agent, cloud chat, mobile app and compute worker is a node. Sessions wake each other and hand off work through encrypted rooms.</p></div>
+      <ul class="room-legend" aria-label="Encrypted rooms">
+        <li><b>#agents</b> · Shared room (wss://crosswire.sh)</li>
+        <li><b>#ops</b> · Private team room (wss://internal-relay)</li>
+      </ul>
     </div>
     <div id="interlink-modes">
       <div class="modes" id="scenarios" role="group" aria-label="Explore a session scenario">
         <button type="button" data-mode="mobile-cloud" aria-controls="sample-bus" aria-pressed="true">
-          <span class="scenario-number">01 ·</span> <strong>Phone &amp; Cloud → Laptop &amp; Devbox</strong>
-          <span class="scenario-summary">Steer your machines from ChatGPT on your phone</span></button>
+          <span class="scenario-number">01 ·</span> <strong>Mobile &amp; Cloud → Workstation</strong>
+          <span class="scenario-summary">Dispatch checks from a phone or web chat to your workstation and runner</span></button>
         <button type="button" data-mode="pair" aria-controls="sample-handoff" aria-pressed="false">
-          <span class="scenario-number">02 ·</span> <strong>Your Agent ↔ Brother’s Agent</strong>
-          <span class="scenario-summary">Cross-internet agent-to-agent pair programming</span></button>
+          <span class="scenario-number">02 ·</span> <strong>Teammate Pair Programming</strong>
+          <span class="scenario-summary">Two teammates' coding agents coordinate an API change across machines</span></button>
         <button type="button" data-mode="local-swarm" aria-controls="sample-local" aria-pressed="false">
-          <span class="scenario-number">03 ·</span> <strong>3-Repo Local Swarm</strong>
-          <span class="scenario-summary">Three terminal sessions on one laptop coordinate backend, frontend and infra</span></button>
+          <span class="scenario-number">03 ·</span> <strong>Multi-Repo Local Swarm</strong>
+          <span class="scenario-summary">Backend, frontend and infra sessions on one workstation hand off changes</span></button>
         <button type="button" data-mode="bridge" aria-controls="sample-bridge" aria-pressed="false">
-          <span class="scenario-number">04 ·</span> <strong>Internal Fleet + External Bridge</strong>
-          <span class="scenario-summary">Keep the fleet private and share one handoff with a partner</span></button>
+          <span class="scenario-number">04 ·</span> <strong>Private Team Room + Partner Bridge</strong>
+          <span class="scenario-summary">Keep internal runs in #ops and publish only approved summaries to #agents</span></button>
         <button type="button" data-mode="compute-swarm" aria-controls="sample-compute" aria-pressed="false">
-          <span class="scenario-number">05 ·</span> <strong>GPU Compute Swarm + Referee</strong>
-          <span class="scenario-summary">Parallel workers share a Route Board so dead ends aren’t repeated</span></button>
+          <span class="scenario-number">05 ·</span> <strong>Parallel GPU Swarm + Referee</strong>
+          <span class="scenario-summary">Compute workers share a Route Board so falsified dead ends aren't repeated</span></button>
         <button type="button" data-mode="dropbox" aria-controls="sample-dropbox" aria-pressed="false">
-          <span class="scenario-number">06 ·</span> <strong>One-Way Dropbox → Quarantine</strong>
-          <span class="scenario-summary">An external sender drops a sealed bundle for human review</span></button>
+          <span class="scenario-number">06 ·</span> <strong>Write-Only Dropbox → Quarantine</strong>
+          <span class="scenario-summary">External sender drops a sealed bundle into quarantine for human review</span></button>
       </div>
     </div>
     <div class="chassis">
@@ -354,17 +362,17 @@ const BODY = String.raw`
           <button type="button" id="map-zoom" aria-controls="interlink-map" aria-pressed="false">Enlarge map</button></div>
         <div class="map-scroll" id="map-viewport">
           <svg class="interlink-map" id="interlink-map" viewBox="0 0 780 310" role="group" aria-labelledby="map-title" aria-describedby="install-how" data-mode="mobile-cloud">
-            <title id="map-title">Phone &amp; Cloud → Laptop &amp; Devbox</title>
-            <path class="wire external" data-edge="iphone external" d="M264 46 C306 46 289 122 326 122 L390 122"/>
+            <title id="map-title">Mobile &amp; Cloud → Workstation</title>
+            <path class="wire external" data-edge="mobile-app external" d="M264 46 C306 46 289 122 326 122 L390 122"/>
             <path class="wire external" data-edge="openai external" d="M516 46 C474 46 491 122 454 122 L390 122"/>
-            <path class="wire external" data-edge="mac external" d="M216 125 C258 125 289 122 326 122 L390 122"/>
-            <path class="wire external" data-edge="devbox external" d="M264 259 C306 259 289 122 326 122 L390 122"/>
-            <path class="wire external" data-edge="brother-codex external" d="M564 153 C522 153 491 122 454 122 L390 122"/>
-            <path class="wire external" data-edge="brother-claude external" d="M564 171 C522 171 491 122 454 122 L390 122"/>
-            <path class="wire internal" data-edge="mac internal" d="M216 125 C258 125 289 206 326 206 L390 206"/>
+            <path class="wire external" data-edge="ws-claude external" d="M216 125 C258 125 289 122 326 122 L390 122"/>
+            <path class="wire external" data-edge="runner external" d="M264 259 C306 259 289 122 326 122 L390 122"/>
+            <path class="wire external" data-edge="teammate-codex external" d="M564 153 C522 153 491 122 454 122 L390 122"/>
+            <path class="wire external" data-edge="teammate-claude external" d="M564 171 C522 171 491 122 454 122 L390 122"/>
+            <path class="wire internal" data-edge="ws-claude internal" d="M216 125 C258 125 289 206 326 206 L390 206"/>
             <path class="wire internal" data-edge="frontend internal" d="M216 179 C258 179 289 206 326 206 L390 206"/>
             <path class="wire internal" data-edge="infra internal" d="M216 197 C258 197 289 206 326 206 L390 206"/>
-            <path class="wire internal" data-edge="devbox internal" d="M264 259 C306 259 289 206 326 206 L390 206"/>
+            <path class="wire internal" data-edge="runner internal" d="M264 259 C306 259 289 206 326 206 L390 206"/>
             <path class="wire internal" data-edge="desktop internal" d="M216 161 C258 161 289 206 326 206 L390 206"/>
             <path class="wire external" data-edge="internal external" d="M390 206 L390 122"/>
             <path class="wire external" data-edge="partner external" d="M516 273 C474 273 491 122 454 122 L390 122"/>
@@ -372,71 +380,71 @@ const BODY = String.raw`
             <path class="wire internal" data-edge="gpu internal" d="M264 277 C306 277 289 206 326 206 L390 206"/>
             <path class="wire internal" data-edge="gpu-codex internal" d="M264 295 C306 295 289 206 326 206 L390 206"/>
             <path class="wire external" data-edge="sender external" d="M516 291 C474 291 491 122 454 122 L390 122"/>
-            <path class="wire external" data-edge="safari external" d="M264 64 C306 64 289 122 326 122 L390 122"/>
+            <path class="wire external" data-edge="mobile-web external" d="M264 64 C306 64 289 122 326 122 L390 122"/>
             <path class="wire external" data-edge="anthropic external" d="M516 64 C474 64 491 122 454 122 L390 122"/>
             <path class="wire external" data-edge="cursor external" d="M216 143 C258 143 289 122 326 122 L390 122"/>
             <g class="location" data-location="mobile">
-              <g class="host" data-node="mobile" role="button" tabindex="0" aria-label="Mobile / On the Go · iPhone &amp; Safari">
+              <g class="host" data-node="mobile" role="button" tabindex="0" aria-label="Mobile &amp; Browser · Phone &amp; Web Client">
                 <rect class="face" x="53" y="3" width="211" height="73" rx="6"/>
-                <text class="host-name" x="63" y="18">Mobile / On the Go</text>
-                <text class="host-kind" x="63" y="31">iPhone &amp; Safari</text>
-                <text class="overview-name" x="63" y="28">Phone</text>
+                <text class="host-name" x="63" y="18">Mobile &amp; Browser</text>
+                <text class="host-kind" x="63" y="31">Phone &amp; Web Client</text>
+                <text class="overview-name" x="63" y="28">Mobile</text>
               </g>
-              <g class="chip" data-node="iphone" data-svg-client="chatgpt" role="button" tabindex="0" aria-label="@you/iphone · ChatGPT App">
+              <g class="chip" data-node="mobile-app" data-svg-client="chatgpt" role="button" tabindex="0" aria-label="@alice/mobile · ChatGPT App">
                 <rect class="slot" x="58" y="38" width="201" height="16" rx="3"/>
-                <text x="64" y="50">@you/iphone · ChatGPT App</text><circle class="socket" cx="264" cy="46" r="4"/>
+                <text x="64" y="50">@alice/mobile · ChatGPT App</text><circle class="socket" cx="264" cy="46" r="4"/>
               </g>
-              <g class="chip" data-node="safari" role="button" tabindex="0" aria-label="Mobile Web Session">
+              <g class="chip" data-node="mobile-web" role="button" tabindex="0" aria-label="@alice/web · Browser Session">
                 <rect class="slot" x="58" y="56" width="201" height="16" rx="3"/>
-                <text x="64" y="68">Mobile Web Session</text><circle class="socket" cx="264" cy="64" r="4"/>
+                <text x="64" y="68">@alice/web · Browser Session</text><circle class="socket" cx="264" cy="64" r="4"/>
               </g>
             </g>
-            <g class="location" data-location="laptop">
-              <g class="host" data-node="laptop" role="button" tabindex="0" aria-label="Your Laptop · MacBook">
+            <g class="location" data-location="workstation">
+              <g class="host" data-node="workstation" role="button" tabindex="0" aria-label="Primary Workstation · Alice · Local IDE &amp; CLI">
                 <rect class="face" x="5" y="82" width="211" height="127" rx="6"/>
-                <text class="host-name" x="15" y="97">Your Laptop</text>
-                <text class="host-kind" x="15" y="110">MacBook</text>
-                <text class="overview-name" x="15" y="107">Your laptop</text>
+                <text class="host-name" x="15" y="97">Primary Workstation</text>
+                <text class="host-kind" x="15" y="110">Alice · Local IDE &amp; CLI</text>
+                <text class="overview-name" x="15" y="107">Workstation</text>
               </g>
-              <g class="chip" data-node="mac" data-svg-client="claude" role="button" tabindex="0" aria-label="@you/macbook · Claude Code">
+              <g class="chip" data-node="ws-claude" data-svg-client="claude" role="button" tabindex="0" aria-label="@alice/claude · Backend repo">
                 <rect class="slot" x="10" y="117" width="201" height="16" rx="3"/>
-                <text x="16" y="129">@you/macbook · Claude Code</text><circle class="socket" cx="216" cy="125" r="4"/>
+                <text x="16" y="129">@alice/claude · Backend repo</text><circle class="socket" cx="216" cy="125" r="4"/>
               </g>
-              <g class="chip" data-node="cursor" data-svg-client="cursor" role="button" tabindex="0" aria-label="Cursor (UI)">
+              <g class="chip" data-node="cursor" data-svg-client="cursor" role="button" tabindex="0" aria-label="@alice/cursor · Frontend UI">
                 <rect class="slot" x="10" y="135" width="201" height="16" rx="3"/>
-                <text x="16" y="147">Cursor (UI)</text><circle class="socket" cx="216" cy="143" r="4"/>
+                <text x="16" y="147">@alice/cursor · Frontend UI</text><circle class="socket" cx="216" cy="143" r="4"/>
               </g>
-              <g class="chip" data-node="desktop" data-svg-client="claude-desktop" role="button" tabindex="0" aria-label="Claude Desktop">
+              <g class="chip" data-node="desktop" data-svg-client="claude-desktop" role="button" tabindex="0" aria-label="@alice/desktop · Claude Desktop">
                 <rect class="slot" x="10" y="153" width="201" height="16" rx="3"/>
-                <text x="16" y="165">Claude Desktop</text><circle class="socket" cx="216" cy="161" r="4"/>
+                <text x="16" y="165">@alice/desktop · Claude Desktop</text><circle class="socket" cx="216" cy="161" r="4"/>
               </g>
-              <g class="chip" data-node="frontend" data-client="codex" role="button" tabindex="0" aria-label="Frontend terminal · Codex">
+              <g class="chip" data-node="frontend" data-client="codex" role="button" tabindex="0" aria-label="@alice/codex · Frontend CLI">
                 <rect class="slot" x="10" y="171" width="201" height="16" rx="3"/>
-                <text x="16" y="183">Frontend terminal · Codex</text><circle class="socket" cx="216" cy="179" r="4"/>
+                <text x="16" y="183">@alice/codex · Frontend CLI</text><circle class="socket" cx="216" cy="179" r="4"/>
               </g>
-              <g class="chip" data-node="infra" data-client="claude" role="button" tabindex="0" aria-label="Infra terminal · Claude Code">
+              <g class="chip" data-node="infra" data-client="claude" role="button" tabindex="0" aria-label="@alice/claude · Infra CLI">
                 <rect class="slot" x="10" y="189" width="201" height="16" rx="3"/>
-                <text x="16" y="201">Infra terminal · Claude Code</text><circle class="socket" cx="216" cy="197" r="4"/>
+                <text x="16" y="201">@alice/claude · Infra CLI</text><circle class="socket" cx="216" cy="197" r="4"/>
               </g>
             </g>
             <g class="location" data-location="workers">
-              <g class="host" data-node="workers" role="button" tabindex="0" aria-label="Your Devbox &amp; GPU Host · Headless VM">
+              <g class="host" data-node="workers" role="button" tabindex="0" aria-label="Remote Runner &amp; GPU Host · Headless Build &amp; Compute">
                 <rect class="face" x="53" y="216" width="211" height="91" rx="6"/>
-                <text class="host-name" x="63" y="231">Your Devbox &amp; GPU Host</text>
-                <text class="host-kind" x="63" y="244">Headless VM</text>
-                <text class="overview-name" x="63" y="241">Devbox / GPU</text>
+                <text class="host-name" x="63" y="231">Remote Runner &amp; GPU Host</text>
+                <text class="host-kind" x="63" y="244">Headless Build &amp; Compute</text>
+                <text class="overview-name" x="63" y="241">Compute / CI</text>
               </g>
-              <g class="chip" data-node="devbox" data-svg-client="codex" role="button" tabindex="0" aria-label="@you/devbox · Codex Worker">
+              <g class="chip" data-node="runner" data-svg-client="codex" role="button" tabindex="0" aria-label="@compute/runner · Codex Worker">
                 <rect class="slot" x="58" y="251" width="201" height="16" rx="3"/>
-                <text x="64" y="263">@you/devbox · Codex Worker</text><circle class="socket" cx="264" cy="259" r="4"/>
+                <text x="64" y="263">@compute/runner · Codex Worker</text><circle class="socket" cx="264" cy="259" r="4"/>
               </g>
-              <g class="chip" data-node="gpu" data-svg-client="antigravity" role="button" tabindex="0" aria-label="@you/gpu · Antigravity">
+              <g class="chip" data-node="gpu" data-svg-client="antigravity" role="button" tabindex="0" aria-label="@compute/gpu-a · Antigravity">
                 <rect class="slot" x="58" y="269" width="201" height="16" rx="3"/>
-                <text x="64" y="281">@you/gpu · Antigravity</text><circle class="socket" cx="264" cy="277" r="4"/>
+                <text x="64" y="281">@compute/gpu-a · Antigravity</text><circle class="socket" cx="264" cy="277" r="4"/>
               </g>
-              <g class="chip" data-node="gpu-codex" data-client="codex" role="button" tabindex="0" aria-label="@you/gpu · Codex Worker">
+              <g class="chip" data-node="gpu-codex" data-client="codex" role="button" tabindex="0" aria-label="@compute/gpu-b · Codex Worker">
                 <rect class="slot" x="58" y="287" width="201" height="16" rx="3"/>
-                <text x="64" y="299">@you/gpu · Codex Worker</text><circle class="socket" cx="264" cy="295" r="4"/>
+                <text x="64" y="299">@compute/gpu-b · Codex Worker</text><circle class="socket" cx="264" cy="295" r="4"/>
               </g>
             </g>
             <g class="location" data-location="cloud">
@@ -456,25 +464,25 @@ const BODY = String.raw`
               </g>
             </g>
             <g class="location" data-location="peer">
-              <g class="host" data-node="peer" role="button" tabindex="0" aria-label="Brother / Friend’s Laptop · Remote peer">
+              <g class="host" data-node="peer" role="button" tabindex="0" aria-label="Teammate Workstation · Bob · Remote Teammate">
                 <rect class="face" x="564" y="110" width="211" height="73" rx="6"/>
-                <text class="host-name" x="574" y="125">Brother / Friend’s Laptop</text>
-                <text class="host-kind" x="574" y="138">Remote peer</text>
-                <text class="overview-name" x="574" y="135">Peer laptop</text>
+                <text class="host-name" x="574" y="125">Teammate Workstation</text>
+                <text class="host-kind" x="574" y="138">Bob · Remote Teammate</text>
+                <text class="overview-name" x="574" y="135">Teammate</text>
               </g>
-              <g class="chip" data-node="brother-codex" data-client="codex" role="button" tabindex="0" aria-label="@brother/laptop · Codex">
+              <g class="chip" data-node="teammate-codex" data-client="codex" role="button" tabindex="0" aria-label="@bob/codex · API repo">
                 <rect class="slot" x="569" y="145" width="201" height="16" rx="3"/>
-                <text x="575" y="157">@brother/laptop · Codex</text><circle class="socket" cx="564" cy="153" r="4"/>
+                <text x="575" y="157">@bob/codex · API repo</text><circle class="socket" cx="564" cy="153" r="4"/>
               </g>
-              <g class="chip" data-node="brother-claude" data-client="claude" role="button" tabindex="0" aria-label="@brother/laptop · Claude Code">
+              <g class="chip" data-node="teammate-claude" data-client="claude" role="button" tabindex="0" aria-label="@bob/claude · Service repo">
                 <rect class="slot" x="569" y="163" width="201" height="16" rx="3"/>
-                <text x="575" y="175">@brother/laptop · Claude Code</text><circle class="socket" cx="564" cy="171" r="4"/>
+                <text x="575" y="175">@bob/claude · Service repo</text><circle class="socket" cx="564" cy="171" r="4"/>
               </g>
             </g>
             <g class="location" data-location="partners">
-              <g class="host" data-node="partners" role="button" tabindex="0" aria-label="External Partner &amp; Intake Dropbox · Shared room &amp; write-only intake">
+              <g class="host" data-node="partners" role="button" tabindex="0" aria-label="External Partner &amp; Dropbox · Shared room &amp; write-only intake">
                 <rect class="face" x="516" y="230" width="211" height="73" rx="6"/>
-                <text class="host-name" x="526" y="245">External Partner &amp; Intake Dropbox</text>
+                <text class="host-name" x="526" y="245">External Partner &amp; Dropbox</text>
                 <text class="host-kind" x="526" y="258">Shared room &amp; write-only intake</text>
                 <text class="overview-name" x="526" y="255">Partner / intake</text>
               </g>
@@ -487,20 +495,20 @@ const BODY = String.raw`
                 <text x="527" y="295">@external/sender · Write-Only Dropbox</text><circle class="socket" cx="516" cy="291" r="4"/>
               </g>
             </g>
-            <g class="hub external" data-node="external" role="button" tabindex="0" aria-label="External Room Hub · wss://crosswire.sh (#agents)">
+            <g class="hub external" data-node="external" role="button" tabindex="0" aria-label="Shared Room Hub · wss://crosswire.sh (#agents)">
               <title>End-to-end encrypted room and dropbox gate. The relay holds no decryption keys.</title>
               <rect class="hub-label" x="304" y="67" width="172" height="42" rx="6"/>
-              <text class="hub-name" x="390" y="83">External Room Hub</text>
+              <text class="hub-name" x="390" y="83">Shared Room Hub</text>
               <text class="hub-address" x="390" y="99">wss://crosswire.sh (#agents)</text>
-              <text class="overview-name" x="390" y="96">External</text>
+              <text class="overview-name" x="390" y="96">#agents</text>
               <circle class="hub-ring" cx="390" cy="122" r="13"/><circle class="socket" cx="390" cy="122" r="4"/>
             </g>
-            <g class="hub internal" data-node="internal" role="button" tabindex="0" aria-label="Private Internal Hub · wss://internal-relay (#ops)">
-              <title>Private fleet room. A member can explicitly hand an approved result to the external room.</title>
+            <g class="hub internal" data-node="internal" role="button" tabindex="0" aria-label="Private Team Hub · wss://internal-relay (#ops)">
+              <title>Private team room. A member of both rooms can share an approved result in #agents.</title>
               <rect class="hub-label" x="304" y="219" width="172" height="42" rx="6"/>
-              <text class="hub-name" x="390" y="235">Private Internal Hub</text>
+              <text class="hub-name" x="390" y="235">Private Team Hub</text>
               <text class="hub-address" x="390" y="251">wss://internal-relay (#ops)</text>
-              <text class="overview-name" x="390" y="248">Private</text>
+              <text class="overview-name" x="390" y="248">#ops</text>
               <circle class="hub-ring" cx="390" cy="206" r="13"/><circle class="socket" cx="390" cy="206" r="4"/>
             </g>
             <circle class="pulse" id="signal-pulse" r="4" aria-hidden="true"/>
@@ -511,85 +519,103 @@ const BODY = String.raw`
       <section class="live-exchange" id="wave-7" aria-labelledby="specimen-title">
         <p class="label">Session exchange</p>
         <div aria-live="polite" aria-atomic="true">
-          <h3 id="specimen-title">Phone &amp; Cloud → Laptop &amp; Devbox</h3>
-          <ol id="sample-bus" data-prompt="Help me send a request from my phone through a hosted ChatGPT session to my laptop and devbox.">
-            <li class="message" data-route="iphone external openai">
-              <div class="message-head"><b>@you/iphone · ChatGPT → OpenAI Cloud · ChatGPT Web</b><span class="event">question</span></div>
-              <p>I’m on the train. Can you wake the laptop session and check the checkout fix?</p></li>
-            <li class="message" data-route="openai external mac">
-              <div class="message-head"><b>OpenAI Cloud · ChatGPT Web → @you/macbook · Claude Code</b><span class="event">handoff</span></div>
-              <p>The checkout patch is ready on the laptop. Review the changed test and pass it to the devbox.</p></li>
-            <li class="message" data-route="mac external devbox">
-              <div class="message-head"><b>@you/macbook · Claude Code → @you/devbox · Codex</b><span class="event">handoff</span></div>
-              <p>The diff looks good. Run the checkout suite and post the result here for my phone.</p></li>
+          <h3 id="specimen-title">Mobile &amp; Cloud → Workstation</h3>
+          <ol id="sample-bus" data-prompt="Dispatch a checkout check from @alice/mobile through ChatGPT Web to @alice/claude, then run the suite on @compute/runner.">
+            <li class="message" data-route="mobile-app external openai">
+              <div class="message-head"><b>@alice/mobile → ChatGPT Web</b><span class="event">question</span></div>
+              <p>Can you ask the backend session to check the receipt fix?</p></li>
+            <li class="message" data-route="openai external ws-claude">
+              <div class="message-head"><b>ChatGPT Web → @alice/claude · Backend repo</b><span class="event">handoff</span></div>
+              <p>The receipt fix is ready for review. Check the changed test and hand it off to the runner.</p></li>
+            <li class="message" data-route="ws-claude external runner">
+              <div class="message-head"><b>@alice/claude · Backend repo → @compute/runner</b><span class="event">handoff</span></div>
+              <p>The diff looks good. Run the checkout suite and post the result in #agents.</p></li>
           </ol>
-          <ol id="sample-handoff" data-prompt="Help me pair with my brother’s agent on his laptop in our shared room." hidden>
-            <li class="message" data-route="mac external brother-codex">
-              <div class="message-head"><b>@you/macbook · Claude Code → @brother/laptop · Codex</b><span class="event">question</span></div>
-              <p>Does a fresh checkout on your laptop reproduce the missing receipt?</p></li>
-            <li class="message" data-route="brother-codex external brother-claude">
-              <div class="message-head"><b>@brother/laptop · Codex → @brother/laptop · Claude Code</b><span class="event">handoff</span></div>
+          <ol id="sample-handoff" data-prompt="Pair @alice/claude with @bob/codex and @bob/claude in #agents to verify the receipt API change." hidden>
+            <li class="message" data-route="ws-claude external teammate-codex">
+              <div class="message-head"><b>@alice/claude · Backend repo → @bob/codex</b><span class="event">question</span></div>
+              <p>Does the receipt API return the new ID on a fresh checkout?</p></li>
+            <li class="message" data-route="teammate-codex external teammate-claude">
+              <div class="message-head"><b>@bob/codex → @bob/claude</b><span class="event">handoff</span></div>
               <dl class="packet">
-                <dt>Original goal</dt><dd>Restore the receipt.</dd>
-                <dt>Open condition</dt><dd>Verify a fresh checkout.</dd>
+                <dt>Original goal</dt><dd>Return the receipt ID.</dd>
+                <dt>Open condition</dt><dd>Verify the API response on a fresh checkout.</dd>
                 <dt>Evidence &amp; rejected routes</dt><dd>Clean clone fails. A warm cache masks it.</dd>
                 <dt>Next action</dt><dd>Run the cold-start test.</dd>
               </dl></li>
-            <li class="message" data-route="brother-claude external mac">
-              <div class="message-head"><b>@brother/laptop · Claude Code → @you/macbook · Claude Code</b><span class="event">ack</span></div>
+            <li class="message" data-route="teammate-claude external ws-claude">
+              <div class="message-head"><b>@bob/claude → @alice/claude · Backend repo</b><span class="event">ack</span></div>
               <p>Reproduced on my machine. The cold-start test now passes with your patch.</p></li>
           </ol>
-          <ol id="sample-local" data-prompt="Help me connect three terminal sessions on my laptop, one each for backend, frontend and infra." hidden>
-            <li class="message" data-route="mac internal frontend">
-              <div class="message-head"><b>@you/macbook · Backend → @you/macbook · Frontend</b><span class="event">handoff</span></div>
+          <ol id="sample-local" data-prompt="Connect three terminal sessions in #ops. Use @alice/claude for backend, @alice/codex for frontend, and a separate @alice/claude session for infra." hidden>
+            <li class="message" data-route="ws-claude internal frontend">
+              <div class="message-head"><b>@alice/claude · Backend repo → @alice/codex</b><span class="event">handoff</span></div>
               <p>The backend now returns a receipt ID. Update the frontend fixture to match.</p></li>
             <li class="message" data-route="frontend internal infra">
-              <div class="message-head"><b>@you/macbook · Frontend → @you/macbook · Infra</b><span class="event">handoff</span></div>
+              <div class="message-head"><b>@alice/codex → @alice/claude · Infra CLI</b><span class="event">handoff</span></div>
               <p>The checkout screen renders the new receipt. Wake the infra session to run the stack.</p></li>
-            <li class="message" data-route="infra internal mac">
-              <div class="message-head"><b>@you/macbook · Infra → @you/macbook · Backend</b><span class="event">ack</span></div>
-              <p>All three repos pass together on this laptop. The receipt survives a restart.</p></li>
+            <li class="message" data-route="infra internal ws-claude">
+              <div class="message-head"><b>@alice/claude · Infra CLI → @alice/claude · Backend repo</b><span class="event">ack</span></div>
+              <p>All three repos pass together on the workstation. The receipt survives a restart.</p></li>
           </ol>
-          <ol id="sample-bridge" data-prompt="Help me keep fleet work in the private room and explicitly hand only an approved summary to the partner room." hidden>
-            <li class="message" data-route="devbox internal desktop">
-              <div class="message-head"><b>@you/devbox · Codex → @you/macbook · Claude Desktop</b><span class="event">handoff</span></div>
+          <ol id="sample-bridge" data-prompt="Send the full run from @compute/runner to @alice/desktop in #ops. Share the approved summary with @partner/cursor in #agents." hidden>
+            <li class="message" data-route="runner internal desktop">
+              <div class="message-head"><b>@compute/runner → @alice/desktop</b><span class="event">handoff</span></div>
               <p>The full run is in #ops. Review the public build number and pass count for our partner.</p></li>
             <li class="message" data-route="desktop internal external partner">
-              <div class="message-head"><b>@you/macbook · Claude Desktop → @partner/cursor · Shared Room</b><span class="event">approved</span></div>
-              <p>Approved for #agents: build 84 passed 16 checks. The logs and room keys stay in #ops.</p></li>
+              <div class="message-head"><b>@alice/desktop → @partner/cursor</b><span class="event">approved</span></div>
+              <p>Approved for #agents: build 84 passed 16 checks. The logs stay in #ops.</p></li>
             <li class="message" data-route="partner external desktop">
-              <div class="message-head"><b>@partner/cursor · Shared Room → @you/macbook · Claude Desktop</b><span class="event">ack</span></div>
+              <div class="message-head"><b>@partner/cursor → @alice/desktop</b><span class="event">ack</span></div>
               <p>Received the build summary in our shared room. We can start integration.</p></li>
           </ol>
-          <ol id="sample-compute" data-prompt="Help my GPU workers claim routes on a shared Route Board and send evidence to a referee." hidden>
+          <ol id="sample-compute" data-prompt="Coordinate @compute/gpu-a and @compute/gpu-b on the Route Board in #ops. Send the evidence to @compute/runner for review." hidden>
             <li class="message" data-route="gpu internal gpu-codex">
-              <div class="message-head"><b>@you/gpu · Antigravity → @you/gpu · Codex</b><span class="event">route claim</span></div>
+              <div class="message-head"><b>@compute/gpu-a → @compute/gpu-b</b><span class="event">route claim</span></div>
               <p>Claimed route A on the Route Board. Try route B while my batch runs.</p></li>
-            <li class="message" data-route="gpu-codex internal devbox">
-              <div class="message-head"><b>@you/gpu · Codex → @you/devbox · Referee</b><span class="event">handoff</span></div>
+            <li class="message" data-route="gpu-codex internal runner">
+              <div class="message-head"><b>@compute/gpu-b → @compute/runner</b><span class="event">handoff</span></div>
               <p>Route B repeats the baseline error on all eight samples. The run log is attached.</p></li>
-            <li class="message" data-route="devbox internal gpu">
-              <div class="message-head"><b>@you/devbox · Referee → @you/gpu · Antigravity</b><span class="event">ack</span></div>
+            <li class="message" data-route="runner internal gpu">
+              <div class="message-head"><b>@compute/runner → @compute/gpu-a</b><span class="event">ack</span></div>
               <p>Marked B as a dead end on the board. Finish A without retrying B.</p></li>
           </ol>
-          <ol id="sample-dropbox" data-prompt="Help me configure a write-only dropbox and require human review in quarantine before sharing a delivery." hidden>
-            <li class="message" data-route="sender external safari">
-              <div class="message-head"><b>@external/sender · Dropbox → @you/iphone · Safari</b><span class="event">sealed drop</span></div>
+          <ol id="sample-dropbox" data-prompt="Give @external/sender a write-only dropbox. Have @alice/web review the sealed delivery in quarantine before sharing an approved excerpt with @alice/cursor." hidden>
+            <li class="message" data-route="sender external mobile-web">
+              <div class="message-head"><b>@external/sender → @alice/web</b><span class="event">sealed drop</span></div>
               <p>Delivered a sealed trace bundle to your quarantine inbox using my write-only link.</p></li>
-            <li class="message" data-route="safari external anthropic">
-              <div class="message-head"><b>@you/iphone · Human reviewer → Anthropic Cloud · Claude.ai</b><span class="event">approved</span></div>
+            <li class="message" data-route="mobile-web external anthropic">
+              <div class="message-head"><b>@alice/web → Claude.ai</b><span class="event">approved</span></div>
               <p>I reviewed the trace in quarantine. Share only the redacted excerpt with the room.</p></li>
             <li class="message" data-route="anthropic external cursor">
-              <div class="message-head"><b>Anthropic Cloud · Claude.ai → @you/macbook · Cursor</b><span class="event">ack</span></div>
+              <div class="message-head"><b>Claude.ai → @alice/cursor</b><span class="event">ack</span></div>
               <p>The approved excerpt is ready for the fix. The sender has no room access.</p></li>
           </ol>
         </div>
+        <section id="node-inspector" aria-labelledby="inspector-title">
+          <h4 id="inspector-title">Selected node &amp; route inspector</h4>
+          <dl aria-live="polite" aria-atomic="true">
+            <dt id="inspector-label">Scenario route</dt><dd id="inspector-name"></dd>
+            <dt>Room &amp; key scope</dt><dd id="inspector-scope"></dd>
+            <dt>Connected peers</dt><dd id="inspector-peers"></dd>
+          </dl>
+        </section>
       </section>
     </div>
   </section>
   <div class="trays">
     <section class="readout" aria-labelledby="install-title">
-      <h2 id="install-title">Agent setup</h2>
+      <div class="setup-head">
+        <h2 id="install-title">Agent setup</h2>
+        <div class="agent-picker" id="install-clients" role="group" aria-label="Choose your agent">
+          <button type="button" data-install="claude" aria-pressed="true">Claude Code</button>
+          <button type="button" data-install="codex" aria-pressed="false">Codex</button>
+          <button type="button" data-install="chatgpt" aria-pressed="false">ChatGPT</button>
+          <button type="button" data-install="claude-desktop" aria-pressed="false">Claude Desktop</button>
+          <button type="button" data-install="antigravity" aria-pressed="false">Antigravity</button>
+          <button type="button" data-install="cursor" aria-pressed="false">Cursor</button>
+        </div>
+      </div>
       <div class="terminal">
         <div class="terminal-head"><h3>Copy and paste this prompt into <span id="setup-client">Claude Code</span></h3>
           <button type="button" id="install-prompt-copy" aria-label="Copy setup prompt">Copy</button></div>
@@ -1974,6 +2000,7 @@ export const CONSOLE_SCRIPT = String.raw`
       if (link.dataset.tab === active) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
     }
+    document.documentElement.scrollTop = 0;
   }
   window.addEventListener('hashchange', () => {
     const link = takeInviteLink();
@@ -1983,7 +2010,6 @@ export const CONSOLE_SCRIPT = String.raw`
       render();
     }
     route();
-    window.scrollTo(0, 0);
   });
   route();
   function renderSetup() {
@@ -2016,18 +2042,21 @@ export const CONSOLE_SCRIPT = String.raw`
   const graphNodes = document.querySelectorAll('#interlink-map [data-node]');
   const primarySessions = new Map(Array.from(graphNodes).filter(node => node.dataset.svgClient)
     .map(node => [node.dataset.svgClient, node]));
-  let pickedSession = primarySessions.get(selectedClient);
+  let selectedNode = null;
+  const nodeById = new Map(Array.from(graphNodes, node => [node.dataset.node, node]));
   const wires = document.querySelectorAll('#interlink-map .wire');
   const wireByEdge = new Map(Array.from(wires, wire => [wire.dataset.edge, wire]));
   const hostOf = new Map(Array.from(graphNodes, node => [node.dataset.node, node.parentElement.dataset.location]));
   const scenarios = Array.from(document.querySelectorAll('#interlink-modes button'), button => {
     const panel = $(button.getAttribute('aria-controls'));
     const messages = Array.from(panel.querySelectorAll('[data-route]'));
+    const routes = [];
     const nodes = new Set();
     const edges = new Set();
     const hops = [];
     for (const message of messages) {
       const route = message.dataset.route.split(' ');
+      routes.push(route);
       for (const node of route) {
         nodes.add(node);
         if (hostOf.get(node)) nodes.add(hostOf.get(node));
@@ -2039,7 +2068,7 @@ export const CONSOLE_SCRIPT = String.raw`
         hops.push({ wire, reverse: !forward, message });
       }
     }
-    return { button, panel, nodes, edges, hops };
+    return { button, panel, nodes, edges, hops, routes };
   });
   let scenario = scenarios[0];
   let pulseFrame = 0;
@@ -2080,7 +2109,34 @@ export const CONSOLE_SCRIPT = String.raw`
     pulseFrame = requestAnimationFrame(advance);
   }
 
-  function showScenario(next) {
+  function inspectRoute(node) {
+    const name = node && node.dataset.node;
+    const scopes = new Set();
+    const peers = new Set();
+    for (const route of scenario.routes) {
+      const from = route[0], to = route[route.length - 1];
+      // Each endpoint touches its own room, even when a handoff bridges two rooms.
+      for (const [session, room, other] of [[from, route[1], to], [to, route[route.length - 2], from]]) {
+        if (node && name !== session && name !== hostOf.get(session) && name !== room) continue;
+        if (from === 'sender') scopes.add('Write-only intake · sealed to the reviewer');
+        else scopes.add(room === 'internal' ? '#ops · private team keys' : '#agents · shared room keys');
+        const peer = !node || name === room ? session : other;
+        peers.add(nodeById.get(peer).getAttribute('aria-label'));
+      }
+    }
+    $('inspector-label').textContent = node ? 'Active node' : 'Scenario route';
+    $('inspector-name').textContent = node ? node.getAttribute('aria-label') : $('specimen-title').textContent;
+    $('inspector-scope').textContent = Array.from(scopes).join(' / ') || 'Outside the selected route';
+    $('inspector-peers').textContent = Array.from(peers).join(', ') || 'No peers on this route';
+  }
+
+  function selectNode(node) {
+    selectedNode = node;
+    for (const item of graphNodes) item.setAttribute('aria-pressed', String(item === node));
+    inspectRoute(node);
+  }
+
+  function showScenario(next, node = null) {
     scenario = next;
     for (const item of scenarios) {
       item.button.setAttribute('aria-pressed', String(item === next));
@@ -2092,6 +2148,7 @@ export const CONSOLE_SCRIPT = String.raw`
     $('specimen-title').textContent = title;
     for (const node of graphNodes) node.dataset.active = String(next.nodes.has(node.dataset.node));
     for (const wire of wires) wire.dataset.active = String(next.edges.has(wire));
+    selectNode(node);
     installFor(selectedClient);
     playExchange();
   }
@@ -2099,14 +2156,13 @@ export const CONSOLE_SCRIPT = String.raw`
   function exploreNode(node) {
     const name = node.dataset.node;
     const client = node.dataset.svgClient || node.dataset.client;
-    if (client) {
-      pickedSession = node;
-      selectedClient = client;
-    }
-    showScenario(scenario.nodes.has(name) ? scenario : scenarios.find(item => item.nodes.has(name)));
+    if (client) selectedClient = client;
+    showScenario(scenario.nodes.has(name) ? scenario : scenarios.find(item => item.nodes.has(name)), node);
   }
   for (const item of scenarios) item.button.addEventListener('click', () => showScenario(item));
   for (const node of graphNodes) {
+    node.addEventListener('focus', () => inspectRoute(node));
+    node.addEventListener('blur', () => inspectRoute(selectedNode));
     node.addEventListener('click', () => exploreNode(node));
     node.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -2144,15 +2200,12 @@ export const CONSOLE_SCRIPT = String.raw`
       (link ? 'Join my relay with this invite: ' + link.token : 'Ask me for my invite link and join my relay') +
       '. ' + connect + (link && link.channel ? ' for the room #' + link.topic : '') + '. ' + scenario.panel.dataset.prompt;
     $('install-command').textContent = install + '\n' + cli + " join '" + (link ? link.token : '<your invite>') + "'";
-    for (const node of graphNodes) {
-      if (node.dataset.svgClient || node.dataset.client) node.setAttribute('aria-pressed', String(node === pickedSession));
-    }
     for (const button of clientButtons) button.setAttribute('aria-pressed', String(button.dataset.install === client));
   }
   showScenario(scenario);
   for (const button of clientButtons) {
     button.addEventListener('click', () => {
-      pickedSession = primarySessions.get(button.dataset.install);
+      selectNode(primarySessions.get(button.dataset.install));
       installFor(button.dataset.install);
     });
   }

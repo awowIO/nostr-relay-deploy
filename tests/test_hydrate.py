@@ -1127,18 +1127,23 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert [a["data-install"] for a in choices if a["aria-pressed"] == "true"] == ["claude"]
     ids = [a["id"] for _, a in parsed.tags if "id" in a]
     assert len(ids) == len(set(ids))
-    order = [ids.index(name) for name in ("install-clients", "interlink-modes", "interlink-map", "wave-7",
-                                          "install-prompt", "install-command", "admission", "open-token", "maywe-card")]
+    order = [ids.index(name) for name in ("interlink-modes", "interlink-map", "wave-7", "install-title",
+                                          "install-clients", "install-prompt", "install-command", "admission",
+                                          "open-token", "maywe-card")]
     assert order == sorted(order)
     board = _switchboard(page)
     buttons = board.findall(".//*[@id='scenarios']/button")
     assert [b.attrib["data-mode"] for b in buttons] == [
         "mobile-cloud", "pair", "local-swarm", "bridge", "compute-swarm", "dropbox"]
+    assert [b.findtext("strong") for b in buttons] == [
+        "Mobile & Cloud → Workstation", "Teammate Pair Programming", "Multi-Repo Local Swarm",
+        "Private Team Room + Partner Bridge", "Parallel GPU Swarm + Referee", "Write-Only Dropbox → Quarantine"]
     assert [b.attrib["data-mode"] for b in buttons if b.get("aria-pressed") == "true"] == ["mobile-cloud"]
     svg = board.find(".//svg[@id='interlink-map']")
     assert svg.get("viewBox") == "0 0 780 310" and not svg.findall(".//svg")
     locations = svg.findall(".//g[@data-location]")
-    assert {g.attrib["data-location"] for g in locations} == {"mobile", "laptop", "workers", "cloud", "peer", "partners"}
+    assert {g.attrib["data-location"] for g in locations} == {
+        "mobile", "workstation", "workers", "cloud", "peer", "partners"}
     chips = svg.findall(".//g[@class='chip']")
     primary_clients = sorted(g.attrib["data-svg-client"] for g in chips if "data-svg-client" in g.attrib)
     assert primary_clients == sorted(a["data-install"] for a in choices)
@@ -3748,18 +3753,20 @@ def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = 
     hidden = sorted({a["id"] for _, a in tags if "hidden" in a and "id" in a})
     datasets = {a["id"]: {k[5:]: v for k, v in a.items() if k.startswith("data-")} for _, a in tags if "id" in a}
     board = _switchboard(page)
+    card = re.search(r'<section class="readout".*?</section>', page, re.DOTALL)[0]
+    setup = ElementTree.fromstring(card.replace(" hidden>", ' hidden="">'))
     host_of = {node: group.attrib["data-location"] for group in board.findall(".//g[@data-location]")
                for node in group.findall("g[@data-node]")}
     controls = {}
-    for selector, xpath, attr in (
-            ("#install-clients [data-install]", ".//*[@id='install-clients']/button", "install"),
-            ("#interlink-modes button", ".//*[@id='scenarios']/button", "mode"),
-            ("#interlink-map [data-node]", ".//g[@data-node]", "node"),
-            ("#interlink-map .wire", ".//path[@data-edge]", "edge")):
+    for root, selector, xpath, attr in (
+            (setup, "#install-clients [data-install]", ".//*[@id='install-clients']/button", "install"),
+            (board, "#interlink-modes button", ".//*[@id='scenarios']/button", "mode"),
+            (board, "#interlink-map [data-node]", ".//g[@data-node]", "node"),
+            (board, "#interlink-map .wire", ".//path[@data-edge]", "edge")):
         controls[selector] = [
             {"key": f"{attr}={node.attrib['data-' + attr]}", "attrs": node.attrib,
              "host": host_of.get(node), "title": node.findtext("strong")}
-            for node in board.findall(xpath)]
+            for node in root.findall(xpath)]
     routes = {panel.attrib["id"]: [m.attrib["data-route"] for m in panel.findall("li")]
               for panel in board.findall(".//ol[@data-prompt]")}
     (tmp_path / "page.js").write_text(script)
@@ -3844,8 +3851,8 @@ def test_console_and_github_pages_switchboard_select_topologies_and_copy_agent_p
     for page in pages:
         board = _switchboard(page)
         for mode, panel, node, event, client, agent in (
-                ("mobile-cloud", "sample-bus", "iphone", "click", "chatgpt", "ChatGPT"),
-                ("pair", "sample-handoff", "brother-codex", "click", "codex", "Codex"),
+                ("mobile-cloud", "sample-bus", "mobile-app", "click", "chatgpt", "ChatGPT"),
+                ("pair", "sample-handoff", "teammate-codex", "click", "codex", "Codex"),
                 ("local-swarm", "sample-local", "infra", "Enter", "claude", "Claude Code"),
                 ("bridge", "sample-bridge", "desktop", " ", "claude-desktop", "Claude Desktop"),
                 ("compute-swarm", "sample-compute", "gpu", "click", "antigravity", "Antigravity"),
@@ -3883,7 +3890,7 @@ def test_console_and_github_pages_switchboard_select_topologies_and_copy_agent_p
         picked = run_page(tmp_path, page, steps=[["click", "mode=local-swarm"], ["click", "install=chatgpt"]])
         els = picked["elements"]
         assert els["interlink-map"]["dataset"]["mode"] == "local-swarm"
-        assert els["node=iphone"]["attrs"]["aria-pressed"] == els["install=chatgpt"]["attrs"]["aria-pressed"] == "true"
+        assert els["node=mobile-app"]["attrs"]["aria-pressed"] == els["install=chatgpt"]["attrs"]["aria-pressed"] == "true"
         assert "ChatGPT" in els["install-prompt"]["text"] and "three terminal sessions" in els["install-prompt"]["text"]
 
 
