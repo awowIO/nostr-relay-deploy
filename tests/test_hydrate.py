@@ -1085,6 +1085,11 @@ DOCS_ORIGIN = "https://docs.awow.io"
 SUBSCRIBE_KEY, DOCS_SUBSCRIBE_KEY = "pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI", "pk_6ZNZP0jBeKTpu22jfUQfQ6Dhcu6faq7iSzeEJsMMy78"
 
 
+def _switchboard(page: str) -> ElementTree.Element:
+    section = re.search(r'<section class="patchbay".*?\n  </section>', page, re.DOTALL)[0]
+    return ElementTree.fromstring(section.replace(" hidden>", ' hidden="">'))
+
+
 def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     """Both pages ship their artwork locally and enroll through the same invite service."""
     assert not [(t, a) for t, a in parsed.tags if "src" in a]
@@ -1125,30 +1130,51 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     order = [ids.index(name) for name in ("install-clients", "interlink-modes", "interlink-map", "wave-7",
                                           "install-prompt", "install-command", "admission", "open-token", "maywe-card")]
     assert order == sorted(order)
-    assert [a["data-mode"] for t, a in parsed.tags if t == "button" and "data-mode" in a] == ["mesh", "bridge", "dropbox"]
-    diagram = re.search(r'<svg class="interlink-map".*?</svg>', page, re.DOTALL)[0]
-    svg = ElementTree.fromstring(diagram)
-    assert svg.get("viewBox") == "0 0 1120 264" and not svg.findall(".//svg")
-    pins = svg.findall(".//circle[@class='socket']")
-    sockets = {(pin.attrib["cx"], pin.attrib["cy"]) for pin in pins}
-    assert all(pin.get("r") == "4" for pin in pins)
-    assert sum(x == "298" for x, _ in sockets) == 6 and sum(x == "822" for x, _ in sockets) == 3
-    rows = svg.findall(".//g[@data-svg-client]")
-    assert [row.get("data-svg-client") for row in rows] == [a["data-install"] for a in choices]
-    assert [row.get("aria-pressed") for row in rows] == [a["aria-pressed"] for a in choices]
-    for row in rows:
-        assert row.get("role") == "button" and row.get("tabindex") == "0"
-        pin = row.find("circle[@class='socket']")
-        assert pin is not None and pin.get("cx") == "298"
-        feeds = row.findall("path")
-        assert {feed.get("class") for feed in feeds} == {"wire internal-feed", "wire external-feed"}
-        assert all(feed.attrib["d"].startswith(f"M298 {pin.attrib['cy']} ") for feed in feeds)
-    wires = [p.attrib["d"] for p in svg.iter("path") if "wire" in p.get("class", "").split()]
-    endpoints = set()
-    for wire in wires:
-        coordinates = re.findall(r"-?\d+(?:\.\d+)?", wire)
-        endpoints.update((tuple(coordinates[:2]), tuple(coordinates[-2:])))
-    assert endpoints == sockets, "each wire terminates at the center of a socket inside the same SVG"
+    board = _switchboard(page)
+    buttons = board.findall(".//*[@id='scenarios']/button")
+    assert [b.attrib["data-mode"] for b in buttons] == [
+        "mobile-cloud", "pair", "local-swarm", "bridge", "compute-swarm", "dropbox"]
+    assert [b.attrib["data-mode"] for b in buttons if b.get("aria-pressed") == "true"] == ["mobile-cloud"]
+    svg = board.find(".//svg[@id='interlink-map']")
+    assert svg.get("viewBox") == "0 0 780 310" and not svg.findall(".//svg")
+    locations = svg.findall(".//g[@data-location]")
+    assert {g.attrib["data-location"] for g in locations} == {"mobile", "laptop", "workers", "cloud", "peer", "partners"}
+    chips = svg.findall(".//g[@class='chip']")
+    primary_clients = sorted(g.attrib["data-svg-client"] for g in chips if "data-svg-client" in g.attrib)
+    assert primary_clients == sorted(a["data-install"] for a in choices)
+    assert all(g.get("role") == "button" and g.get("tabindex") == "0" for g in svg.findall(".//g[@data-node]"))
+
+    pins = {}
+    for node in svg.findall(".//g[@data-node]"):
+        pin = node.find("circle[@class='socket']")
+        if node.get("class") == "host":
+            continue
+        assert pin is not None and pin.get("r") == "4"
+        pins[node.attrib["data-node"]] = (pin.attrib["cx"], pin.attrib["cy"])
+    assert (pins["external"], pins["internal"]) == (("390", "122"), ("390", "206"))
+    assert len(set(pins.values())) == len(pins) == len(svg.findall(".//circle[@class='socket']"))
+    edges = set()
+    for wire in (p for p in svg.iter("path") if "wire" in p.get("class", "").split()):
+        sender, receiver = wire.attrib["data-edge"].split()
+        assert receiver in {"external", "internal"}
+        coords = re.findall(r"-?\d+(?:\.\d+)?", wire.attrib["d"])
+        assert (tuple(coords[:2]), tuple(coords[-2:])) == (pins[sender], pins[receiver])
+        edges.add(frozenset((sender, receiver)))
+    assert svg.find("circle[@class='pulse']") is not None
+
+    used_edges = set()
+    for button in buttons:
+        panel = board.find(".//ol[@id='" + button.attrib["aria-controls"] + "']")
+        assert panel is not None and ("hidden" in panel.attrib) == (button.get("aria-pressed") == "false")
+        messages = panel.findall("li[@data-route]")
+        assert len(messages) == 3 and panel.get("data-prompt")
+        for message in messages:
+            route = message.attrib["data-route"].split()
+            assert route[0] not in {"external", "internal"} and route[-1] not in {"external", "internal"}
+            assert set(route[1:-1]) <= {"external", "internal"} and len(route) >= 3
+            assert message.find(".//b").text and message.find(".//span[@class='event']").text
+            used_edges.update(frozenset(pair) for pair in zip(route, route[1:]))
+    assert used_edges == edges and set().union(*edges) == set(pins)
     hidden = {a["id"] for _, a in parsed.tags if "hidden" in a and "id" in a}
     assert {"install-command", "install-copy"} <= hidden
     assert {"scenarios", "open-invite", "returning"} <= set(ids)
@@ -3623,20 +3649,32 @@ function element(id) {
     const node = { id: id, textContent: '', value: '', className: '', checked: false, dataset: scenario.datasets[id] || {}, type: 'button',
       hidden: scenario.hidden.includes(id), listeners: {}, parentElement: { className: '' },
       addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
-      attrs: {}, setAttribute(k, v) { this.attrs[k] = String(v); },
+      attrs: {}, getAttribute(k) { return this.attrs[k]; }, setAttribute(k, v) { this.attrs[k] = String(v); },
       appendChild() {}, prepend() {}, reset() {} };
     elements.set(id, node);
   }
   return elements.get(id);
 }
-// Use the controls from the served markup for the patchbay's selector-based listeners.
+// Wire the served controls, their graph hosts, and each feed's ordered message routes.
 const controls = {};
-for (const [selector, key, values] of scenario.controls) {
-  controls[selector] = values.map(value => {
-    const button = element(key + '=' + value);
-    button.dataset[key] = value;
-    return button;
+for (const [selector, nodes] of Object.entries(scenario.controls)) {
+  controls[selector] = nodes.map(({ key, attrs, host, title }) => {
+    const node = element(key);
+    node.attrs = attrs;
+    for (const [attr, value] of Object.entries(attrs)) {
+      if (attr.startsWith('data-')) {
+        const name = attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        node.dataset[name] = value;
+      }
+    }
+    node.parentElement.dataset = { location: host };
+    node.querySelector = selector => selector === 'strong' ? { textContent: title } : null;
+    return node;
   });
+}
+for (const [panel, messages] of Object.entries(scenario.routes)) {
+  element(panel).querySelectorAll = selector => selector === '[data-route]' ?
+    messages.map(route => ({ dataset: { route } })) : [];
 }
 let fresh = 0;
 const sandbox = {
@@ -3649,7 +3687,7 @@ const sandbox = {
     removeItem(k) { this.items.delete(k); }, get length() { return this.items.size; },
     key(i) { return Array.from(this.items.keys())[i]; } },
   matchMedia: () => ({ matches: false }),
-  addEventListener() {}, clearTimeout,
+  addEventListener() {}, clearTimeout, requestAnimationFrame() {}, cancelAnimationFrame() {},
   navigator: { clipboard: { writeText: async text => requests.push({ copied: text }) } },
   console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
   atob, btoa, setTimeout, Promise, JSON, Uint8Array, Array, Object, Map, Error, String, Math, Date,
@@ -3709,16 +3747,26 @@ def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = 
     tags = _parsed(page).tags
     hidden = sorted({a["id"] for _, a in tags if "hidden" in a and "id" in a})
     datasets = {a["id"]: {k[5:]: v for k, v in a.items() if k.startswith("data-")} for _, a in tags if "id" in a}
-    selectors = {"install": "#install-clients [data-install]", "mode": "#interlink-modes button"}
-    controls = [(selector, key, [a["data-" + key] for t, a in tags if t == "button" and "data-" + key in a])
-                for key, selector in selectors.items()]
-    controls.append(("#interlink-map [data-svg-client]", "svgClient",
-                     [a["data-svg-client"] for t, a in tags if t == "g" and "data-svg-client" in a]))
+    board = _switchboard(page)
+    host_of = {node: group.attrib["data-location"] for group in board.findall(".//g[@data-location]")
+               for node in group.findall("g[@data-node]")}
+    controls = {}
+    for selector, xpath, attr in (
+            ("#install-clients [data-install]", ".//*[@id='install-clients']/button", "install"),
+            ("#interlink-modes button", ".//*[@id='scenarios']/button", "mode"),
+            ("#interlink-map [data-node]", ".//g[@data-node]", "node"),
+            ("#interlink-map .wire", ".//path[@data-edge]", "edge")):
+        controls[selector] = [
+            {"key": f"{attr}={node.attrib['data-' + attr]}", "attrs": node.attrib,
+             "host": host_of.get(node), "title": node.findtext("strong")}
+            for node in board.findall(xpath)]
+    routes = {panel.attrib["id"]: [m.attrib["data-route"] for m in panel.findall("li")]
+              for panel in board.findall(".//ol[@data-prompt]")}
     (tmp_path / "page.js").write_text(script)
     (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
     (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
                                                         "steps": steps or [], "replies": replies or {}, "path": path,
-                                                        "controls": controls, "datasets": datasets,
+                                                        "controls": controls, "datasets": datasets, "routes": routes,
                                                         "port": relay_port, "extension": extension,
                                                         "nostr": str(REPO / "templates/cloudflare/src/nostr.ts")}))
     done = subprocess.run(["node", str(tmp_path / "runner.cjs"), str(tmp_path / "page.js"),
@@ -3794,30 +3842,49 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
 def test_console_and_github_pages_switchboard_select_topologies_and_copy_agent_prompts_locally(worker, build, tmp_path):
     pages = (worker.http("GET", "/")[2].decode(), (build / "github-pages/index.html").read_text())
     for page in pages:
-        for client, agent, mode, control, event in (
-                ("claude", "Claude Code", "mesh", "install", "click"),
-                ("codex", "Codex", "bridge", "svgClient", "click"),
-                ("chatgpt", "ChatGPT", "dropbox", "svgClient", "Enter"),
-                ("claude-desktop", "Claude Desktop", "mesh", "svgClient", " "),
-                ("antigravity", "Antigravity", "bridge", "install", "click"),
-                ("cursor", "Cursor", "dropbox", "install", "click")):
-            select = ["click" if event == "click" else "keydown", control + "=" + client, event]
+        board = _switchboard(page)
+        for mode, panel, node, event, client, agent in (
+                ("mobile-cloud", "sample-bus", "iphone", "click", "chatgpt", "ChatGPT"),
+                ("pair", "sample-handoff", "brother-codex", "click", "codex", "Codex"),
+                ("local-swarm", "sample-local", "infra", "Enter", "claude", "Claude Code"),
+                ("bridge", "sample-bridge", "desktop", " ", "claude-desktop", "Claude Desktop"),
+                ("compute-swarm", "sample-compute", "gpu", "click", "antigravity", "Antigravity"),
+                ("dropbox", "sample-dropbox", "cursor", "click", "cursor", "Cursor")):
+            select = ["click" if event == "click" else "keydown", "node=" + node, event]
             steps = [["click", "mode=" + mode], select, ["click", "install-prompt-copy"]]
             seen = run_page(tmp_path, page, steps=steps)
             els = seen["elements"]
-            for prefix, selected in (("install=", client), ("svgClient=", client), ("mode=", mode)):
+            for prefix, selected in (("install=", client), ("mode=", mode)):
                 assert [k for k, v in els.items() if k.startswith(prefix)
                         and v["attrs"]["aria-pressed"] == "true"] == [prefix + selected]
+            assert els["node=" + node]["attrs"]["aria-pressed"] == "true"
             assert els["interlink-map"]["dataset"]["mode"] == mode
             assert els["setup-client"]["text"] == agent
-            assert els["map-title"]["text"].startswith(agent) and els["install-how"]["text"]
+            assert els["map-title"]["text"] == els["specimen-title"]["text"] == board.findtext(
+                ".//button[@data-mode='" + mode + "']/strong")
+            assert [k for k, v in els.items() if k.startswith("sample-") and not v["hidden"]] == [panel]
+            feed = board.find(".//ol[@id='" + panel + "']")
+            routes = [m.attrib["data-route"].split() for m in feed.findall("li")]
+            edges = {frozenset(pair) for route in routes for pair in zip(route, route[1:])}
+            assert {frozenset(k[5:].split()) for k, v in els.items()
+                    if k.startswith("edge=") and v["dataset"]["active"] == "true"} == edges
+            nodes = set().union(*edges)
+            nodes.update(g.attrib["data-location"] for g in board.findall(".//g[@data-location]")
+                         if any(chip.get("data-node") in nodes for chip in g))
+            assert {k[5:] for k, v in els.items() if k.startswith("node=") and v["dataset"]["active"] == "true"} == nodes
             prompt = els["install-prompt"]["text"]
-            assert agent in prompt and "invite link" in prompt
+            assert agent in prompt and "invite link" in prompt and feed.attrib["data-prompt"] in prompt
             assert all(term not in prompt for term in ("uv ", "mcp add", "git clone", "nostr-mailbox", "nm1_"))
             assert [r["copied"] for r in seen["requests"] if "copied" in r] == [prompt]
             assert els["install-command"]["hidden"] and els["install-copy"]["hidden"]
             assert len([r for r in seen["requests"] if "url" in r]) == 1
             assert not any("dial" in r or "navigate" in r or "stored" in r for r in seen["requests"])
+
+        picked = run_page(tmp_path, page, steps=[["click", "mode=local-swarm"], ["click", "install=chatgpt"]])
+        els = picked["elements"]
+        assert els["interlink-map"]["dataset"]["mode"] == "local-swarm"
+        assert els["node=iphone"]["attrs"]["aria-pressed"] == els["install=chatgpt"]["attrs"]["aria-pressed"] == "true"
+        assert "ChatGPT" in els["install-prompt"]["text"] and "three terminal sessions" in els["install-prompt"]["text"]
 
 
 def test_console_admission_uses_the_authenticated_relay(relay, worker, console_ws, tmp_path):
