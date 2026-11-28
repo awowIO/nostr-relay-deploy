@@ -12,8 +12,14 @@ What is exercised for real, and how:
   - The three edge filters (Caddyfile, Traefik IngressRoute, Worker) are held to one
     route table: the first two by evaluating their hydrated rules, the Worker by
     fetching through its real handler.
-  - `kubectl kustomize` (offline) builds the hydrated Kubernetes tree when kubectl is
-    installed.
+  - `kubectl kustomize` (offline) builds the hydrated Kubernetes trees, with and without
+    the Web Console, when kubectl is installed.
+  - When a Docker daemon answers, the pinned console image serves the hydrated console
+    as console.yaml runs it (UID 101, read-only root, no capabilities), and is held to the
+    Worker's page and headers.
+  - Both pages' whole scripts run under Node against a stand-in DOM and fetch (a test
+    double, named as one): what they send at boot, on a pasted invite, on the Pair form,
+    and how they read each MayWe answer.
   - When a Docker daemon answers, the pinned ncli release itself: `ncli relay --check`
     on the hydrated relay.yaml, and a live ncli relay booted on it. The self-service
     scenarios (member-minted invites, NIP-29 groups, recipient-only kinds, what `/`
@@ -598,10 +604,139 @@ def test_kustomize_builds_the_hydrated_tree(private_ws):
     docs = out.split("\n---\n")
     kinds = [re.search(r"^kind: (\S+)", d, re.MULTILINE).group(1) for d in docs]
     assert sorted(kinds) == sorted(["ConfigMap", "Namespace", "Service", "StatefulSet", "IngressRoute",
-                                    "NetworkPolicy", "NetworkPolicy"])
+                                    "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"])
+    deny = next(d for d in docs if "name: nostr-relay-default-deny" in d)
+    assert "podSelector: {}" in deny and "- Ingress" in deny and "- Egress" in deny
+    assert "ingress:" not in deny and "egress:" not in deny, "denies all, allows nothing"
     backend = next(d for d in docs if "name: nostr-relay-backend" in d)
     assert "namespace: traefik" in backend
     assert "auth_required: true" in next(d for d in docs if d.startswith("apiVersion: v1\ndata:"))
+
+
+# The Web Console on Kubernetes: one fictional operator's relay rendered twice, once with
+# the console beside it and once without, from configurations that differ in nothing else.
+CONSOLE_NAMESPACE = "relay-two"
+
+
+@pytest.fixture(scope="session")
+def console_ws(tmp_path_factory) -> Path:
+    ws = copy_repo(tmp_path_factory.mktemp("console"))
+    for profile, console in (("with-console", True), ("without-console", False)):
+        config = f"relay.{profile}.local.toml"
+        data = private_config(kubernetes={"namespace": CONSOLE_NAMESPACE, "web_console": console})
+        (ws / config).write_text(dump_toml(data))
+        run_cli(ws, "--config", config, "--profile", profile, "--target", "all")
+    return ws
+
+
+def console_build(console_ws: Path) -> Path:
+    return console_ws / ".build" / "with-console" / "kubernetes"
+
+
+def test_kubernetes_serves_the_web_console_beside_an_untouched_relay(console_ws, worker):
+    k8s, bare = console_build(console_ws), console_ws / ".build" / "without-console" / "kubernetes"
+    files = {str(p.relative_to(k8s)) for p in k8s.rglob("*") if p.is_file()}
+    assert files == {str(p.relative_to(bare)) for p in bare.rglob("*") if p.is_file()} | {
+        "console.yaml", "console/index.html", "console/nginx.conf"}
+    # The relay's own objects are byte for byte those of the same relay without a console:
+    # turning the console on rolls nothing of the relay and drops no member's socket.
+    for name in ("statefulset.yaml", "service.yaml", "networkpolicy.yaml", "namespace.yaml", "relay.yaml"):
+        assert (k8s / name).read_text() == (bare / name).read_text(), name
+    kustomization = (k8s / "kustomization.yaml").read_text()
+    assert re.findall(r"^  - (\S+\.yaml)$", kustomization, re.MULTILINE) == [
+        "namespace.yaml", "statefulset.yaml", "service.yaml", "ingressroute.yaml", "networkpolicy.yaml",
+        "console.yaml", "traefik-networkpolicy.yaml"]
+    assert (f"  - name: {hydrate.CONSOLE_NAME}\n    namespace: {CONSOLE_NAMESPACE}\n    files:\n"
+            "      - index.html=console/index.html\n      - nginx.conf=console/nginx.conf\n") in kustomization
+
+    console = (k8s / "console.yaml").read_text()
+    deployment, service, policy = console.split("\n---\n")
+    assert f"image: {hydrate.CONSOLE_IMAGE}" in deployment and "@sha256:" in hydrate.CONSOLE_IMAGE
+    for line in ("kind: Deployment", "replicas: 1", "maxUnavailable: 0", "automountServiceAccountToken: false",
+                 "enableServiceLinks: false", "runAsNonRoot: true", "runAsUser: 101", "runAsGroup: 101",
+                 "seccompProfile: { type: RuntimeDefault }", "allowPrivilegeEscalation: false",
+                 "readOnlyRootFilesystem: true", "capabilities: { drop: [ALL] }",
+                 'command: ["nginx", "-c", "/etc/console/nginx.conf", "-g", "daemon off;"]',
+                 "requests: { cpu: 1m, memory: 5Mi }", f"      priorityClassName: {PRIVATE['priority_class']}\n",
+                 "- key: node-role.kubernetes.io/control-plane"):
+        assert line in deployment, line
+    manifest = "\n".join(line.split("#", 1)[0] for line in deployment.splitlines())
+    for absent in ("secretKeyRef", "persistentVolumeClaim", "volumeClaimTemplates", "limits:", "hostNetwork"):
+        assert absent not in manifest, f"the console holds no key, no relay volume and no cap: {absent}"
+    assert f"ports: [{{ name: http, port: {hydrate.CONSOLE_PORT}, targetPort: http }}]" in service
+    assert f"podSelector: {{ matchLabels: {{ app: {hydrate.CONSOLE_NAME} }} }}" in policy
+    assert f"ports: [{{ protocol: TCP, port: {hydrate.CONSOLE_PORT} }}]" in policy and "egress: []" in policy
+    assert 'podSelector: { matchLabels: { "app.kubernetes.io/name": "traefik" } }' in policy
+
+    # Traefik's own egress door, named after the relay's namespace, opens to both pods.
+    backend = (k8s / "traefik-networkpolicy.yaml").read_text()
+    assert f"metadata: {{ name: {CONSOLE_NAMESPACE}-backend, namespace: traefik }}" in backend
+    peers = re.findall(r"- namespaceSelector: \{ matchLabels: \{ kubernetes\.io/metadata\.name: (\S+) \} \}\n"
+                       r"\s+podSelector: \{ matchLabels: \{ app: (\S+) \} \}\n\s+ports: \[\{ protocol: TCP, port: (\d+) \}\]",
+                       backend)
+    assert peers == [(CONSOLE_NAMESPACE, "nostr-relay", "5500"), (CONSOLE_NAMESPACE, hydrate.CONSOLE_NAME, "8080")]
+    assert f"name: {CONSOLE_NAMESPACE}-backend" in (k8s / "traefik-networkpolicy.yaml").read_text()
+
+    # The page is the Worker's console, with what only the Worker serves (its MCP server and
+    # OAuth sign-in) hidden, and its policy admits the same script and style by hash.
+    served = worker.http("GET", "/")[2].decode()
+    page = (k8s / "console" / "index.html").read_text()
+    markup, script = served.split("<script>", 1)
+    assert page == markup.replace('data-edge="worker"', 'data-edge="worker" hidden') + "<script>" + script
+    assert page.count('data-edge="worker" hidden') == 3
+    hidden = {a.get("id") for t, a in _parsed(page).tags if "hidden" in a and "data-edge" in a}
+    assert {"pair-card", "stat-mcp"} <= hidden
+    nginx = (k8s / "console" / "nginx.conf").read_text()
+    policy_header = re.search(r'add_header Content-Security-Policy "([^"]+)" always;', nginx).group(1)
+    worker_policy = csp(worker.http("GET", "/")[1])
+    ours = dict(part.strip().split(" ", 1) for part in policy_header.split(";"))
+    assert {k: v for k, v in ours.items() if k != "connect-src"} == {
+        k: v for k, v in worker_policy.items() if k != "connect-src"}
+    assert ours["connect-src"] == f"'self' wss://{PRIVATE['relay_host']} https://newsletter.awow.io"
+    assert ours["script-src"] == sha256_source(re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1))
+    for path in ("/", "/join", "/join/"):
+        assert f"location = {path} {{ try_files /index.html =404; }}" in nginx
+    assert "location / { return 404; }" in nginx
+    assert not re.search(r"^\s*include\b", nginx, re.MULTILINE), "nothing the image ships decides what is served"
+    for path in k8s.rglob("*"):
+        assert path.is_dir() or "{{" not in path.read_text(), path
+
+
+def _parsed(page: str) -> _Collect:
+    parsed = _Collect()
+    parsed.feed(page)
+    return parsed
+
+
+def test_each_relay_keeps_its_own_traefik_door(tmp_path):
+    """Two relays on one cluster live in two namespaces; each one's Traefik egress policy is
+    named after its namespace, so applying one never rewrites the other's. The default
+    namespace keeps the name a live relay already has."""
+    ws = copy_repo(tmp_path)
+    for namespace in ("nostr-relay", "relay-two"):
+        config = f"relay.{namespace}.local.toml"
+        (ws / config).write_text(dump_toml(private_config(kubernetes={"namespace": namespace})))
+        run_cli(ws, "--config", config, "--profile", namespace, "--target", "kubernetes")
+        backend = (ws / ".build" / namespace / "kubernetes" / "traefik-networkpolicy.yaml").read_text()
+        assert f"metadata: {{ name: {namespace}-backend, namespace: traefik }}" in backend
+        assert f"kubernetes.io/metadata.name: {namespace} }}" in backend
+        assert backend.count("- to:") == 1, "without a console, one door: the relay's"
+
+
+@pytest.mark.skipif(shutil.which("kubectl") is None, reason="kubectl is not installed")
+def test_kustomize_builds_the_console_tree(console_ws):
+    out = subprocess.run(["kubectl", "kustomize", str(console_build(console_ws))],
+                         capture_output=True, text=True, check=True).stdout
+    docs = out.split("\n---\n")
+    kinds = sorted(re.search(r"^kind: (\S+)", d, re.MULTILINE).group(1) for d in docs)
+    assert kinds == sorted(["ConfigMap", "ConfigMap", "Namespace", "Service", "Service", "StatefulSet", "Deployment",
+                            "IngressRoute", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy", "NetworkPolicy"])
+    page_map = next(d for d in docs if d.startswith("apiVersion: v1\ndata:") and "index.html: " in d)
+    generated = re.search(r"^  name: (\S+)$", page_map, re.MULTILINE).group(1)
+    assert generated.startswith(f"{hydrate.CONSOLE_NAME}-") and "nginx.conf: " in page_map
+    deployment = next(d for d in docs if d.startswith("apiVersion: apps/v1\nkind: Deployment"))
+    assert deployment.count(f"name: {generated}") == 2, "both of the console's volumes mount the generated ConfigMap"
+    assert f"namespace: {CONSOLE_NAMESPACE}" in deployment
 
 
 # ========================================================================== compose
@@ -691,6 +826,145 @@ def test_the_pinned_ncli_accepts_the_hydrated_relay_yaml(build, private_ws):
     assert refused.returncode != 0 and "memberClaim" in refused.stdout + refused.stderr
 
 
+@pytest.fixture(scope="session")
+def console_server(console_ws):
+    """The pinned console image serving the hydrated console as console.yaml runs it: its
+    own command, UID 101, a read-only root with /tmp the only writable path, no
+    capabilities, and the two files mounted read-only where the ConfigMap puts them."""
+    problem = docker_problem()
+    if problem is not None:
+        pytest.skip(problem)
+    k8s = console_build(console_ws)
+    command = json.loads(re.search(r"command: (\[.*\])", (k8s / "console.yaml").read_text()).group(1))
+    tag = os.urandom(4).hex()
+    name, mounts = f"nostr-relay-deploy-console-{tag}", {"/etc/console": "nginx.conf", "/srv/console": "index.html"}
+    volumes = {mount: f"nostr-relay-deploy-console-{tag}{mount.replace('/', '-')}" for mount in mounts}
+    try:
+        for mount, volume in volumes.items():
+            subprocess.run(["docker", "volume", "create", volume], capture_output=True, check=True)
+            subprocess.run(["docker", "run", "-i", "--rm", "--user", "0", "-v", f"{volume}:/dst", "--entrypoint", "sh",
+                            hydrate.CONSOLE_IMAGE, "-c", f"cat > /dst/{mounts[mount]}"],
+                           input=(k8s / "console" / mounts[mount]).read_bytes(), capture_output=True, check=True)
+        started = subprocess.run(
+            ["docker", "run", "-d", "--name", name, "--read-only", "--tmpfs", "/tmp:uid=101,gid=101",
+             "--user", "101:101", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+             *(arg for mount, volume in volumes.items() for arg in ("-v", f"{volume}:{mount}:ro")),
+             "-p", f"127.0.0.1::{hydrate.CONSOLE_PORT}", hydrate.CONSOLE_IMAGE, *command],
+            capture_output=True, text=True, check=False)
+        if started.returncode != 0:
+            pytest.fail(f"docker run of the pinned console image failed:\n{started.stderr}")
+        mapped = subprocess.run(["docker", "port", name, f"{hydrate.CONSOLE_PORT}/tcp"], capture_output=True,
+                                text=True, check=True).stdout.splitlines()[0]
+        origin = f"http://127.0.0.1:{mapped.rsplit(':', 1)[1]}"
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        while True:
+            running = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True,
+                                     text=True, check=False).stdout.strip()
+            if running != "true":
+                logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True, check=False)
+                pytest.fail(f"the console stopped before it served:\n{logs.stdout[-3000:]}{logs.stderr[-3000:]}")
+            try:
+                opener.open(origin + "/").close()
+                break
+            except (ConnectionError, urllib.error.URLError):
+                time.sleep(0.1)                 # not listening yet; the container is still running
+        yield name, origin
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+        subprocess.run(["docker", "volume", "rm", *volumes.values()], capture_output=True, check=False)
+
+
+def _get(origin: str, method: str, path: str, headers: dict[str, str] | None = None):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    request = urllib.request.Request(origin + path, method=method, headers=headers or {})
+    try:
+        with opener.open(request) as response:
+            return response.status, response.headers, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers, exc.read()
+
+
+def test_the_pinned_console_image_serves_the_page_as_the_worker_does(console_server, console_ws, worker):
+    name, origin = console_server
+    k8s = console_build(console_ws)
+    page = (k8s / "console" / "index.html").read_bytes()
+    policy = re.search(r'add_header Content-Security-Policy "([^"]+)" always;',
+                       (k8s / "console" / "nginx.conf").read_text()).group(1)
+    _, worker_headers, _ = worker.http("GET", "/", headers={"Accept": "text/html"})
+    for method in ("GET", "HEAD"):
+        for path in ("/", "/join", "/join/"):
+            status, headers, body = _get(origin, method, path, {"Accept": "text/html"})
+            assert (status, body) == (200, page if method == "GET" else b""), (method, path)
+            assert headers["Content-Security-Policy"] == policy
+            for header in ("Content-Type", "Cache-Control", "Referrer-Policy", "X-Content-Type-Options",
+                           "X-Frame-Options"):
+                assert headers[header] == worker_headers[header], (method, path, header)
+    for path in ("/index.html", "/nginx.conf", "/joined", "/JOIN/", "/join/index.html", "/mcp", "/openapi.json",
+                 f"/{SHA}", "/.well-known/nostr.json"):
+        assert _get(origin, "GET", path)[0] == 404, path
+    hydrate.verify_console(hydrate.load_config(console_ws / "relay.with-console.local.toml"), origin)
+    logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True, check=False)
+    assert "[emerg]" not in logs.stderr and "Read-only file system" not in logs.stderr, logs.stderr[-2000:]
+
+
+def test_verify_finds_the_web_console_or_says_what_answers_instead(worker, console_ws):
+    cfg = hydrate.load_config(console_ws / "relay.with-console.local.toml")
+    hydrate.verify_console(cfg, worker.origin)              # the Worker serves the same page
+    page = worker.http("GET", "/")[2]
+
+    def serve(body: bytes, policy: str):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Security-Policy", policy)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        return server
+
+    for body, policy, said in ((b"<!doctype html><title>relay</title>", "default-src 'none'", "is not the Web Console"),
+                               (page, "default-src 'none'", "does not admit the page's own script")):
+        server = serve(body, policy)
+        try:
+            with pytest.raises(hydrate.VerifyError, match=said):
+                hydrate.verify_console(cfg, f"http://127.0.0.1:{server.server_address[1]}")
+        finally:
+            server.shutdown()
+
+
+def test_verify_reads_the_console_deployment_rollout(tmp_path, monkeypatch, capsys):
+    """--verify on a relay with the Web Console also reads its Deployment, through kubectl
+    (stood in for here: the real-contact path is an operator's --verify after an apply)."""
+    config = tmp_path / "relay.local.toml"
+    config.write_text(dump_toml(private_config(kubernetes={"web_console": True})))
+    cfg = hydrate.load_config(config)
+    sts = {"status": {"readyReplicas": 1, "updateRevision": "r1"}}
+    pod = {"metadata": {"labels": {"controller-revision-hash": "r1"}}}
+
+    def run(deployment):
+        def kubectl(argv):
+            kind = argv[argv.index("get") + 1]
+            return json.dumps({"statefulset": sts, "pod": pod, "deployment": deployment}[kind])
+        monkeypatch.setattr(hydrate, "run_kubectl", kubectl)
+        hydrate.verify_rollout(cfg)
+        return capsys.readouterr().out
+
+    rolled = {"metadata": {"generation": 2}, "spec": {"replicas": 1},
+              "status": {"observedGeneration": 2, "updatedReplicas": 1, "availableReplicas": 1}}
+    assert f"console: deployment/{hydrate.CONSOLE_NAME} serves the applied revision (1/1 available)" in run(rolled)
+    rolling = {**rolled, "status": {**rolled["status"], "observedGeneration": 1}}
+    assert "console rollout IN PROGRESS" in run(rolling)
+    with pytest.raises(hydrate.VerifyError, match="has no available replica"):
+        run({**rolled, "status": {"availableReplicas": 0}})
+
+
 # ======================================================================= cloudflare
 def test_cloudflare_hydrates_wrangler_and_copies_the_worker(build):
     cf = build / "cloudflare"
@@ -734,6 +1008,55 @@ class _Collect(html.parser.HTMLParser):
             self.style += data
 
 
+# What both pages link to, and where their invite-request form posts: the source on GitHub, and
+# MayWe, which runs the waitlist (with a second publishable key for pages served from docs.awow.io).
+SOURCE_URL = "https://github.com/awowIO/crosswire"
+MAYWE_URL = "https://maywe.email"
+SUBSCRIBE_URL = "https://newsletter.awow.io/v1/subscribe"
+DOCS_ORIGIN = "https://docs.awow.io"
+MAYWE_KEY, DOCS_MAYWE_KEY = "pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI", "pk_6ZNZP0jBeKTpu22jfUQfQ6Dhcu6faq7iSzeEJsMMy78"
+
+
+def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
+    """No script, stylesheet or image from anywhere; links to the source on GitHub (header and
+    footer) and to MayWe only; and the MayWe invite-request form. `q` is the script's quote."""
+    assert not [(t, a) for t, a in parsed.tags if "src" in a or t == "link"]
+    links = [(t, a) for t, a in parsed.tags if "href" in a]
+    assert {(t, a["href"]) for t, a in links} == {("a", SOURCE_URL), ("a", MAYWE_URL)}
+    assert all(a.get("target") == "_blank" and a.get("rel") == "noopener noreferrer" for _, a in links)
+    header = re.search(r"<header .*?</header>", page, re.DOTALL).group(0)
+    link = re.search(rf'<a class="hdr-link" href="{re.escape(SOURCE_URL)}"[^>]*>(.*?)</a>', header, re.DOTALL)
+    assert link and re.sub(r"<[^>]+>", "", link.group(1)) == "GitHub · awowIO/crosswire ↗"
+    assert '<span class="hdr-repo"> · awowIO/crosswire</span>' in link.group(1), "what a narrow header drops"
+    assert f'<a href="{SOURCE_URL}"' in re.search(r"<footer>.*?</footer>", page, re.DOTALL).group(0)
+    # No style attribute anywhere: the console's hash-only style-src refuses inline styles, so
+    # a hidden field styled that way would show. The honeypot is hidden by a rule instead.
+    assert not [(t, a) for t, a in parsed.tags if "style" in a]
+    assert re.search(r"#maywe-website \{ position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; "
+                     r"pointer-events: none; \}", parsed.style)
+    # The two ways in come first, side by side: already invited, and asking for an invite.
+    cards = re.findall(r"<section[^>]*>.*?</section>", page[page.index('<div class="grid">'):], re.DOTALL)
+    assert ">01 · Already invited</h2>" in cards[0] and ">02 · Request an invite</h2>" in cards[1]
+    opener = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "open-form")
+    assert "action" not in opener
+    pasted = next(a for t, a in parsed.tags if t == "input" and a.get("id") == "open-token")
+    assert "required" in pasted and pasted["autocomplete"] == "off"
+    form = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "maywe-form")
+    assert "action" not in form, "the script posts it, and form-action 'none' stops a plain submit"
+    fields = {a["id"]: a for t, a in parsed.tags if t == "input" and a.get("id", "").startswith("maywe-")}
+    assert set(fields) == {"maywe-email", "maywe-note", "maywe-website"}
+    assert fields["maywe-email"]["type"] == "email" and "required" in fields["maywe-email"]
+    trap = fields["maywe-website"]
+    assert (trap["name"], trap["tabindex"], trap["aria-hidden"]) == ("website", "-1", "true"), "the honeypot"
+    for needle in (f"fetch({q}{SUBSCRIBE_URL}{q}, {{\n", f"method: {q}POST{q}",
+                   f"source: {q}crosswire:invite-request{q}",
+                   f"if (note) params.set({q}details{q}, JSON.stringify({{ use_case: note }}));"):
+        assert needle in page, needle
+    assert re.search(rf"location\.origin === {q}{DOCS_ORIGIN}{q}\)\s*\?\s*{q}{DOCS_MAYWE_KEY}{q}\s*:\s*{q}{MAYWE_KEY}{q}",
+                     page), "docs.awow.io posts with its own key, every other origin with the relay's"
+    assert re.search(r"new URLSearchParams\(\{[^}]*\bemail\b[^}]*\bwebsite\b[^}]*\}\)", page)
+
+
 def test_github_pages_is_a_full_width_self_contained_status_page(build):
     pages = build / "github-pages"
     page = (pages / "index.html").read_text()
@@ -747,9 +1070,10 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     assert {"charset": "utf-8"} in metas
     assert any(a.get("name") == "viewport" and "width=device-width" in a.get("content", "") for a in metas)
     csp = next(a["content"] for a in metas if a.get("http-equiv") == "Content-Security-Policy")
-    assert "default-src 'none'" in csp and f"connect-src https://{RELAY_HOST};" in csp
-    # Self-contained: no stylesheet, script, image or link pointing anywhere.
-    assert not [(t, a) for t, a in parsed.tags if "src" in a or "href" in a or t == "link"]
+    assert "default-src 'none'" in csp and f"connect-src https://{RELAY_HOST} https://newsletter.awow.io;" in csp
+    assert "form-action 'none'" in csp
+    # Self-contained: no stylesheet, script or image from anywhere, and links to GitHub and MayWe only.
+    _assert_links_and_invite_form(parsed, page, '"')
     style = re.sub(r"/\*.*?\*/", "", parsed.style, flags=re.DOTALL)
     page_rule = re.search(r"\.page\s*\{([^}]*)\}", style).group(1)
     assert re.search(r"(^|;)\s*width:\s*100%", page_rule)
@@ -760,10 +1084,12 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     assert "@media (prefers-color-scheme: dark)" in style and "color-scheme: light dark" in style
     assert f'const RELAY_HOST = "{RELAY_HOST}";' in page
     assert 'fetch(url, { headers: { Accept: "application/nostr+json" }' in page
-    for command in ("claude plugin marketplace add awowIO/nostr-mailbox",
+    assert "awowIO/nostr-mailbox" not in page, "the repository is awowIO/crosswire now"
+    for command in ("claude plugin marketplace add awowIO/crosswire",
                     "claude plugin install nostr-mailbox@nostr-mailbox",
-                    "codex plugin marketplace add awowIO/nostr-mailbox",
-                    "uv tool install git+https://github.com/awowIO/nostr-mailbox",
+                    "codex plugin marketplace add awowIO/crosswire",
+                    "codex plugin add nostr-mailbox@nostr-mailbox",
+                    "uv tool install git+https://github.com/awowIO/crosswire",
                     "nostr-mailbox join &lt;nm1_ token or invite link from your operator&gt;",
                     "nostr-mailbox relay check",
                     f"nostr-mailbox setup --relay wss://{RELAY_HOST} --campaign my-campaign --kubectl"):
@@ -774,6 +1100,7 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     invite = next(a for t, a in parsed.tags if a.get("id") == "invite")
     assert "hidden" in invite, "nothing about an invite shows without one"
     assert re.search(r"^  showInvite\(\);\n  checkRelay\(\);\n</script>", page, re.MULTILINE)
+    assert page.index('id="maywe-title"') < page.index('id="install-title"'), "02 before the install steps"
     assert 'history.replaceState(null, "", location.pathname + location.search);' in page
     assert (pages / ".nojekyll").exists()
     assert json.loads((pages / ".well-known" / "nostr.json").read_text()) == {"names": {}, "relays": {}}
@@ -982,9 +1309,22 @@ _TRAEFIK_CALL = re.compile(r"([A-Za-z]+)\(((?:\s*`[^`]*`\s*,?)*)\)")
 
 
 def traefik_admits(ingressroute: str, host: str, method: str, path: str, headers: dict[str, str]) -> bool:
-    """Evaluate the hydrated IngressRoute's match rules (Traefik v3 rule syntax)."""
-    rules = re.findall(r"- match: '(.*)'", ingressroute)
-    assert len(rules) == 3
+    """Whether the relay-only IngressRoute (three rules) routes the request at all."""
+    assert len(re.findall(r"- match: '(.*)'", ingressroute)) == 3
+    return traefik_service(ingressroute, host, method, path, headers) is not None
+
+
+_TRAEFIK_ROUTE = re.compile(r"- match: '(.*)'\n\s+kind: Rule\n\s+priority: (\d+)\n"
+                            r"\s+services: \[\{ name: (\S+), port: (\d+) \}\]")
+
+
+def traefik_service(ingressroute: str, host: str, method: str, path: str, headers: dict[str, str]) -> str | None:
+    """Evaluate the hydrated IngressRoute's match rules (Traefik v3 rule syntax): the
+    `name:port` of the service the request reaches, or None. Every route has the same
+    priority, so no two rules may match one request: the order Traefik would pick is
+    never what decides."""
+    routes = _TRAEFIK_ROUTE.findall(ingressroute)
+    assert len(routes) == len(re.findall(r"- match: ", ingressroute)) and len({r[1] for r in routes}) == 1
 
     def evaluate(rule: str) -> bool:
         tokens, at = [], 0
@@ -1012,6 +1352,9 @@ def traefik_admits(ingressroute: str, host: str, method: str, path: str, headers
                 return method == args[0]
             if name == "Header":
                 return _header(headers, args[0]) == args[1]
+            if name == "HeaderRegexp":                      # Go's RE2; (?i) and \+ mean the same in Python
+                value = _header(headers, args[0])
+                return value is not None and re.search(args[1], value) is not None
             if name == "PathRegexp":
                 return re.search(args[0], path) is not None
             raise AssertionError(f"this evaluator does not know the Traefik matcher {name!r}")
@@ -1044,7 +1387,9 @@ def traefik_admits(ingressroute: str, host: str, method: str, path: str, headers
         assert end == len(tokens)
         return value
 
-    return any(evaluate(rule) for rule in rules)
+    matched = [f"{name}:{port}" for rule, _, name, port in routes if evaluate(rule)]
+    assert len(matched) <= 1, f"two routes match {method} {path} {headers}: {matched}"
+    return matched[0] if matched else None
 
 
 @pytest.mark.parametrize("name, method, path, headers, host, admitted", PROBES, ids=[p[0] for p in PROBES])
@@ -1063,6 +1408,35 @@ def test_caddy_traefik_and_the_worker_admit_the_same_routes(build, worker, name,
     elif admitted == WORKER_ONLY:
         assert answer["upgrade"] is False, "the MCP and OAuth routes are never the wire"
         assert answer["status"] == WORKER_ONLY_STATUS.get((method, path), 401), answer
+
+
+def console_backend(method: str, path: str, headers: dict[str, str], admitted) -> str | None:
+    """Where the IngressRoute of a relay with the Web Console sends a probe of PROBES: the
+    split edgeRoute() in nostr.ts makes. The Worker's "page" is the console; the wire, NIP-11
+    (and its 400 for a list of types), uploads and blobs are the relay; the Worker's MCP and
+    OAuth routes reach nothing."""
+    if admitted is False:
+        return None
+    if admitted == WORKER_ONLY:
+        return f"{hydrate.CONSOLE_NAME}:{hydrate.CONSOLE_PORT}" if path in JOIN_PATHS else None
+    upgrade = method == "GET" and (_header(headers, "Upgrade") or "").lower() == "websocket"
+    nip11 = "application/nostr+json" in (_header(headers, "Accept") or "").lower()
+    if path == "/" and not upgrade and not nip11:
+        return f"{hydrate.CONSOLE_NAME}:{hydrate.CONSOLE_PORT}"
+    return "nostr-relay:5500"
+
+
+@pytest.mark.parametrize("name, method, path, headers, host, admitted", PROBES, ids=[p[0] for p in PROBES])
+def test_with_the_console_traefik_routes_a_browser_to_it_and_the_rest_as_before(console_ws, worker, name, method,
+                                                                                 path, headers, host, admitted):
+    host = host or RELAY_HOST
+    ingressroute = (console_build(console_ws) / "ingressroute.yaml").read_text().replace(PRIVATE["relay_host"], RELAY_HOST)
+    expected = console_backend(method, path, headers, admitted)
+    assert traefik_service(ingressroute, host, method, path, headers) == expected
+    if expected and expected.startswith(hydrate.CONSOLE_NAME):
+        # The Worker answers the same request with its console page: the two edges agree.
+        status, response_headers, _ = worker.http(method, path, headers=headers)
+        assert (status, response_headers["Content-Type"]) == (200, "text/html; charset=utf-8")
 
 
 def test_the_worker_admin_api_is_the_only_other_route_and_needs_the_token(worker):
@@ -1192,17 +1566,20 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     metas = [a for t, a in parsed.tags if t == "meta"]
     assert {"charset": "utf-8"} in metas
     assert any(a.get("name") == "viewport" and "width=device-width" in a.get("content", "") for a in metas)
-    # Self-contained: no stylesheet, script, image or link to anywhere, and no other site named.
-    assert not [(t, a) for t, a in parsed.tags if "src" in a or "href" in a or t == "link"]
-    assert "http://" not in page and "https://" not in page
-    # The CSP admits this script and this style, by hash, and connects to this relay only.
+    # Self-contained: no stylesheet, script or image from anywhere, links to GitHub and MayWe only,
+    # and no other site named.
+    _assert_links_and_invite_form(parsed, page, "'")
+    assert "http://" not in page
+    assert set(re.findall(r"https://[^\s'\"<>]+", page)) == {SOURCE_URL, MAYWE_URL, SUBSCRIBE_URL, DOCS_ORIGIN}
+    # The CSP admits this script and this style, by hash, and connects to this relay and MayWe only.
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
     style = re.search(r"<style>(.*?)</style>", page, re.DOTALL).group(1)
     policy = dict(part.strip().split(" ", 1) for part in headers["Content-Security-Policy"].split(";"))
     digest = lambda text: "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
     assert policy["default-src"] == "'none'" and policy["frame-ancestors"] == "'none'"
     assert policy["script-src"] == digest(script) and policy["style-src"] == digest(style)
-    assert policy["connect-src"] == f"'self' wss://{RELAY_HOST}"
+    assert policy["connect-src"] == f"'self' wss://{RELAY_HOST} https://newsletter.awow.io"
+    assert policy["form-action"] == "'none'"
     assert headers["X-Content-Type-Options"] == "nosniff" and headers["Referrer-Policy"] == "no-referrer"
     # The script parses: the same engine family as the browsers that run it.
     (tmp_path / "console.js").write_text(script)
@@ -1213,7 +1590,8 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
                    "publish(9007, [['h', id]]", "kinds: [9021], '#h': [id]", "kinds: [1059, 4410, 4411], '#p'",
                    "'wss://' + location.host", "window.nostr",
                    "history.replaceState(null, '', location.pathname + location.search);",
-                   "if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;"):
+                   "if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;",
+                   "$('maywe-form').addEventListener('submit', action(requestMayweInvite));"):
         assert needle in script, needle
     assert "innerHTML" not in script, "what the relay sends is text, never markup"
     # Full width, light and dark, like the GitHub Pages page.
@@ -1226,6 +1604,8 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     # The header names this relay and the key signed in, and the Mint button is in the controls bar.
     for needle in ('id="relay-url"', 'id="persona-npub"', 'id="theme"', 'id="room"', 'id="mint"', 'id="join-code"'):
         assert needle in page, needle
+    assert page.index('id="maywe-card"') < page.index('id="pair-card"'), "the ways in before pairing"
+    assert page.index('id="join-code"') < page.index('id="maywe-card"'), "redeeming is part of 01"
     assert "$('relay-url').textContent = RELAY_URL;" in script
     status, headers, body = worker.http("HEAD", "/", headers={"Accept": "text/html"})
     assert (status, headers["Content-Type"], body) == (200, "text/html; charset=utf-8", b"")
@@ -1364,6 +1744,14 @@ def test_both_pages_share_one_design_system(worker, build):
         assert "font-variant-numeric: tabular-nums" in style
         top = re.search(r"\.top\s*\{([^}]*)\}", style).group(1)
         assert "height: 61px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
+        assert "position: sticky; top: 0; z-index: 10;" in top, "the header stays while the page scrolls"
+        # A narrow screen never scrolls sideways: the right side keeps its width, the wordmark
+        # gives way, and below 760px the repository's name and the long fields drop out.
+        assert "flex: 0 0 auto;" in re.search(r"\.header-right\s*\{([^}]*)\}", style).group(1)
+        assert re.search(r"\.wordmark\s*\{[^}]*flex: 1 1 auto;[^}]*min-width: 0;[^}]*text-overflow: ellipsis",
+                         style)
+        narrow = style[style.index("@media (width <= 760px)"):]
+        assert re.search(r"[^{}]*\.hdr-repo[^{}]*\{ display: none; \}", narrow)
         assert '<button id="theme" type="button" aria-label="Switch color theme">◐</button>' in page
         assert '<span class="mark" aria-hidden="true">⨉</span>' in page
         assert re.search(r"""THEME_KEY = ['"]nostr-relay-deploy/theme['"];""", script)
@@ -1851,14 +2239,13 @@ class NcliRelay:
             time.sleep(0.1)
 
 
-@pytest.fixture(scope="session")
-def ncli_relay(build):
+def booted_ncli(relay_yaml: str):
+    """The pinned ncli relay on `relay_yaml`, serving on a loopback port, removed afterwards."""
     problem = docker_problem()
     if problem is not None:
         pytest.skip(problem)
     name = f"nostr-relay-deploy-test-{os.urandom(4).hex()}"
-    env = ncli_env((build / "compose" / "relay.yaml").read_text())
-    started = subprocess.run(ncli_argv("-d", "--name", name, "-p", "127.0.0.1::5500"), env=env,
+    started = subprocess.run(ncli_argv("-d", "--name", name, "-p", "127.0.0.1::5500"), env=ncli_env(relay_yaml),
                              capture_output=True, text=True, check=False)
     if started.returncode != 0:
         pytest.fail(f"docker run of the pinned ncli image failed:\n{started.stderr}")
@@ -1870,6 +2257,20 @@ def ncli_relay(build):
         yield relay
     finally:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+
+
+@pytest.fixture(scope="session")
+def ncli_relay(build):
+    yield from booted_ncli((build / "compose" / "relay.yaml").read_text())
+
+
+@pytest.fixture
+def limited_ncli_relay(tmp_path):
+    """The pinned ncli relay hydrated with events_per_minute = 3."""
+    data = example_dict()
+    data["events_per_minute"] = 3
+    (tmp_path / "relay.local.toml").write_text(dump_toml(data))
+    yield from booted_ncli(hydrate.compose_files(hydrate.load_config(tmp_path / "relay.local.toml"))["relay.yaml"])
 
 
 @pytest.fixture(params=["worker", "ncli"])
@@ -2187,6 +2588,19 @@ def test_minting_invites_spends_the_key_rate_limit(limited_worker):
     for _ in range(3):
         a.invite()
     assert a.refusal({"kinds": [28935], "limit": 1}) == "rate-limited: at most 3 events and invites a minute per key"
+
+
+def test_minting_invites_spends_the_key_read_budget_on_ncli(limited_ncli_relay, build):
+    """The pinned ncli answers a member's mint (REQ kind 28935) from limits.reads: with
+    events_per_minute codes a minute per key, as the Worker caps it, and another key mints on."""
+    [(_alice, a), (_bob, b)] = enrolled(limited_ncli_relay, 2)
+    for _ in range(3):
+        a.invite()
+    refused = a.refusal({"kinds": [28935], "limit": 1})
+    assert refused.startswith("rate-limited"), refused
+    assert b.invite()["kind"] == 28935, "the budget is per key"
+    settings = relay_settings((build / "compose" / "relay.yaml").read_text())
+    assert settings["limits.reads.perPubkey"] == settings["limits.events.perPubkey"] == "{events: 60, per: 1m, burst: 60}"
 
 
 # ============================================================= the remote MCP server
@@ -3064,6 +3478,170 @@ def test_the_console_pairs_a_coding_agent_with_urls_the_worker_serves(worker, tm
     assert "?token=" not in script and "/mcp/s/' + token + '/openapi.json'" in script
     ids = set(re.findall(r'\bid="([^"]+)"', page))
     assert set(re.findall(r"\$\('([^']+)'\)", script)) <= ids, "every element the script reaches is on the page"
+
+
+# A page's whole script, run under Node against a stand-in DOM: elements by id that record
+# text, values and `hidden`, a location and history, localStorage, and a fetch that answers
+# from the scenario and records every request. It is a test double, said openly: no browser
+# lays the page out or enforces its CSP here. What it shows is what the script itself
+# sends, and when, from the page's own markup (which ids start hidden).
+PAGE_RUNNER = r"""
+const fs = require('node:fs');
+const vm = require('node:vm');
+const [scriptPath, scenarioPath] = process.argv.slice(2);
+const scenario = JSON.parse(fs.readFileSync(scenarioPath, 'utf8'));
+const elements = new Map(), requests = [], snapshots = {};
+function element(id) {
+  if (!elements.has(id)) {
+    const node = { id: id, textContent: '', value: '', className: '', checked: false, dataset: {}, type: 'button',
+      hidden: scenario.hidden.includes(id), listeners: {}, parentElement: { className: '' },
+      addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
+      setAttribute() {}, appendChild() {}, prepend() {}, reset() {} };
+    elements.set(id, node);
+  }
+  return elements.get(id);
+}
+let fresh = 0;
+const sandbox = {
+  document: { getElementById: element, querySelectorAll: () => [], createElement: () => element('#new' + (++fresh)),
+              createTextNode: () => ({}), documentElement: { dataset: {} }, title: '' },
+  location: { hash: scenario.hash, host: scenario.host, origin: 'https://' + scenario.host, pathname: '/join/', search: '' },
+  history: { replaceState(_state, _title, url) { requests.push({ replaceState: url }); } },
+  localStorage: { getItem: () => null, setItem() {}, removeItem() {}, length: 0, key: () => null },
+  matchMedia: () => ({ matches: false }),
+  navigator: {}, console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
+  atob, btoa, setTimeout, Promise, JSON, Uint8Array, Array, Object, Map, Error, String, Math, Date,
+  fetch: async (url, init) => {
+    init = init || {};
+    requests.push({ url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body || null });
+    const queue = scenario.replies[String(url)] || [];
+    const reply = queue.length ? queue.shift() : { status: 200, body: JSON.stringify({ name: 'test relay', limitation: {} }) };
+    return { ok: reply.status >= 200 && reply.status < 300, status: reply.status,
+             json: async () => JSON.parse(reply.body), text: async () => reply.body };
+  },
+};
+sandbox.window = sandbox;
+vm.createContext(sandbox);
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+(async () => {
+  vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), sandbox);
+  await settle();
+  for (const [verb, id, value] of scenario.steps) {
+    if (verb === 'set') element(id).value = value;
+    if (verb === 'submit') for (const fn of element(id).listeners.submit || []) fn({ preventDefault() {} });
+    if (verb === 'mark') requests.push({ mark: id });
+    await settle();
+  }
+  const seen = {};
+  for (const [id, node] of elements) if (!id.startsWith('#new')) seen[id] = { text: node.textContent, value: node.value, hidden: node.hidden, className: node.className };
+  console.log(JSON.stringify({ requests: requests, elements: seen }));
+})().catch((err) => { console.error(err); process.exit(1); });
+"""
+
+
+def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = None,
+             replies: dict | None = None) -> dict:
+    """Run `page`'s script under PAGE_RUNNER: what it requested, and its elements after."""
+    script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
+    hidden = sorted({a["id"] for _, a in _parsed(page).tags if "hidden" in a and "id" in a})
+    (tmp_path / "page.js").write_text(script)
+    (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
+    (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
+                                                        "steps": steps or [], "replies": replies or {}}))
+    done = subprocess.run(["node", str(tmp_path / "runner.cjs"), str(tmp_path / "page.js"),
+                           str(tmp_path / "scenario.json")], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def bearers(requests: list[dict]) -> list[dict]:
+    return [r for r in requests if "url" in r and any(k.lower() == "authorization" for k in r["headers"])]
+
+
+def test_an_invite_link_opens_the_console_and_sends_its_token_nowhere(worker, console_ws, tmp_path):
+    """The token an invite link carries holds a room's key. Opening the link, on the Worker's
+    console and on the Kubernetes build of it, shows the invite and fills its code in, and
+    sends the token to no one: the relay hears of it only when the visitor submits the
+    Pair card's form, and then in a header, to this relay's /openapi.json."""
+    code = hashlib.sha256(b"a code the console reads").hexdigest()
+    token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="agents",
+                         operator_pubkeys=[NIP19_NPUB], campaign_key="cd" * 32, code=code)
+    served = worker.http("GET", "/join/")[2].decode()
+    opened = run_page(tmp_path, served, hash=f"#{token}", steps=[["mark", "submit"], ["submit", "pair-form"]],
+                      replies={"/openapi.json": [{"status": 200, "body": "{}"}]})
+    requests, seen = opened["requests"], opened["elements"]
+    assert requests[0] == {"replaceState": "/join/"}, "the fragment leaves the address bar first"
+    before = requests[:requests.index({"mark": "submit"})]
+    assert bearers(before) == [] and [r["url"] for r in before if "url" in r] == ["/"], "only NIP-11 at boot"
+    assert seen["join-code"]["value"] == code and seen["link-card"]["hidden"] is False
+    assert seen["pair-mcp"]["text"] == f"https://{RELAY_HOST}/mcp/s/{token}", "the URLs are built in the page"
+    assert bearers(requests) == [{"url": "/openapi.json", "method": "GET", "body": None,
+                                  "headers": {"Authorization": f"Bearer {token}"}}]
+    assert seen["pair-status"]["text"] == "This relay honours the token."
+
+    k8s = (console_build(console_ws) / "console" / "index.html").read_text()
+    opened = run_page(tmp_path, k8s, hash=f"#{token}")
+    assert bearers(opened["requests"]) == [] and opened["elements"]["pair-card"]["hidden"] is True
+    assert opened["elements"].get("pair-mcp", {"text": ""})["text"] == "", "no MCP URL where no MCP server is"
+    assert opened["elements"]["join-code"]["value"] == code
+
+
+def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp_path):
+    code = hashlib.sha256(b"a pasted code").hexdigest()
+    token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="agents",
+                         operator_pubkeys=[NIP19_NPUB], code=code, member="boaz")
+    for given in (f"https://{RELAY_HOST}/join/#{token}", token, f"#join={token}"):
+        seen = run_page(tmp_path, worker.http("GET", "/")[2].decode(),
+                        steps=[["set", "open-token", given], ["submit", "open-form"]])
+        assert bearers(seen["requests"]) == []
+        els = seen["elements"]
+        assert els["open-token"]["value"] == "", "the pasted token does not linger in the field"
+        assert (els["link-card"]["hidden"], els["join-code"]["value"]) == (False, code), given
+        assert els["link-about"]["text"] == "An invite to campaign agents on this relay, for boaz."
+        assert els["link-command"]["text"] == f"nostr-mailbox join {token}"
+    seen = run_page(tmp_path, worker.http("GET", "/")[2].decode(),
+                    steps=[["set", "open-token", code], ["submit", "open-form"]])
+    assert seen["elements"]["join-code"]["value"] == code, "a bare relay code fills the Redeem field"
+    pages = (build / "github-pages" / "index.html").read_text()
+    seen = run_page(tmp_path, pages, steps=[["set", "open-token", f"https://{RELAY_HOST}/join/#{token}"],
+                                            ["submit", "open-form"]])
+    els = seen["elements"]
+    assert (els["invite"]["hidden"], els["invite-join"]["hidden"]) == (False, False)
+    assert els["invite-command"]["text"] == f"nostr-mailbox join {token}" and els["open-token"]["value"] == ""
+    assert [r["url"] for r in seen["requests"] if "url" in r] == [f"https://{RELAY_HOST}/"], "NIP-11 only"
+
+
+MAYWE_ANSWERS = [
+    (200, {"ok": True, "status": "pending"}, "good", "Request received. Check your inbox to confirm your place on the waitlist."),
+    (200, {"ok": False, "status": "paused"}, "bad", "Invite requests are temporarily paused; please try again shortly."),
+    (401, {"detail": "unknown key, or this key is not valid for this origin"}, "bad",
+     "MayWe refused the request (HTTP 401): unknown key, or this key is not valid for this origin"),
+    (422, {"detail": [{"msg": "value is not a valid email address"}]}, "bad",
+     "MayWe refused the request (HTTP 422): value is not a valid email address"),
+]
+
+
+@pytest.mark.parametrize("status, answer, cls, said", MAYWE_ANSWERS, ids=["pending", "paused", "401", "422"])
+def test_both_pages_say_what_maywe_answered_beside_the_email_field(worker, build, tmp_path, status, answer, cls, said):
+    """MayWe's subscribe answers {ok, status}, ok false with 'paused' while the list takes
+    no requests (newsletter app/routes/subscribe.py); 'pending' is also its answer where it
+    sends no new mail, so success promises none. Both pages carry one answer reader."""
+    console, pages = worker.http("GET", "/")[2].decode(), (build / "github-pages" / "index.html").read_text()
+    block = re.compile(r"^  // BEGIN MayWe answer\n.*?^  // END MayWe answer\n", re.DOTALL | re.MULTILINE)
+    assert block.search(console).group(0) == block.search(pages).group(0), "one reader on both pages"
+    steps = [["set", "maywe-email", "someone@example.org"], ["set", "maywe-note", "Claude Code"],
+             ["submit", "maywe-form"]]
+    replies = {SUBSCRIBE_URL: [{"status": status, "body": json.dumps(answer)}]}
+    for page in (console, pages):
+        seen = run_page(tmp_path, page, steps=steps, replies=replies)
+        posted = [r for r in seen["requests"] if r.get("url") == SUBSCRIBE_URL]
+        assert len(posted) == 1 and posted[0]["method"] == "POST"
+        form = urllib.parse.parse_qs(posted[0]["body"])
+        assert (form["email"], form["source"], form["details"]) == (
+            ["someone@example.org"], ["crosswire:invite-request"], ['{"use_case":"Claude Code"}'])
+        status_line = seen["elements"]["maywe-status"]
+        assert (status_line["text"], status_line["className"]) == (said, f"note {cls}")
+        assert (seen["elements"]["maywe-email"]["value"] == "") == (cls == "good"), "kept for a retry on failure"
 
 
 def console_block(script: str, name: str) -> str:

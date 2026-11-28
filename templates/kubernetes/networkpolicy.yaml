@@ -12,3 +12,13 @@ spec:
           {{ traefik_from_pod_selector_block }}
       ports: [{ protocol: TCP, port: 5500 }]
   egress: []
+---
+# Every pod of this namespace, including any added later, starts with no ingress and no
+# egress. Policies add up: the relay's (above) and the console's (console.yaml) are the
+# only doors.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: {{ statefulset_name }}-default-deny, namespace: {{ namespace }} }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

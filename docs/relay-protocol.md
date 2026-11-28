@@ -8,7 +8,7 @@
 | GET or HEAD | `/` | NIP-11 with `Accept: application/nostr+json`, otherwise the homepage |
 | PUT | `/upload` or `/media/upload` | Signed Blossom upload |
 | GET or HEAD | `/<sha256>` or `/media/<sha256>` | Signed Blossom download, optionally with a file extension |
-| GET or HEAD | `/join` or `/join/` | Cloudflare invite console |
+| GET or HEAD | `/join` or `/join/` | Invite console: Cloudflare, and Kubernetes with `web_console = true` |
 | POST, GET or DELETE | `/mcp` | Cloudflare remote MCP server, with an `nm1_…` token or an OAuth access token |
 | GET | `/openapi.json` | Cloudflare OpenAPI 3.1 document of the MCP tools, with a token |
 | POST | `/tools/<tool>` | Cloudflare tool call as plain JSON, with a token |
@@ -32,7 +32,10 @@ Accept list that mixes it with other media types.
 ## What a member can do
 
 - **Invite one key.** A member requests kind 28935 with a limit of one. The relay
-  returns a signed ephemeral claim, sends EOSE and closes the subscription. Redeeming
+  returns a signed ephemeral claim, sends EOSE and closes the subscription. Each request
+  spends the key's read budget (`limits.reads`, `events_per_minute` a minute), so one
+  member mints at most that many codes a minute; the Worker charges events and invites
+  to one budget of the same size. Redeeming
   the code uses kind 28934. The default is one use within seven days. Each Worker
   claim counts against the member's event rate limit. Removing a member leaves their
   outstanding invites valid until they expire or an operator revokes them.
@@ -86,9 +89,19 @@ a relay invite for its own host and waits for the member to redeem it. Topic inv
 need the CLI, or the Worker's remote MCP server, to hold the channel keys. Invites
 naming a different relay stay unused.
 
-On Compose and Kubernetes, the pinned ncli release serves homepage HTML at the root.
-Its script and stylesheet paths under `/_home/assets/` fall outside the edge filters.
-A browser receives 404 on the join paths. Use the CLI for invite links on these targets.
+The console opens with two cards: **01 · Already invited** takes a pasted invite
+link, `nm1_…` token or bare code and previews it as a clicked link is, and **02 ·
+Request an invite** puts an email address on the waitlist through MayWe. Neither
+sends a token anywhere. The console sends a token to the relay only when the visitor
+submits the **Pair a coding agent** card, in an `Authorization` header to
+`/openapi.json`; opening an invite link and minting one build the URLs in the page.
+
+On Kubernetes with `web_console = true`, the same console, without its MCP and OAuth
+controls, answers a browser at the root and both join paths, beside the relay. On
+Compose, and on Kubernetes without it, the pinned ncli release serves homepage HTML at
+the root. Its script and stylesheet paths under `/_home/assets/` fall outside the edge
+filters. A browser receives 404 on the join paths. Use the CLI for invite links on these
+targets.
 
 ## Connect a hosted assistant without pasting a token
 

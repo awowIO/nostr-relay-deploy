@@ -61,6 +61,11 @@ limits:
     # Per key: events_per_minute from relay.local.toml, with a burst of the same size.
     # It caps one runaway or hostile key; it is not sized to hold the whole fleet back.
     perPubkey: {events: {{ events_per_minute }}, per: 1m, burst: {{ events_per_minute }}}
+  reads:
+    # Per key, the same budget for REQs. A member mints an invite with a REQ (kind 28935,
+    # above), so this is also what caps one member's minting: events_per_minute codes a
+    # minute, shared with that key's reads. The Worker charges both to one budget.
+    perPubkey: {events: {{ events_per_minute }}, per: 1m, burst: {{ events_per_minute }}}
 
 # Blossom on the relay's own origin: blobs for fixtures, patches, wave artifacts and seal
 # manifests, so a campaign needs no second server. Downloads are members-only too,

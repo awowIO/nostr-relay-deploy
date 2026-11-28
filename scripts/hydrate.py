@@ -7,6 +7,7 @@
     python3 scripts/hydrate.py --check-clean                  nothing private in what Git would publish
     python3 scripts/hydrate.py --target kubernetes --apply    namespace, signing Secret, apply -k
     python3 scripts/hydrate.py --target kubernetes --verify   rollout state + NIP-11 at https://<relay_host>/
+                                                              (and the Web Console, with web_console = true)
 
 Targets: kubernetes, compose, cloudflare, github-pages (or all). Output goes to
 .build/<target>/ or .build/<profile>/<target>/. Both .build/ and *.local.toml are
@@ -18,6 +19,7 @@ import argparse
 import base64
 import binascii
 import datetime
+import hashlib
 import html
 import json
 import re
@@ -52,6 +54,18 @@ STATEFULSET_NAME = "nostr-relay"
 APP_LABEL = "nostr-relay"
 SIGNING_SECRET = "nostr-relay-signing"
 CONFIGMAP_NAME = "nostr-relay-config"
+
+# The Web Console on Kubernetes (`kubernetes.web_console = true`): the Cloudflare Worker's
+# own page, rendered from console.ts at hydration and served by a static web server of its
+# own beside the relay. Pinned by digest: the unprivileged stable nginx build, UID 101.
+CONSOLE_IMAGE = ("docker.io/nginxinc/nginx-unprivileged:1.30.6-alpine-slim"
+                 "@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6")
+CONSOLE_NAME = "nostr-relay-console"       # Deployment, Service, label and ConfigMap
+CONSOLE_PORT = 8080
+CONSOLE_SOURCE = TEMPLATES / "cloudflare" / "src" / "console.ts"
+# Where the console's page talks besides its own origin: MayWe's subscribe endpoint, for the
+# invite-request form. The Worker's consolePage sends the same connect-src.
+MAYWE_ORIGIN = "https://newsletter.awow.io"
 
 
 class HydrateError(Exception):
@@ -363,6 +377,7 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "traefik_namespace": Field(dns_label, identifying=True),
         "traefik_pod_selector": Field(optional(label_selector), identifying=True),
         "traefik_egress_network_policy": Field(boolean),
+        "web_console": Field(boolean),
         "kubeconfig": Field(optional(path_text), identifying=True),
         "context": Field(optional(path_text), identifying=True),
     },
@@ -498,13 +513,109 @@ affinity:
 """
 
 
+_CONSOLE_PART = re.compile(r"^(?:export )?const ([A-Z_]+) = String\.raw`(.*?)`;$", re.DOTALL | re.MULTILINE)
+_CONSOLE_PARTS = ("CONSOLE_STYLE", "BODY", "CONSOLE_SCRIPT")
+# What the console's BODY marks as the Worker's alone (its remote MCP server and OAuth sign-in):
+# a Kubernetes build hides it, since the pinned ncli serves no such endpoint.
+WORKER_ONLY_MARK = 'data-edge="worker"'
+
+
+def console_parts() -> dict[str, str]:
+    """The console's style, body and script, read from console.ts. They are String.raw
+    literals without interpolation, so the text between the backticks is what the Worker
+    serves, byte for byte."""
+    source = CONSOLE_SOURCE.read_text(encoding="utf-8")
+    parts = {m.group(1): m.group(2) for m in _CONSOLE_PART.finditer(source)}
+    missing = [name for name in _CONSOLE_PARTS if name not in parts]
+    if missing:
+        raise HydrateError(f"{_shown(CONSOLE_SOURCE)} no longer defines {', '.join(missing)} as a "
+                           "String.raw literal, which the Kubernetes console is rendered from")
+    for name in _CONSOLE_PARTS:
+        if "${" in parts[name]:
+            raise HydrateError(f"{name} in {_shown(CONSOLE_SOURCE)} interpolates with ${{…}}; the "
+                               "Kubernetes console renders it as plain text")
+    return {name: parts[name] for name in _CONSOLE_PARTS}
+
+
+def console_html(parts: dict[str, str], *, hosted_mcp: bool) -> str:
+    """The page consoleHtml() in console.ts builds. Without the Worker's MCP server
+    (`hosted_mcp` false), what BODY marks as the Worker's alone is hidden."""
+    body = parts["BODY"] if hosted_mcp else parts["BODY"].replace(WORKER_ONLY_MARK, f"{WORKER_ONLY_MARK} hidden")
+    return ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            '<meta name="color-scheme" content="light dark">\n'
+            '<meta name="referrer" content="no-referrer">\n<title>Relay console</title>\n'
+            f'<style>{parts["CONSOLE_STYLE"]}</style>\n</head>\n<body>{body}'
+            f'<script>{parts["CONSOLE_SCRIPT"]}</script>\n</body>\n</html>\n')
+
+
+def _sha256_source(text: str) -> str:
+    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
+
+
+def console_policy(parts: dict[str, str], relay_host: str) -> str:
+    """The Content-Security-Policy consolePage() in worker.ts sends with the page."""
+    return "; ".join([
+        "default-src 'none'",
+        f"script-src {_sha256_source(parts['CONSOLE_SCRIPT'])}",
+        f"style-src {_sha256_source(parts['CONSOLE_STYLE'])}",
+        f"connect-src 'self' wss://{relay_host} {MAYWE_ORIGIN}",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    ])
+
+
+# `GET`/`HEAD /` on the IngressRoute. With the relay alone behind it, one route: ncli tells a
+# WebSocket, a NIP-11 client and a browser apart. With the Web Console beside it, the split
+# edgeRoute() in nostr.ts makes: a WebSocket upgrade and any Accept naming NIP-11's type
+# (ncli answers a list of types 400, as the Worker does) reach the relay; a browser at `/`,
+# `/join` or `/join/` reaches the console. The two rules exclude each other, so their equal
+# priority never decides anything.
+_UPGRADE = "HeaderRegexp(`Upgrade`, `(?i)^websocket$`)"
+_NIP11 = "HeaderRegexp(`Accept`, `(?i)application/nostr\\+json`)"
+_ROOT_ROUTE = """\
+- match: 'Host(`{host}`) && Path(`/`) && (Method(`GET`) || Method(`HEAD`))'
+  kind: Rule
+  priority: {priority}
+  services: [{{ name: {relay}, port: 5500 }}]"""
+_ROOT_ROUTES_WITH_CONSOLE = f"""\
+- match: 'Host(`{{host}}`) && Path(`/`) && ((Method(`GET`) && {_UPGRADE}) || ((Method(`GET`) || Method(`HEAD`)) && {_NIP11}))'
+  kind: Rule
+  priority: {{priority}}
+  services: [{{{{ name: {{relay}}, port: 5500 }}}}]
+- match: 'Host(`{{host}}`) && (Method(`GET`) || Method(`HEAD`)) && ((Path(`/`) && !(Method(`GET`) && {_UPGRADE}) && !{_NIP11}) || Path(`/join`) || Path(`/join/`))'
+  kind: Rule
+  priority: {{priority}}
+  services: [{{{{ name: {{console}}, port: {{port}} }}}}]"""
+
+# The Traefik egress policy's second door, to the console, when there is one.
+_TRAEFIK_TO_CONSOLE = """\
+- to:
+    - namespaceSelector: {{ matchLabels: {{ kubernetes.io/metadata.name: {namespace} }} }}
+      podSelector: {{ matchLabels: {{ app: {console} }} }}
+  ports: [{{ protocol: TCP, port: {port} }}]"""
+
+_CONSOLE_GENERATOR = """\
+- name: {console}
+  namespace: {namespace}
+  files:
+    - index.html=console/index.html
+    - nginx.conf=console/nginx.conf"""
+
+
 def kubernetes_files(cfg: Config) -> dict[str, str]:
     k8s = cfg["kubernetes"]
     selector = k8s["traefik_pod_selector"]
+    console = k8s["web_console"]
     resources = ["namespace.yaml", "statefulset.yaml", "service.yaml", "ingressroute.yaml",
                  "networkpolicy.yaml"]
+    if console:
+        resources.append("console.yaml")
     if k8s["traefik_egress_network_policy"]:
         resources.append("traefik-networkpolicy.yaml")
+    routes = _ROOT_ROUTES_WITH_CONSOLE if console else _ROOT_ROUTE
+    names = {"namespace": k8s["namespace"], "console": CONSOLE_NAME, "port": CONSOLE_PORT}
     values = {
         **common_values(cfg),
         "namespace": k8s["namespace"],
@@ -526,11 +637,24 @@ def kubernetes_files(cfg: Config) -> dict[str, str]:
             f"podSelector: {{ matchLabels: {{ {_flow_labels(selector)} }} }}" if selector else "",
         "traefik_pod_selector_flow": f"{{ matchLabels: {{ {_flow_labels(selector)} }} }}" if selector else "{}",
         "resources_block": "\n".join(f"- {name}" for name in resources),
+        "root_routes_block": routes.format(host=cfg["relay"]["relay_host"], priority=k8s["ingress_priority"],
+                                           relay=STATEFULSET_NAME, console=CONSOLE_NAME, port=CONSOLE_PORT),
+        "traefik_to_console_block": _TRAEFIK_TO_CONSOLE.format(**names) if console else "",
+        "console_generator_block": _CONSOLE_GENERATOR.format(**names) if console else "",
+        "console_name": CONSOLE_NAME,
+        "console_image": CONSOLE_IMAGE,
+        "console_port": str(CONSOLE_PORT),
     }
-    names = [*resources, "kustomization.yaml"]
     files = {name: render(_template("kubernetes", name), values, source=f"kubernetes/{name}")
-             for name in names}
+             for name in [*resources, "kustomization.yaml"]}
     files["relay.yaml"] = render(_template("shared", "relay.yaml"), values, source="shared/relay.yaml")
+    if console:
+        parts = console_parts()
+        files["console/index.html"] = console_html(parts, hosted_mcp=False)
+        files["console/nginx.conf"] = render(
+            _template("kubernetes", "console-nginx.conf"),
+            {"console_policy": console_policy(parts, cfg["relay"]["relay_host"]), "console_port": str(CONSOLE_PORT)},
+            source="kubernetes/console-nginx.conf")
     return files
 
 
@@ -956,6 +1080,24 @@ def verify_rollout(cfg: Config) -> None:
         print(f"rollout PENDING: {STATEFULSET_NAME}-0 runs revision {running}, the applied one is "
               f"{wanted}. When a restart suits the members (it drops every socket once): "
               f"kubectl -n {ns} delete pod {STATEFULSET_NAME}-0")
+    if cfg["kubernetes"]["web_console"]:
+        verify_console_rollout(k, ns)
+
+
+def verify_console_rollout(k: list[str], ns: str) -> None:
+    """The console's Deployment: an available replica, and whether the applied revision has
+    reached all of them. A RollingUpdate replaces its pods by itself; nothing to delete."""
+    dep = json.loads(run_kubectl([*k, "-n", ns, "get", "deployment", CONSOLE_NAME, "-o", "json"]))
+    status, wanted = dep.get("status", {}), dep.get("spec", {}).get("replicas", 1)
+    available, updated = status.get("availableReplicas", 0), status.get("updatedReplicas", 0)
+    if available < 1:
+        raise VerifyError(f"deployment/{CONSOLE_NAME} in {ns} has no available replica: "
+                          f"kubectl -n {ns} describe deployment {CONSOLE_NAME}")
+    if status.get("observedGeneration") == dep.get("metadata", {}).get("generation") and updated >= wanted:
+        print(f"console: deployment/{CONSOLE_NAME} serves the applied revision ({available}/{wanted} available)")
+    else:
+        print(f"console rollout IN PROGRESS: deployment/{CONSOLE_NAME} has {updated}/{wanted} replicas on the "
+              f"applied revision and {available} available: kubectl -n {ns} rollout status deployment/{CONSOLE_NAME}")
 
 
 def verify_nip11(cfg: Config, url: str | None = None) -> dict[str, Any]:
@@ -995,6 +1137,44 @@ def verify_nip11(cfg: Config, url: str | None = None) -> dict[str, Any]:
         print("verify: note: no Access-Control-Allow-Origin header; the GitHub Pages status page "
               "cannot read this document from a browser")
     return summary
+
+
+_CONSOLE_MARK = b'<span id="relay-name">Relay console</span>'
+
+
+def verify_console(cfg: Config, origin: str | None = None) -> None:
+    """A browser at `/` and at `/join/` gets the Web Console, under a policy that admits its
+    own script and style: the page a ConfigMap carries and the hashes nginx sends agree."""
+    origin = origin or f"https://{cfg['relay']['relay_host']}"
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    failures, pages = [], {}
+    for path in ("/", "/join/"):
+        url = origin + path
+        request = urllib.request.Request(url, headers={"Accept": "text/html"})
+        try:
+            with opener.open(request) as response:
+                body, headers = response.read(), response.headers
+        except urllib.error.HTTPError as exc:
+            raise VerifyError(f"{url} answered a browser with HTTP {exc.code}, not the Web Console") from exc
+        except urllib.error.URLError as exc:
+            raise VerifyError(f"cannot reach {url}: {exc.reason}") from exc
+        pages[path] = body
+        if not (headers.get("Content-Type") or "").startswith("text/html") or _CONSOLE_MARK not in body:
+            failures.append(f"{url} is not the Web Console (Content-Type {headers.get('Content-Type')!r})")
+            continue
+        page = body.decode("utf-8")
+        policy = headers.get("Content-Security-Policy") or ""
+        for tag, directive in (("script", "script-src"), ("style", "style-src")):
+            inline = re.search(rf"<{tag}>(.*?)</{tag}>", page, re.DOTALL)
+            wanted = f"{directive} {_sha256_source(inline.group(1))}" if inline else None
+            if wanted is None or wanted not in policy:
+                failures.append(f"{url}: its Content-Security-Policy does not admit the page's own {tag} "
+                                f"(the browser would block it): {policy!r}")
+    if not failures and pages["/"] != pages["/join/"]:
+        failures.append(f"{origin}/join/ is not the same page as {origin}/")
+    if failures:
+        raise VerifyError("the Web Console does not answer as configured:\n  - " + "\n  - ".join(failures))
+    print(f"verify: OK the Web Console at {origin}/ and {origin}/join/")
 
 
 # ================================================================================ main
@@ -1048,6 +1228,9 @@ def main(argv: list[str] | None = None) -> int:
                 if args.target == "kubernetes" and not args.verify_url:
                     verify_rollout(cfg)
                 verify_nip11(cfg, args.verify_url)
+                # A --verify-url is the relay itself (a port-forward, say), where no console is.
+                if cfg["kubernetes"]["web_console"] and not args.verify_url:
+                    verify_console(cfg)
         if args.check_clean:
             status = check_clean(config_path, args.forbid)
         return status

@@ -22,8 +22,19 @@
 // server (mcp.ts, oauth.ts) without a token pasted into its settings: the OAuth URL,
 // /mcp, whose consent page fills the token in from this browser when the user asked the
 // card to remember it; the magic URLs /mcp/s/<token> and /mcp/s/<token>/openapi.json; and
-// the join link /join/#<token> that nostr-mailbox's CLI redeems. It asks the relay whether
-// it honours the token in an Authorization header, never in a URL.
+// the join link /join/#<token> that nostr-mailbox's CLI redeems. It builds them in the
+// page. Only when the visitor submits the card's form does it ask the relay whether it
+// honours the token, in an Authorization header, never in a URL: a token carries a room's
+// key, so the page never sends one on its own, not when an invite link opens it and not
+// when a member mints one.
+//
+// "01 · Already invited" reads an invite link or token the visitor pastes the way it reads
+// a link that opened the page, in the page, and "02 · Request an invite" puts an address
+// on the waitlist through MayWe's public subscribe endpoint.
+//
+// What BODY marks data-edge="worker" (the MCP and OAuth parts) is the Worker's alone. The
+// Kubernetes target renders this same page with those parts hidden (scripts/hydrate.py),
+// since the pinned ncli serves no MCP endpoint; the script reads that from the page.
 //
 // It signs with a NIP-07 browser extension (window.nostr), so no secret key reaches the
 // page. Through the relay's own wire protocol, and nothing else, a member:
@@ -68,6 +79,13 @@ export const CONSOLE_STYLE = String.raw`
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.hdr-link {
+  display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--soft);
+  color: var(--ink); border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 550; text-decoration: none;
+}
+.hdr-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 6px 10px; }
 button:hover { background: var(--soft); border-color: var(--muted); }
@@ -75,20 +93,26 @@ button:disabled { opacity: .35; cursor: default; }
 button.go { border-color: var(--accent); background: var(--accent); color: var(--panel); font-weight: 600; }
 button.go:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: var(--accent); }
 input { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; outline: none; min-width: 0; }
-input[type="text"] { flex: 1 1 14rem; }
+input[type="text"], input[type="email"] { flex: 1 1 14rem; }
+/* The invite-request form's honeypot: out of sight and out of reach, for bots to fill.
+   A rule here, not a style attribute, which the page's hash-only style-src would refuse. */
+#maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
 input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .top {
+  position: sticky; top: 0; z-index: 10;
   height: 61px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
   padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .wordmark {
-  margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
+  flex: 1 1 auto; margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mark { color: var(--accent); margin-right: 9px; font-size: 22px; vertical-align: -1px; }
-.header-right { display: flex; gap: 17px; align-items: center; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; }
+/* The header's right side keeps its own width and the wordmark gives way (ellipsis), so a
+   narrow screen never scrolls sideways. */
+.header-right { flex: 0 0 auto; display: flex; gap: 17px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
 #theme { font-size: 19px; padding: 1px 9px; }
 .dot { color: var(--muted); }
 .dot.good { color: var(--green); }
@@ -175,7 +199,7 @@ footer {
   .top { height: 53px; }
   .wordmark { font-size: 15px; }
   .header-right { gap: 8px; font-size: 10px; }
-  #relay-dial { display: none; }
+  #relay-dial, #persona-npub, .hdr-repo { display: none; }
   .overview { gap: 10px 22px; padding-top: 17px; }
   .stat strong { font-size: 21px; }
   .stat span { font-size: 10px; }
@@ -189,6 +213,7 @@ const BODY = String.raw`
 <header class="top">
   <h1 class="wordmark"><span class="mark" aria-hidden="true">⨉</span><span id="relay-name">Relay console</span></h1>
   <div class="header-right">
+    <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" title="Source code, CLI & agent plugins on GitHub">GitHub<span class="hdr-repo"> · awowIO/crosswire</span> ↗</a>
     <span id="relay-dial" class="mono"><span id="relay-dot" class="dot" aria-hidden="true">●</span> <span id="relay-url"></span></span>
     <span id="persona-npub" class="mono" title="The key your NIP-07 extension signs with">not signed in</span>
     <button id="theme" type="button" aria-label="Switch color theme">◐</button>
@@ -201,7 +226,7 @@ const BODY = String.raw`
     <div class="stat" id="stat-gate"><strong id="gate-state">…</strong><span>NIP-42 auth · NIP-43 members</span></div>
     <div class="stat good"><strong>v2</strong><span>NIP-44 sealed bus</span></div>
     <div class="stat"><strong id="seen-count">–</strong><span>your groups · sealed mail</span></div>
-    <div class="stat"><strong class="mono">/mcp</strong><span>MCP · OAuth 2.1 · magic URLs</span></div>
+    <div class="stat" id="stat-mcp" data-edge="worker"><strong class="mono">/mcp</strong><span>MCP · OAuth 2.1 · magic URLs</span></div>
   </section>
   <p id="relay-about" class="about">Reading this relay's NIP-11 document.</p>
   <dl class="facts" id="facts"></dl>
@@ -219,41 +244,71 @@ const BODY = String.raw`
       <datalist id="rooms"></datalist>
       <span id="room-note" class="note">The campaign a minted token admits to. Its NIP-44 key stays in this browser.</span>
     </div>
-    <div class="control grow" id="join-card" hidden>
-      <label class="label" for="join-code">Redeem an invite</label>
-      <form id="join-form">
-        <input type="text" id="join-code" required autocomplete="off" spellcheck="false" placeholder="single-use code a member gave you">
-        <button type="submit">Redeem</button>
-      </form>
-      <span class="note">Your key is not enrolled yet. An invite link fills the code in.</span>
-    </div>
     <div class="control grow" id="invite-card">
-      <span class="label">Invite</span>
-      <div class="row"><button id="mint" type="button" class="go">Mint invite &amp; magic MCP link</button></div>
-      <div id="invite-out" class="row" hidden>
-        <span class="note">relay code</span><code id="invite-code"></code>
-        <button id="invite-copy" type="button">Copy</button>
+      <span class="label">Invite a friend or an agent seat</span>
+      <div class="row"><button id="mint" type="button" class="go">Mint invite<span data-edge="worker"> &amp; magic MCP link</span></button></div>
+      <div id="invite-out" hidden>
+        <div class="row"><span class="note">join link</span><code id="invite-link"></code>
+          <button id="invite-link-copy" type="button">Copy</button></div>
+        <div class="row"><span class="note">relay code</span><code id="invite-code"></code>
+          <button id="invite-copy" type="button">Copy</button></div>
       </div>
       <span id="mint-status" class="note" aria-live="polite">One key, once, within seven days. Members mint; signing in comes first.</span>
     </div>
   </section>
 
   <div class="grid">
-    <section class="card wide" id="link-card" aria-labelledby="link-title" hidden>
-      <h2 id="link-title">Your invite</h2>
-      <p id="link-about"></p>
-      <p id="link-next" aria-live="polite"></p>
-      <div id="link-cli" hidden>
-        <p class="muted">Or join with the nostr-mailbox CLI, which makes and keeps a key of its own:</p>
-        <div class="row"><code id="link-command"></code>
-          <button id="link-copy" type="button">Copy</button></div>
+    <section class="card" id="invited-card" aria-labelledby="invited-title">
+      <div class="card-head">
+        <h2 id="invited-title">01 · Already invited</h2>
+        <span class="note">a single-use nm1_ token or its link</span>
       </div>
-      <p class="muted">The token admits one key, once. It reached this page in the link's
-      fragment, which a browser never sends to a server, and the page has taken it off the
-      address bar.</p>
+      <p>Paste the invite link or <code>nm1_…</code> token a member sent you, or open the link itself: this page reads
+      it here and sends it nowhere.</p>
+      <form id="open-form">
+        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
+          placeholder="…/join/#nm1_… invite link, nm1_… token or invite code" aria-label="Invite link, nm1_ token or invite code">
+        <button type="submit" class="go">Open invite</button>
+      </form>
+      <div id="link-card" hidden>
+        <p id="link-about"></p>
+        <p id="link-next" aria-live="polite"></p>
+        <div id="link-cli" hidden>
+          <p class="muted">Or join with the nostr-mailbox CLI, which makes and keeps a key of its own:</p>
+          <div class="row"><code id="link-command"></code>
+            <button id="link-copy" type="button">Copy</button></div>
+        </div>
+      </div>
+      <div id="join-card" hidden>
+        <h3><label for="join-code">Redeem with the key you signed in with</label></h3>
+        <form id="join-form">
+          <input type="text" id="join-code" required autocomplete="off" spellcheck="false" placeholder="single-use code from the invite">
+          <button type="submit">Redeem</button>
+        </form>
+        <span class="note">Your key is not enrolled yet. Opening an invite fills its code in.</span>
+      </div>
+      <p class="note">An invite admits one key, once, and works as a password until then. A link's fragment never
+      reaches a server, and this page takes it off the address bar.</p>
     </section>
 
-    <section class="card wide" id="pair-card" aria-labelledby="pair-title">
+    <section class="card" id="maywe-card" aria-labelledby="maywe-title">
+      <div class="card-head">
+        <h2 id="maywe-title">02 · Request an invite</h2>
+        <span class="note">invite-only beta · waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">MayWe · maywe.email</a></span>
+      </div>
+      <p>This switchboard is invite-only. Admitted members mint single-use <code>nm1_</code> invite links for friends and
+      agent seats. No one to ask? Leave your email: MayWe sends a one-click confirmation, and your <code>nm1_</code>
+      admission link follows by mail. Source on <a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">GitHub (awowIO/crosswire) ↗</a>.</p>
+      <form id="maywe-form">
+        <input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com" aria-label="Email address">
+        <input type="text" id="maywe-note" name="note" placeholder="Agents / use case (optional, e.g. Claude Code + ChatGPT)" aria-label="Use case">
+        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button type="submit" class="go">Request Invite →</button>
+      </form>
+      <p id="maywe-status" class="note" aria-live="polite"></p>
+    </section>
+
+    <section class="card wide" id="pair-card" data-edge="worker" aria-labelledby="pair-title">
       <div class="card-head">
         <h2 id="pair-title">Pair a coding agent</h2>
         <span class="note">MCP over Streamable HTTP · OAuth 2.1 · magic URL · join link</span>
@@ -274,8 +329,10 @@ const BODY = String.raw`
       <form id="pair-form">
         <input type="text" id="pair-token" required autocomplete="off" spellcheck="false"
           placeholder="nm1_… token, or …/join/#nm1_… invite link" aria-label="nm1_ token or invite link">
-        <button type="submit">Show connection URLs</button>
+        <button type="submit">Show URLs and check the token</button>
       </form>
+      <p class="note">The URLs are built in this page. Checking sends the token, and the room key it carries, to this
+      relay's MCP server; nothing is sent until you press the button.</p>
       <p id="pair-status" aria-live="polite"></p>
       <div id="pair-out" hidden>
         <div class="snippet" id="pair-snippet-box" hidden><pre id="pair-snippet"></pre>
@@ -379,8 +436,7 @@ const BODY = String.raw`
   </div>
 
   <footer>
-    <span>Talks to this relay only: its WebSocket and its NIP-11 document. Signs through your NIP-07 extension, so
-    no secret key reaches this page.</span>
+    <span><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire ↗</a> · Waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">maywe.email</a> · Signs through your NIP-07 extension, so no secret key reaches this page.</span>
     <span id="relay-software"></span>
   </footer>
 </main>
@@ -396,6 +452,9 @@ export const CONSOLE_SCRIPT = String.raw`
                 urls: null, client: 'chatgpt', counts: { groups: null, mail: null } };
 
   function $(id) { return document.getElementById(id); }
+  // The Worker serves its MCP server beside this page; a Kubernetes build of the page
+  // hides what is the Worker's alone (data-edge="worker"), the Pair card among it.
+  var HOSTED_MCP = !$('pair-card').hidden;
   function now() { return Math.floor(Date.now() / 1000); }
   function short(hex) { return hex.slice(0, 10) + '…' + hex.slice(-6); }
   function when(ts) { return new Date(ts * 1000).toLocaleString(); }
@@ -609,6 +668,23 @@ export const CONSOLE_SCRIPT = String.raw`
     history.replaceState(null, '', location.pathname + location.search);
     try { return readInviteLink(fragment); } catch (err) { return { error: err.message }; }
   }
+  // 01 · Already invited: what a visitor pastes (a whole link, its fragment, a token or a
+  // bare relay code) gets the preview a link that opened the page gets. Nothing is sent.
+  function openGiven() {
+    var given = $('open-token').value.trim();
+    var at = given.indexOf('#');
+    var link;
+    try { link = readInviteLink(at < 0 ? given : given.slice(at)); } catch (err) { link = { error: err.message }; }
+    if (link === null) {
+      if (at >= 0 || !/^[A-Za-z0-9_-]+$/.test(given)) throw new Error('that is no invite link, nm1_ token or invite code');
+      link = { token: null, code: given, topic: null, role: null };
+    }
+    $('open-token').value = '';
+    state.link = link;
+    if (usableHere(link)) $('join-code').value = link.code;
+    if (HOSTED_MCP && link.token && !link.error && forThisRelay(link)) showConnection(link.token);
+    renderLink();
+  }
   function forThisRelay(link) { return !link.token || link.host === location.host.toLowerCase(); }
   function usableHere(link) { return !link.error && !link.channel && forThisRelay(link); }
   function renderLink() {
@@ -636,15 +712,16 @@ export const CONSOLE_SCRIPT = String.raw`
     if (link.channel) {
       about.textContent = 'An invite into the channel ' + (link.topic || '(unnamed)') + ' of ' + where +
         (link.member ? ', for ' + link.member : '') + '. It carries the channel keys, which this console cannot keep.';
-      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below, or pair a coding agent with it.';
+      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below' +
+        (HOSTED_MCP ? ', or pair a coding agent with it.' : '.');
       return;
     }
     about.textContent = 'An invite to ' + where + (link.member ? ', for ' + link.member : '') +
       (link.topic ? ', to ask for the channel ' + link.topic + ' next' : '') + '.';
     if (link.spent) { next.textContent = 'Redeemed: ' + short(state.me) + ' is a member now.'; next.className = 'good'; }
-    else if (!state.me) next.textContent = 'Sign in with your NIP-07 extension, then press Redeem: the code is filled in, and it admits the key your extension holds.';
+    else if (!state.me) next.textContent = 'Sign in with your NIP-07 extension (Persona, above), then press Redeem: the code is filled in, and it admits the key your extension holds.';
     else if (state.member) next.textContent = short(state.me) + ' is already a member; the invite was not used.';
-    else next.textContent = 'Press Redeem above to admit ' + short(state.me) + '.';
+    else next.textContent = 'Press Redeem below to admit ' + short(state.me) + '.';
   }
 
   // ------------------------------------------------------------ pair a coding agent
@@ -697,7 +774,8 @@ export const CONSOLE_SCRIPT = String.raw`
     renderClient();
   }
   function pairStatus(text, cls) { var p = $('pair-status'); p.textContent = text; p.className = cls || ''; }
-  async function pair(token) {
+  // The URLs, built in the page from the token. Nothing leaves the browser here.
+  function showConnection(token) {
     var urls = connectionUrls(location.origin, token);
     urls.campaign = readInviteLink(token).campaign;
     $('pair-oauth').textContent = urls.oauth;
@@ -705,11 +783,17 @@ export const CONSOLE_SCRIPT = String.raw`
     $('pair-openapi').textContent = urls.openapi;
     $('pair-join').textContent = urls.join;
     $('pair-out').hidden = false;
+    $('pair-token').value = token;
     state.pairToken = token;
     state.urls = urls;
     renderClient();
     var store = storage();
     $('pair-remember').checked = !!store && store.getItem(TOKEN_KEY) === token;
+    pairStatus('Built in this page; the token has not been sent anywhere.');
+  }
+  // Whether the relay honours the token. This sends it, room key and all, so it runs only
+  // when the visitor submits the Pair card's form.
+  async function checkToken(token) {
     pairStatus('Asking the relay about this token…');
     var answer = await fetch('/openapi.json', { headers: { Authorization: 'Bearer ' + token } });
     if (answer.ok) { pairStatus('This relay honours the token.', 'good'); return; }
@@ -722,8 +806,8 @@ export const CONSOLE_SCRIPT = String.raw`
     var link = readInviteLink(at < 0 ? given : given.slice(at + 1));
     if (!link || !link.token) throw new Error('give an nm1_ token, or an invite link that carries one');
     if (!forThisRelay(link)) throw new Error('that token is for ' + link.relay + ', not for this relay');
-    $('pair-token').value = link.token;
-    await pair(link.token);
+    showConnection(link.token);
+    await checkToken(link.token);
   }
   function remember() {
     var store = storage();
@@ -879,17 +963,18 @@ export const CONSOLE_SCRIPT = String.raw`
     if (state.relayKey && invite.pubkey !== state.relayKey) throw new Error('the invite is not signed by the relay key NIP-11 names');
     var code = tagValue(invite, 'claim');
     if (!code) throw new Error('the invite carries no claim code');
-    $('invite-code').textContent = code;
-    $('invite-out').hidden = false;
     var key = roomKey(room);
     var token = packInvite({ relay: RELAY_URL, campaign: room, operator: state.me, campaignKey: key.hex, code: code });
+    $('invite-code').textContent = code;
+    $('invite-link').textContent = connectionUrls(location.origin, token).join;
+    $('invite-out').hidden = false;
     $('room').value = room;
     listRooms();
     $('mint-status').textContent = 'Minted a token for #' + room + (key.fresh ? ', under a new room key this browser now keeps.' :
-      ', under the room key this browser keeps.') + ' Pair a client with it below.';
+      ', under the room key this browser keeps.') + ' Send the join link to one person or agent seat' +
+      (HOSTED_MCP ? ', or pair a client with it below.' : '.');
     $('mint-status').className = 'note good';
-    $('pair-token').value = token;
-    await pair(token);
+    if (HOSTED_MCP) showConnection(token);
   }
 
   // ------------------------------------------------------------------------ groups
@@ -1060,6 +1145,54 @@ export const CONSOLE_SCRIPT = String.raw`
     renderLink();
   }
 
+  // ---------------------------------------------------------------- 02 · waitlist
+  function mayweStatus(text, cls) { var p = $('maywe-status'); p.textContent = text; p.className = 'note' + (cls ? ' ' + cls : ''); }
+  // BEGIN MayWe answer
+  // tests/test_hydrate.py runs this block under Node. MayWe's public subscribe answers
+  // {ok, status}: ok false with status 'paused' while the list takes no requests, and
+  // 'pending' also where it deliberately sends no new mail, so a success promises none.
+  // An error answer carries FastAPI's detail, a string or a list of {msg}.
+  function mayweAnswer(httpStatus, text) {
+    var data;
+    try { data = JSON.parse(text); } catch (err) { throw new Error('MayWe answered HTTP ' + httpStatus + ' with a body that is not JSON'); }
+    if (httpStatus < 200 || httpStatus > 299) {
+      var why = data && (Array.isArray(data.detail) ? data.detail.map(function (d) { return d.msg; }).join('; ') : data.detail);
+      throw new Error('MayWe refused the request (HTTP ' + httpStatus + ')' + (why ? ': ' + why : ''));
+    }
+    if (data && data.status === 'paused') throw new Error('Invite requests are temporarily paused; please try again shortly.');
+    if (!data || data.ok !== true) throw new Error('MayWe did not take the request (status ' + (data && data.status) + ')');
+    return 'Request received. Check your inbox to confirm your place on the waitlist.';
+  }
+  // END MayWe answer
+  async function requestMayweInvite() {
+    var email = $('maywe-email').value.trim();
+    if (!email) throw new Error('enter your email address first');
+    var note = $('maywe-note').value.trim();
+    var website = $('maywe-website').value || '';
+    var key = (typeof location !== 'undefined' && location.origin === 'https://docs.awow.io')
+      ? 'pk_6ZNZP0jBeKTpu22jfUQfQ6Dhcu6faq7iSzeEJsMMy78'
+      : 'pk_G-LEI15eUfTnYhGyV2hMHvRsxMsJwkM4r-wgj3jS2jI';
+    var params = new URLSearchParams({ key: key, email: email, source: 'crosswire:invite-request', website: website });
+    if (note) params.set('details', JSON.stringify({ use_case: note }));
+    mayweStatus('Sending your request to MayWe…');
+    var done;
+    try {
+      var res = await fetch('https://newsletter.awow.io/v1/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: params.toString()
+      });
+      done = mayweAnswer(res.status, await res.text());
+    } catch (err) {
+      // Beside the email field, where the visitor looks, and in the log.
+      mayweStatus(err.message, 'bad');
+      throw err;
+    }
+    $('maywe-email').value = '';
+    $('maywe-note').value = '';
+    mayweStatus(done, 'good');
+  }
+
   var kept = storage();
   applyTheme(kept && kept.getItem(THEME_KEY));
   $('relay-url').textContent = RELAY_URL;
@@ -1068,7 +1201,8 @@ export const CONSOLE_SCRIPT = String.raw`
   var pairWith = state.link && !state.link.error && state.link.token && forThisRelay(state.link) ? state.link.token
     : kept && kept.getItem(TOKEN_KEY);
   renderClient();
-  if (pairWith) { $('pair-token').value = pairWith; action(function () { return pair(pairWith); })(); }
+  // Shown, never sent: the relay hears about a token only when the visitor asks it to.
+  if (pairWith && HOSTED_MCP) showConnection(pairWith);
   $('theme').addEventListener('click', action(toggleTheme));
   Array.from(document.querySelectorAll('#pair-clients button')).forEach(function (button) {
     button.addEventListener('click', action(function () { chooseClient(button.dataset.client); }));
@@ -1082,9 +1216,12 @@ export const CONSOLE_SCRIPT = String.raw`
   copyButton($('pair-snippet-copy'), 'pair-snippet');
   copyButton($('link-copy'), 'link-command');
   copyButton($('invite-copy'), 'invite-code');
+  copyButton($('invite-link-copy'), 'invite-link');
+  $('open-form').addEventListener('submit', action(openGiven));
   $('signin').addEventListener('click', action(signIn));
   $('join-form').addEventListener('submit', action(redeem));
   $('mint').addEventListener('click', action(mint));
+  $('maywe-form').addEventListener('submit', action(requestMayweInvite));
   $('create-form').addEventListener('submit', action(createGroup));
   $('request-form').addEventListener('submit', action(requestJoin));
   $('add-form').addEventListener('submit', action(addMember));

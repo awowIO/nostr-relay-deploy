@@ -7,7 +7,7 @@ deployment files for the platform you choose.
 
 | Target | Runs on | What you deploy |
 | --- | --- | --- |
-| Kubernetes | Private cluster | ncli StatefulSet and Traefik ingress |
+| Kubernetes | Private cluster | ncli StatefulSet and Traefik ingress, optionally the Web Console |
 | Docker Compose | Linux host | ncli and Caddy with TLS |
 | Cloudflare | Cloudflare Workers | Worker, SQLite Durable Object and R2 |
 | GitHub Pages | Static site | Optional NIP-05 directory and join page |

@@ -268,7 +268,8 @@ async function base64Sha256(text: string): Promise<string> {
 }
 
 // The page runs only its own inline script and style, by hash, and talks only to this
-// origin: the relay's WebSocket and its NIP-11 document.
+// origin (the relay's WebSocket and its NIP-11 document) and, when a visitor requests an
+// invite, to MayWe's subscribe endpoint.
 let consoleHashes: Promise<[string, string]> | null = null;
 
 async function consolePage(cfg: Config, method: string): Promise<Response> {
@@ -278,7 +279,7 @@ async function consolePage(cfg: Config, method: string): Promise<Response> {
     "default-src 'none'",
     `script-src 'sha256-${script}'`,
     `style-src 'sha256-${style}'`,
-    `connect-src 'self' wss://${cfg.relayHost}`,
+    `connect-src 'self' wss://${cfg.relayHost} https://newsletter.awow.io`,
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",

@@ -1,0 +1,87 @@
+# The Web Console beside the relay, rendered only with `kubernetes.web_console = true`:
+# the Cloudflare Worker's console page (console.ts, rendered at hydration, without the
+# Worker's MCP and OAuth controls, which the pinned ncli does not serve), as static files
+# from a web server of its own.
+#
+# Its own Deployment, not a container in the relay's pod: it shares no network namespace
+# with the relay, holds neither the signing Secret nor the relay's volume, and rolls out
+# without dropping a single member's socket. The page is a ConfigMap kustomize names after
+# its contents (kustomization.yaml), so a changed page is a changed pod template here.
+#
+# The page talks to the relay from the visitor's browser (wss:// and NIP-11 on this host),
+# never from this pod: the pod accepts Traefik only and opens no connection at all.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: {{ console_name }}, namespace: {{ namespace }} }
+spec:
+  replicas: 1
+  # A new pod is ready before the old one goes, so the page never drops out on a rollout.
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: {{ console_name }} } }
+  template:
+    metadata: { labels: { app: {{ console_name }} } }
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      {{ priority_class_block }}
+      {{ affinity_block }}
+      # Not root: the image's nginx user. Read-only root filesystem; nginx writes its pid
+      # and temp directories to /tmp only (console-nginx.conf).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: console
+          # Pinned by digest.
+          image: {{ console_image }}
+          # nginx itself, on the mounted configuration: none of the image's entrypoint
+          # scripts, which would try to rewrite its configuration on a read-only root.
+          command: ["nginx", "-c", "/etc/console/nginx.conf", "-g", "daemon off;"]
+          ports: [{ name: http, containerPort: {{ console_port }} }]
+          readinessProbe:
+            httpGet: { path: /, port: http }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          # Requests from a measurement of this image serving this page under Docker
+          # (2026-11-28): idle, 2.3 MiB and no measurable CPU; 20,000 requests at 100 at once
+          # (5,100 a second), a 5.0 MiB peak and 0.67 of a core. 1m is the least CPU a request
+          # can name. No limits: a burst of visitors takes what the node has free.
+          resources:
+            requests: { cpu: 1m, memory: 5Mi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/console, readOnly: true }
+            - { name: page, mountPath: /srv/console, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap: { name: {{ console_name }}, items: [{ key: nginx.conf, path: nginx.conf }] }
+        - name: page
+          configMap: { name: {{ console_name }}, items: [{ key: index.html, path: index.html }] }
+        - name: tmp
+          emptyDir: {}
+---
+# Cluster-internal address of the console. Only Traefik reaches it (below).
+apiVersion: v1
+kind: Service
+metadata: { name: {{ console_name }}, namespace: {{ namespace }} }
+spec:
+  selector: { app: {{ console_name }} }
+  ports: [{ name: http, port: {{ console_port }}, targetPort: http }]
+---
+# Traefik in, nothing out: the console needs no DNS, no upstream and no egress at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: {{ console_name }}-isolation, namespace: {{ namespace }} }
+spec:
+  podSelector: { matchLabels: { app: {{ console_name }} } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ traefik_namespace }} } }
+          {{ traefik_from_pod_selector_block }}
+      ports: [{ protocol: TCP, port: {{ console_port }} }]
+  egress: []

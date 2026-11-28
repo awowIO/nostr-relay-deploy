@@ -68,7 +68,20 @@ repository root unless a step names another directory.
    for `kubeconfig`, `context`, `namespace`, storage class and size, Traefik namespace,
    pod selector and certificate resolver. Enable `traefik_egress_network_policy`
    only when the selected ingress pods already have restricted egress. Their first
-   egress policy would otherwise restrict all their other destinations.
+   egress policy would otherwise restrict all their other destinations. The policy is
+   named `<namespace>-backend` in the Traefik namespace, so each relay on a cluster, in
+   a namespace of its own, keeps its own. The relay's namespace also gets a default-deny
+   policy, so a pod added there later starts with no traffic at all.
+
+   Set `web_console = true` to serve the Web Console at `/`, `/join` and `/join/`: the
+   Cloudflare Worker's console page, rendered from `console.ts` at hydration without the
+   Worker-only MCP and OAuth controls. It runs as its own Deployment and Service
+   (`nostr-relay-console`, port 8080) on a digest-pinned unprivileged nginx with a
+   read-only root, no service-account token, no signing Secret and no relay volume, and
+   a NetworkPolicy that admits Traefik only and allows no egress. The IngressRoute then
+   sends WebSocket upgrades and NIP-11 requests at `/` to the relay and browsers to the
+   console, as the Worker's own edge does. Turning it on changes none of the relay's
+   objects, and a new page rolls out without dropping a socket.
 
    ```bash
    cp -i relay.toml.example relay.internal.local.toml
@@ -89,6 +102,9 @@ repository root unless a step names another directory.
 4. Once the pod is ready, verify its StatefulSet revision and NIP-11 response from
    the private network. Verification connects directly to the configured hostname.
    For a port-forward, supply a local HTTP URL using `--verify-url` to check NIP-11.
+   With `web_console = true` it also reads the console's Deployment, and fetches `/`
+   and `/join/` as a browser would: both must be the console page under a policy that
+   admits its own script and style. `--verify-url` skips that page check.
 
    ```bash
    python3 scripts/hydrate.py --config relay.internal.local.toml --profile internal --target kubernetes --verify
@@ -118,4 +134,5 @@ repository root unless a step names another directory.
 
 Send the invite privately. The recipient can use the mailbox CLI with the invite file
 or the join link. Browser onboarding at the relay's `/join/` path is available on the
-Cloudflare target. [Member access and compatibility](relay-protocol.md)
+Cloudflare target, and on Kubernetes with `web_console = true`.
+[Member access and compatibility](relay-protocol.md)

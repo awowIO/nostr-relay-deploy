@@ -1,12 +1,16 @@
 # Rendered only with `traefik_egress_network_policy = true`: for a cluster whose Traefik
-# namespace enforces default-deny egress, this opens exactly one door, from Traefik to
-# the relay on 5500.
+# namespace enforces default-deny egress, this opens exactly the doors this relay needs,
+# from Traefik to the relay on 5500 and, with the Web Console, to the console on its port.
+# Each door names the namespace and the pods in one peer, so it opens nothing else there.
+#
+# Named after the relay's namespace, so two relays on one cluster (each in a namespace of
+# its own) keep a policy each in the Traefik namespace instead of overwriting one.
 #
 # Do NOT enable it where Traefik's egress is unrestricted: the first Egress policy that
 # selects a pod makes everything it does not allow forbidden for that pod.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
-metadata: { name: {{ statefulset_name }}-backend, namespace: {{ traefik_namespace }} }
+metadata: { name: {{ namespace }}-backend, namespace: {{ traefik_namespace }} }
 spec:
   podSelector: {{ traefik_pod_selector_flow }}
   policyTypes: [Egress]
@@ -15,3 +19,4 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ namespace }} } }
           podSelector: { matchLabels: { app: {{ app_label }} } }
       ports: [{ protocol: TCP, port: 5500 }]
+    {{ traefik_to_console_block }}

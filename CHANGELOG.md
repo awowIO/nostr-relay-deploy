@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Kubernetes can serve the Web Console: with `kubernetes.web_console = true` the
+  Worker's console page, rendered from `console.ts` without its MCP and OAuth controls,
+  answers browsers at `/`, `/join` and `/join/` from its own zero-egress nginx
+  Deployment, while WebSocket and NIP-11 requests at `/` still reach the relay. The new
+  key is required: add `web_console = false` to an existing configuration to keep it
+  as it is.
+- Traefik's egress policy is named after the relay's namespace
+  (`<namespace>-backend`), so a second relay on a cluster no longer overwrites the
+  first one's, and each relay namespace gets a default-deny NetworkPolicy.
+- `relay.yaml` caps each key's REQs at `events_per_minute` a minute, which also caps how
+  many invite codes one member mints on ncli.
+- The console no longer sends a token to the relay when an invite link opens it or a
+  member mints one; only submitting the Pair card does. Both pages open with
+  **01 · Already invited**, which previews a pasted link, token or code, and
+  **02 · Request an invite**, which now says when MayWe has paused requests. The header
+  stays in view, a narrow screen no longer scrolls sideways, and the invite-request
+  honeypot is hidden by a stylesheet rule the console's CSP admits. The GitHub Pages
+  install commands name `awowIO/crosswire`.
+
 - The Cloudflare Worker console and the GitHub Pages page share a new dense,
   full-width design: 13px type with tabular numerals, a header with the relay's name,
   WebSocket URL and signed-in key, light and dark themes with a header toggle, and a
