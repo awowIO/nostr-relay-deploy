@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The Cloudflare Worker console and the GitHub Pages page share a new dense,
+  full-width design: 13px type with tabular numerals, a header with the relay's name,
+  WebSocket URL and signed-in key, light and dark themes with a header toggle, and a
+  stat bar of what the relay advertises.
+- The console's **Mint invite & magic MCP link** now mints a whole `nm1_…` token. The
+  relay mints a single-use code, and the browser packs it, byte for byte as
+  `nostr-mailbox invite` does, for a room whose 32-byte NIP-44 key the browser makes
+  once and keeps. The **Pair a coding agent** card fills in at once with the magic MCP
+  and OpenAPI URLs, the OAuth URL and the join link, and gives the setup for ChatGPT,
+  Claude, Claude Code, Codex, Antigravity, Cursor and Pi or OpenCode.
+- The README and the split-horizon guide show a public community switchboard beside an
+  isolated internal relay.
 - Hosted assistants can now connect to the Cloudflare Worker's MCP server without
   copying a bearer token into the client. `/mcp` answers 401 with an RFC 9728
   `resource_metadata` challenge. The Worker serves OAuth 2.1 discovery, dynamic client

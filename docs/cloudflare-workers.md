@@ -106,7 +106,7 @@ or token is wrong. For browser onboarding and supported NIPs, see
 ## 5. Connect ChatGPT, Claude.ai and other remote MCP clients
 
 The Worker also serves nostr-mailbox's six MCP tools on the relay's own hostname. A
-hosted assistant joins a channel with an `nm1_…` topic token and nothing installed.
+hosted assistant joins a channel with an `nm1_…` token and nothing installed.
 It reads and writes the same encrypted bus that local coding agents watch with the
 nostr-mailbox CLI. Two flows connect it without copying a bearer token into the
 client's settings.
@@ -122,9 +122,26 @@ keep them shut.
 
 ### Mint a token for the assistant
 
-The topic's keeper mints the token, as for any new member. Give each client its own
-token. The first use spends the token's invite, so the same token no longer works with
-`nostr-mailbox join`, and a token already joined there is refused here with 401.
+Give each client its own token. The first use spends the token's invite, so the same
+token no longer works with `nostr-mailbox join`, and a token already joined there is
+refused here with 401.
+
+**In the browser.** Open the console at `https://relay.example.com/` and sign in with a
+NIP-07 extension as an enrolled member. Name a room beside **Mint invite & magic MCP
+link** (`agents` unless you change it) and press the button. The relay mints a
+single-use invite code over the authenticated WebSocket (REQ kind 28935). The page packs
+the code into an `nm1_…` token for the room, byte for byte as `nostr-mailbox invite`
+packs one. The token's `cf.transport/1` declaration names this relay, the room as its
+campaign, your key as its operator and the room's 32-byte NIP-44 `campaign_key`.
+
+The page makes a room's key once, from the browser's random generator, and keeps it in
+local storage for your key and that room. Every later token for the room carries the
+same key, so all of its clients read and write one bus. Clearing the site's data forgets
+the key, and the next token for the room then opens a new channel. The **Pair a coding
+agent** card fills in at once, as the next subsection describes.
+
+**With the CLI.** A topic token carries the topic's epoch keys and a group code, so only
+the topic's keeper mints one, as for any new member:
 
 ```bash
 nostr-mailbox --home "$partner_home" --persona partner-operator topic create review-desk
@@ -134,9 +151,27 @@ python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$HOM
 ```
 
 The invite file also holds a `join_url` of the form `https://relay.example.com/join/#nm1_…`.
-Open it in a browser to see both flows on the console's **Pair a coding agent** card,
-which builds the URLs from the token and offers a copy button for each. The card asks
-the relay whether it honours the token, in a request header rather than a URL.
+Open it in a browser to see the token on the console's **Pair a coding agent** card.
+
+### The Pair a coding agent card
+
+The card takes a token minted in the console, one an invite link carries, or one pasted
+into it. It shows four URLs, each with a copy button:
+
+| Row | URL | Use |
+| --- | --- | --- |
+| Magic MCP URL | `https://relay.example.com/mcp/s/nm1_…` | A remote MCP server with Authentication: None |
+| Magic OpenAPI URL | `https://relay.example.com/mcp/s/nm1_…/openapi.json` | A Custom GPT Action's schema |
+| OAuth 2.1 URL | `https://relay.example.com/mcp` | A connector that signs in with OAuth |
+| Join link | `https://relay.example.com/join/#nm1_…` | `nostr-mailbox join`, for a CLI or skill agent |
+
+The client pills give the setup for ChatGPT, Claude.ai and Claude Desktop, Claude Code
+(`claude mcp add --transport http`), Codex (`[mcp_servers.<name>]` in
+`~/.codex/config.toml`), Antigravity (the join link and the agent skill), Cursor
+(`~/.cursor/mcp.json`), and Pi or OpenCode (`opencode.json`, or the join link for Pi).
+Commands and files that need a URL get it filled in, under a server name taken from the
+room. The card asks the relay whether it honours the token, in a request header rather
+than a URL.
 
 ### 1-click OAuth popup
 

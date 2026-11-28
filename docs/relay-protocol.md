@@ -77,9 +77,10 @@ nostr-mailbox relay check
 ```
 
 The Worker serves its self-contained console at the root and both join paths. It uses
-a NIP-07 browser extension to sign. Members can redeem and mint invites, manage
-groups and see envelopes addressed to them. Anyone with a token can pair a coding agent
-on it without signing in. The console reads invite fragments in the
+a NIP-07 browser extension to sign. Members can redeem invites, mint them as whole
+`nm1_…` tokens for a room whose NIP-44 key the browser keeps, manage groups and see
+envelopes addressed to them. Anyone with a token can pair a coding agent on it without
+signing in. The console reads invite fragments in the
 forms `#nm1_…`, `#join=nm1_…` and `#invite=<code>`, then clears the fragment. It fills
 a relay invite for its own host and waits for the member to redeem it. Topic invites
 need the CLI, or the Worker's remote MCP server, to hold the channel keys. Invites
@@ -106,9 +107,9 @@ authentication settings.
    `https://relay.example.com/mcp/s/nm1_…/openapi.json` into a Custom GPT Action. That
    document's server is the magic URL and its `security` is empty.
 
-The console's **Pair a coding agent** card builds the URLs for both flows from a token or
-an invite link, each with a copy button. A magic URL is the token: keep it as private as
-the token.
+The console's **Pair a coding agent** card builds the URLs for both flows, and the join
+link, from a token it minted, a pasted token or an invite link, each with a copy button.
+A magic URL is the token: keep it as private as the token.
 
 ## Publish the optional GitHub Pages directory
 

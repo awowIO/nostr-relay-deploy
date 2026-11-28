@@ -3,114 +3,145 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://{{ relay_host }}; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>{{ title_html }}</title>
 <style>
+  /* The relay console's design system: 13px type, tabular numerals, one accent, light and
+     dark (the system's, or the one the header's toggle chose). */
   :root {
     color-scheme: light dark;
-    --bg: #f6f6f3;
-    --fg: #1c1c21;
-    --muted: #5c5c66;
-    --card: #ffffff;
-    --line: #dedee4;
-    --code: #eeeef2;
-    --accent: #4b45d8;
-    --ok: #157a3c;
-    --bad: #b42323;
-    --warn: #9a5b00;
+    --bg: #f6f7f9; --panel: #fff; --ink: #18212f; --muted: #596677; --line: #e0e5eb; --soft: #f0f3f7;
+    --accent: #335ade; --green: #137657; --red: #b14439; --amber: #956014; --head: #eef1f5; --hover: #f4f7ff;
+    --shadow: 0 16px 70px #14243c26;
+    --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  :root[data-theme=light] { color-scheme: light; }
+  :root[data-theme=dark] {
+    color-scheme: dark;
+    --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
+    --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
+    --shadow: 0 16px 70px #0008;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111115;
-      --fg: #ececf1;
-      --muted: #a2a2ad;
-      --card: #1a1a20;
-      --line: #2d2d36;
-      --code: #23232b;
-      --accent: #9a95ff;
-      --ok: #4ad37e;
-      --bad: #ff7b7b;
-      --warn: #f0b45a;
+    :root:not([data-theme=light]) {
+      color-scheme: dark;
+      --bg: #10151c; --panel: #171e28; --ink: #f0f4fb; --muted: #b5c0d0; --line: #2c3644; --soft: #212b38;
+      --accent: #92acff; --green: #78d1aa; --red: #ec9990; --amber: #dfb472; --head: #1d2734; --hover: #243045;
+      --shadow: 0 16px 70px #0008;
     }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body {
-    background: var(--bg);
-    color: var(--fg);
-    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  body { background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 5px; padding: 6px 10px; }
+  button:hover { background: var(--soft); border-color: var(--muted); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .top {
+    height: 61px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding-inline: clamp(20px, 3vw, 48px); border-bottom: 1px solid var(--line); background: var(--panel);
   }
+  .wordmark {
+    margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mark { color: var(--accent); margin-right: 9px; font-size: 22px; vertical-align: -1px; }
+  .header-right { display: flex; gap: 17px; align-items: center; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #theme { font-size: 19px; padding: 1px 9px; }
   /* Full viewport width with fluid gutters: no boxed container, no dead margins. */
-  .page {
-    width: 100%;
-    max-width: none;
-    padding-inline: clamp(20px, 4vw, 64px);
-    padding-block: clamp(24px, 5vw, 64px);
+  .page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); padding-block: 0 8px; }
+  .overview { display: flex; flex-wrap: wrap; gap: 12px 32px; padding: 23px 0 10px; }
+  .stat { display: flex; align-items: baseline; gap: 8px; }
+  .stat strong { font-size: 25px; letter-spacing: -.8px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  #stat-relay[data-state="ok"] { color: var(--green); }
+  #stat-relay[data-state="warn"] { color: var(--amber); }
+  #stat-relay[data-state="bad"] { color: var(--red); }
+  .about { margin: 0 0 18px; color: var(--muted); }
+  .relay-url { font-family: var(--mono); color: var(--accent); overflow-wrap: anywhere; }
+  .assumptions {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px 28px; padding: 12px 16px; margin: 0 0 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   }
-  header h1 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 44px); line-height: 1.15; }
-  header p { margin: 0; color: var(--muted); }
-  .relay-url { font: 600 clamp(16px, 2vw, 20px)/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); word-break: break-all; }
-  .grid {
-    display: grid;
-    gap: clamp(16px, 2vw, 28px);
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
-    margin-top: clamp(20px, 3vw, 36px);
-  }
-  section {
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: clamp(16px, 2vw, 26px);
-    min-width: 0;
-  }
-  section h2 { margin: 0 0 12px; font-size: 18px; }
-  section p { margin: 0 0 12px; color: var(--muted); }
-  .status { display: flex; align-items: center; gap: 10px; font-weight: 600; }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
-  .status[data-state="ok"] .dot { background: var(--ok); }
-  .status[data-state="bad"] .dot { background: var(--bad); }
-  .status[data-state="warn"] .dot { background: var(--warn); }
-  dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 14px 0 0; }
+  .status { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .status[data-state="ok"] .dot, .dot[data-state="ok"] { background: var(--green); }
+  .status[data-state="bad"] .dot, .dot[data-state="bad"] { background: var(--red); }
+  .status[data-state="warn"] .dot, .dot[data-state="warn"] { background: var(--amber); }
+  .header-right .dot { display: inline-block; vertical-align: 1px; margin-right: 6px; }
+  dl { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 11px; }
+  dl div { display: flex; gap: 6px; }
   dt { color: var(--muted); }
-  dd { margin: 0; overflow-wrap: anywhere; }
+  dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); }
+  .grid > section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 14px; min-width: 0; }
+  h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+  p { margin: 0 0 10px; }
+  section p { color: var(--muted); }
+  .note { font-size: 11px; color: var(--muted); }
+  .label { margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  code { font-family: var(--mono); font-size: 12px; background: var(--soft); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
   .cmd { position: relative; margin: 0 0 10px; }
   .cmd pre {
-    margin: 0;
-    padding: 12px 84px 12px 14px;
-    background: var(--code);
-    border-radius: 10px;
-    overflow-x: auto;
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    margin: 0; padding: 10px 76px 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft);
+    border: 1px solid var(--line); border-radius: 6px; font: 12px/1.5 var(--mono);
   }
-  .cmd button {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    border: 1px solid var(--line);
-    background: var(--card);
-    color: var(--fg);
-    border-radius: 8px;
-    padding: 4px 10px;
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
+  .cmd button { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 4px 9px; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; text-align: left; }
+  th {
+    background: var(--head); border-bottom: 1px solid var(--line); padding: 8px 12px;
+    font-size: 10px; font-weight: 550; text-transform: uppercase; letter-spacing: .6px; color: var(--muted);
   }
-  .cmd button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  footer { margin-top: clamp(24px, 4vw, 48px); color: var(--muted); font-size: 14px; }
-  #invite { border-color: var(--accent); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  tbody tr:hover { background: var(--hover); }
+  footer {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 18px;
+    padding: 13px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
+  }
+  #invite { grid-column: 1 / -1; border-color: var(--accent); }
+  [hidden] { display: none !important; }
+  @media (width <= 760px) {
+    .top { height: 53px; }
+    .wordmark { font-size: 15px; }
+    .header-right { gap: 8px; font-size: 10px; }
+    .header-right .dial { display: none; }
+    .overview { gap: 10px 22px; padding-top: 17px; }
+    .stat strong { font-size: 21px; }
+    .stat span { font-size: 10px; }
+  }
 </style>
 </head>
 <body>
+<header class="top">
+  <h1 class="wordmark"><span class="mark" aria-hidden="true">⨉</span>{{ title_html }}</h1>
+  <div class="header-right">
+    <span class="dial"><span class="dot" id="dot" data-state="checking" aria-hidden="true"></span><span class="relay-url">wss://{{ relay_host }}</span></span>
+    <button id="theme" type="button" aria-label="Switch color theme">◐</button>
+  </div>
+</header>
 <main class="page">
-  <header>
-    <h1>{{ title_html }}</h1>
-    <p>A private, invite-gated Nostr + Blossom relay for the <code>{{ campaign }}</code> campaign of nostr-mailbox.</p>
-    <p class="relay-url">wss://{{ relay_host }}</p>
-  </header>
+  <section class="overview" aria-label="What the relay says about itself">
+    <div class="stat"><strong id="stat-relay">…</strong><span>relay</span></div>
+    <div class="stat"><strong id="info-auth">…</strong><span>auth_required · NIP-42</span></div>
+    <div class="stat"><strong id="info-membership">…</strong><span>membership_required · NIP-43</span></div>
+    <div class="stat"><strong id="info-nips-count">…</strong><span>NIPs supported</span></div>
+  </section>
+  <p class="about">A private, invite-gated Nostr + Blossom relay for the <code>{{ campaign }}</code> campaign of nostr-mailbox.</p>
+
+  <section class="assumptions" aria-labelledby="status-title">
+    <h2 id="status-title" class="label">Relay status</h2>
+    <div class="status" id="status" data-state="checking" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span><span id="status-text">Checking https://{{ relay_host }}/ …</span>
+    </div>
+    <dl id="info" hidden>
+      <div><dt>Name</dt><dd id="info-name"></dd></div>
+      <div><dt>Supported NIPs</dt><dd id="info-nips"></dd></div>
+      <div><dt>Software</dt><dd id="info-software"></dd></div>
+    </dl>
+    <span class="note">This page reads the relay's NIP-11 document: what the relay says about itself.
+      <code>nostr-mailbox relay check</code> shows what it does for your key.</span>
+  </section>
 
   <div class="grid">
     <section id="invite" aria-labelledby="invite-title" hidden>
@@ -123,22 +154,6 @@
       </div>
       <p>The token admits one key, once. It reached this page in the link's fragment, which a
         browser never sends to a server, and the page has taken it off the address bar.</p>
-    </section>
-
-    <section aria-labelledby="status-title">
-      <h2 id="status-title">Relay status</h2>
-      <div class="status" id="status" data-state="checking" role="status" aria-live="polite">
-        <span class="dot" aria-hidden="true"></span><span id="status-text">Checking https://{{ relay_host }}/ …</span>
-      </div>
-      <dl id="info" hidden>
-        <dt>Name</dt><dd id="info-name"></dd>
-        <dt>auth_required</dt><dd id="info-auth"></dd>
-        <dt>membership_required</dt><dd id="info-membership"></dd>
-        <dt>Supported NIPs</dt><dd id="info-nips"></dd>
-        <dt>Software</dt><dd id="info-software"></dd>
-      </dl>
-      <p style="margin-top:14px">This page reads the relay's NIP-11 document. It shows what the relay
-        says about itself; <code>nostr-mailbox relay check</code> shows what it does for your key.</p>
     </section>
 
     <section aria-labelledby="install-title">
@@ -165,7 +180,8 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
       <h2 id="operator-title">For the operator</h2>
       <p>Set the campaign up once, then mint one invite per member. Use <code>--kubectl</code> for Kubernetes,
         <code>--compose compose.yaml</code> for Docker Compose, or <code>--exec</code> with
-        <code>cf_ncli_shim.py</code> for the Cloudflare Worker.</p>
+        <code>cf_ncli_shim.py</code> for the Cloudflare Worker. A Cloudflare Worker relay's own console, at its
+        root, also mints a member's invites and pairs coding agents with them.</p>
       <div class="cmd"><pre>nostr-mailbox setup --relay wss://{{ relay_host }} --campaign {{ campaign }} --kubectl</pre><button type="button">Copy</button></div>
       <div class="cmd"><pre>nostr-mailbox invite --kubectl</pre><button type="button">Copy</button></div>
       <div class="cmd"><pre>nostr-mailbox relay revoke &lt;npub&gt; --kubectl</pre><button type="button">Copy</button></div>
@@ -174,15 +190,18 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
     {{ nip05_section_block }}
   </div>
 
-  <footer>Static page. It talks to one host only: https://{{ relay_host }}/ for the NIP-11 document.</footer>
+  <footer><span>Static page. It talks to one host only: https://{{ relay_host }}/ for the NIP-11 document.</span></footer>
 </main>
 <script>
   "use strict";
   const RELAY_HOST = {{ relay_host_js }};
+  const THEME_KEY = "nostr-relay-deploy/theme";
 
   function show(state, text) {
     const status = document.getElementById("status");
     status.dataset.state = state;
+    document.getElementById("dot").dataset.state = state;
+    document.getElementById("stat-relay").dataset.state = state;
     document.getElementById("status-text").textContent = text;
   }
 
@@ -198,17 +217,24 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
       const info = await response.json();
       const limits = info.limitation || {};
       const isPrivate = limits.auth_required === true && limits.membership_required === true;
+      const nips = Array.isArray(info.supported_nips) ? info.supported_nips : null;
       document.getElementById("info-name").textContent = info.name || "(no name)";
       document.getElementById("info-auth").textContent = yesNo(limits.auth_required);
       document.getElementById("info-membership").textContent = yesNo(limits.membership_required);
-      document.getElementById("info-nips").textContent = Array.isArray(info.supported_nips) ? info.supported_nips.join(", ") : "not advertised";
+      document.getElementById("info-nips").textContent = nips ? nips.join(", ") : "not advertised";
+      document.getElementById("info-nips-count").textContent = nips ? String(nips.length) : "–";
       document.getElementById("info-software").textContent = [info.software, info.version].filter(Boolean).join(" ") || "not advertised";
       document.getElementById("info").hidden = false;
+      document.getElementById("stat-relay").textContent = isPrivate ? "private" : "open";
       show(isPrivate ? "ok" : "warn", isPrivate
         ? "Online, private: authentication and membership required"
         : "Online, but it does not advertise both auth_required and membership_required");
     } catch (err) {
       console.error("NIP-11 check of " + url + " failed", err);
+      document.getElementById("stat-relay").textContent = "unreachable";
+      for (const id of ["info-auth", "info-membership", "info-nips-count"]) {
+        document.getElementById(id).textContent = "–";
+      }
       show("bad", "Unreachable from this browser (" + err.message + "). The relay may be down, or its NIP-11 answer lacks CORS headers.");
     }
   }
@@ -314,6 +340,32 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
     // The label stays until the button loses focus, rather than for a guessed delay.
     button.addEventListener("blur", () => { button.textContent = "Copy"; });
   }
+
+  function applyTheme(theme) {
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    else delete document.documentElement.dataset.theme;
+  }
+
+  function themeStore() {
+    try {
+      return window.localStorage;
+    } catch (err) {
+      console.error("this browser keeps no theme for this page", err);
+      return null;
+    }
+  }
+
+  document.getElementById("theme").addEventListener("click", () => {
+    const set = document.documentElement.dataset.theme;
+    const dark = set ? set === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = dark ? "light" : "dark";
+    applyTheme(next);
+    const store = themeStore();
+    if (store) store.setItem(THEME_KEY, next);
+  });
+
+  const keptTheme = themeStore();
+  applyTheme(keptTheme && keptTheme.getItem(THEME_KEY));
 
   showInvite();
   checkRelay();

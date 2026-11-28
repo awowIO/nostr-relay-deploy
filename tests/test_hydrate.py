@@ -25,10 +25,12 @@ operator's first apply, which runs a server-side dry run before it mutates anyth
 the Workers runtime itself (WebSocketPair, hibernation, Durable Object routing, R2; the
 harness stands in for those); Caddy and Traefik binaries; `docker compose config`; the
 console, the OAuth consent page and the GitHub Pages page in a browser (their scripts are
-syntax-checked by Node, the invite-link reader and the console's connection URLs run under
-Node, the consent form is posted as a browser posts it, and the CSP hashes are checked,
-but no browser runs them, so neither localStorage nor a browser's form-action check on a
-redirect is exercised); and a real ChatGPT or Claude.ai client (the OAuth sign-in is
+syntax-checked by Node; the invite-link reader, the console's nm1_ token packer and its
+connection URLs run under Node, and the packer's tokens are redeemed by a real MCP client
+and nostr-mailbox's CLI; the consent form is posted as a browser posts it, and the CSP
+hashes are checked; but no browser runs them, so the Mint button's DOM wiring, the NIP-07
+signer, localStorage (a remembered token, the room keys, the theme) and a browser's
+form-action check on a redirect are not exercised); and a real ChatGPT or Claude.ai client (the OAuth sign-in is
 driven step by step as the MCP authorization spec has a client make it). Without Docker the ncli witnesses are SKIPPED, and
 nothing else here proves agreement with ncli.
 Set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to also run
@@ -752,7 +754,7 @@ def test_github_pages_is_a_full_width_self_contained_status_page(build):
     page_rule = re.search(r"\.page\s*\{([^}]*)\}", style).group(1)
     assert re.search(r"(^|;)\s*width:\s*100%", page_rule)
     assert re.search(r"max-width:\s*none", page_rule)
-    assert "padding-inline: clamp(20px, 4vw, 64px)" in page_rule
+    assert "padding-inline: clamp(20px, 3vw, 48px)" in page_rule
     assert re.findall(r"max-width\s*:\s*([^;}]+)", style) == ["none"], "no boxed max-width container anywhere"
     assert "@media (max-width" not in style
     assert "@media (prefers-color-scheme: dark)" in style and "color-scheme: light dark" in style
@@ -1218,9 +1220,13 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     css = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
     page_rule = re.search(r"\.page\s*\{([^}]*)\}", css).group(1)
     assert re.search(r"(^|;)\s*width:\s*100%", page_rule) and re.search(r"max-width:\s*none", page_rule)
-    assert "padding-inline: clamp(20px, 4vw, 64px)" in page_rule
+    assert "padding-inline: clamp(20px, 3vw, 48px)" in page_rule
     assert re.findall(r"max-width\s*:\s*([^;}]+)", css) == ["none"], "no boxed max-width container anywhere"
     assert "@media (prefers-color-scheme: dark)" in css and "color-scheme: light dark" in css
+    # The header names this relay and the key signed in, and the Mint button is in the controls bar.
+    for needle in ('id="relay-url"', 'id="persona-npub"', 'id="theme"', 'id="room"', 'id="mint"', 'id="join-code"'):
+        assert needle in page, needle
+    assert "$('relay-url').textContent = RELAY_URL;" in script
     status, headers, body = worker.http("HEAD", "/", headers={"Accept": "text/html"})
     assert (status, headers["Content-Type"], body) == (200, "text/html; charset=utf-8", b"")
     status, _, body = worker.http("GET", "/", headers={"Accept": "application/nostr+json, */*"})
@@ -1319,6 +1325,49 @@ def test_both_pages_read_nostr_mailbox_invite_links_alike(worker, build, tmp_pat
         "the link carries no readable nm1_ token", "the nm1_ token is not base64url JSON",
         "the nm1_ token holds no invite", "the nm1_ token carries no invite code",
         "the nm1_ token is not a cf.transport/1 invite", "the nm1_ token names no ws:// or wss:// relay"]
+
+
+# The palettes a page declares: its light :root, the dark theme its toggle sets, and the
+# dark theme the system asks for when no toggle chose one.
+PALETTES = {
+    "light": re.compile(r"^\s*:root\s*\{([^}]*)\}", re.MULTILINE),
+    "dark": re.compile(r"^\s*:root\[data-theme=dark\]\s*\{([^}]*)\}", re.MULTILINE),
+    "system dark": re.compile(r"@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme=light\]\)\s*\{([^}]*)\}"),
+}
+
+
+def palettes(style: str) -> dict[str, dict[str, str]]:
+    css = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
+    return {name: dict(re.findall(r"(--[a-z]+)\s*:\s*([^;]+?)\s*;", rule.search(css).group(1)))
+            for name, rule in PALETTES.items()}
+
+
+def test_both_pages_share_one_design_system(worker, build):
+    """The console and the GitHub Pages page wear one design: the same light and dark
+    palettes, the same type, the same header with its theme toggle under one storage key,
+    and the same full-width gutters on the header and the page."""
+    console = worker.http("GET", "/")[2].decode()
+    pages = (build / "github-pages" / "index.html").read_text()
+    styles = [re.search(r"<style>(.*?)</style>", p, re.DOTALL).group(1) for p in (console, pages)]
+    scripts = [re.search(r"<script>(.*?)</script>", p, re.DOTALL).group(1) for p in (console, pages)]
+    found = [palettes(s) for s in styles]
+    assert found[0] == found[1], "one palette on both pages"
+    colours = {"--bg", "--panel", "--ink", "--muted", "--line", "--soft", "--accent", "--green", "--red", "--amber",
+               "--head", "--hover", "--shadow"}
+    for theme in ("light", "dark"):
+        assert colours <= set(found[0][theme]), theme
+    assert found[0]["dark"] == found[0]["system dark"], "the toggle's dark is the system's dark"
+    assert found[0]["light"]["--bg"] != found[0]["dark"]["--bg"]
+    for style, script, page in zip(styles, scripts, (console, pages), strict=True):
+        assert 'font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' in style
+        assert "--mono: ui-monospace, SFMono-Regular, Consolas, monospace" in style
+        assert "font-variant-numeric: tabular-nums" in style
+        top = re.search(r"\.top\s*\{([^}]*)\}", style).group(1)
+        assert "height: 61px" in top and "padding-inline: clamp(20px, 3vw, 48px)" in top
+        assert '<button id="theme" type="button" aria-label="Switch color theme">◐</button>' in page
+        assert '<span class="mark" aria-hidden="true">⨉</span>' in page
+        assert re.search(r"""THEME_KEY = ['"]nostr-relay-deploy/theme['"];""", script)
+        assert '<meta name="color-scheme" content="light dark">' in page
 
 
 def test_nothing_before_auth_and_only_this_connections_proof_counts(worker):
@@ -3000,8 +3049,12 @@ def test_the_console_pairs_a_coding_agent_with_urls_the_worker_serves(worker, tm
     done = subprocess.run(["node", str(program), ORIGIN, token], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
     urls = json.loads(done.stdout)
-    assert urls == {"oauth": RESOURCE, "mcp": f"{ORIGIN}/mcp/s/{token}", "openapi": f"{ORIGIN}/mcp/s/{token}/openapi.json"}
-    path = {name: urllib.parse.urlsplit(url).path for name, url in urls.items()}
+    assert urls == {"oauth": RESOURCE, "mcp": f"{ORIGIN}/mcp/s/{token}", "openapi": f"{ORIGIN}/mcp/s/{token}/openapi.json",
+                    "join": f"{ORIGIN}/join/#{token}"}
+    assert 'id="pair-join"' in page and 'id="pair-clients"' in page
+    joined = urllib.parse.urlsplit(urls["join"])
+    assert (worker.http("GET", joined.path)[::2], joined.fragment) == ((200, page.encode()), token), "the console opens it"
+    path = {name: urllib.parse.urlsplit(url).path for name, url in urls.items() if name != "join"}
     status, headers, _ = worker.http("POST", path["oauth"], body=b"{}")
     assert (status, headers["WWW-Authenticate"]) == (401, f'Bearer resource_metadata="{RESOURCE_METADATA}"')
     assert Mcp(worker, path["mcp"].rsplit("/", 1)[1], magic=True).rpc("ping")["result"] == {}
@@ -3011,6 +3064,101 @@ def test_the_console_pairs_a_coding_agent_with_urls_the_worker_serves(worker, tm
     assert "?token=" not in script and "/mcp/s/' + token + '/openapi.json'" in script
     ids = set(re.findall(r'\bid="([^"]+)"', page))
     assert set(re.findall(r"\$\('([^']+)'\)", script)) <= ids, "every element the script reaches is on the page"
+
+
+def console_block(script: str, name: str) -> str:
+    """One `// BEGIN <name>` … `// END <name>` block of the console's own script."""
+    block = re.search(rf"^  // BEGIN {re.escape(name)}\n.*?^  // END {re.escape(name)}\n", script, re.DOTALL | re.MULTILINE)
+    assert block, name
+    return block.group(0)
+
+
+def console_mint(tmp_path: Path, script: str, origin: str, **given) -> dict:
+    """What the console's Mint button packs, run under Node by the console's own packer and
+    connection-URL blocks: the room's key (a fresh one when none is given), the nm1_ token,
+    the operator's npub, and the URLs the Pair card shows for the token."""
+    program = tmp_path / "mint.cjs"
+    program.write_text(console_block(script, "nm1_ token packer") + console_block(script, "connection URLs") + """
+const given = JSON.parse(process.argv[2]);
+const key = given.campaignKey || freshRoomKey();
+const token = packInvite(Object.assign({}, given, { campaignKey: key }));
+console.log(JSON.stringify({ key: key, token: token, npub: npubOf(given.operator), urls: connectionUrls(process.argv[3], token) }));
+""")
+    done = subprocess.run(["node", str(program), json.dumps(given), origin], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+@pytest.mark.skipif(not os.environ.get("NOSTR_MAILBOX_SRC"),
+                    reason="set NOSTR_MAILBOX_SRC=<nostr-mailbox checkout>/skills/nostr-mailbox to run its CLI on a "
+                           "token the console mints")
+def test_a_token_the_console_mints_pairs_an_mcp_client_and_the_cli_in_one_room(worker, tmp_path):
+    """The console's Mint button, end to end with nothing faked on either side: a member's
+    REQ for kind 28935 gets a relay-signed code; the console's own packer makes it a whole
+    nm1_ token for a room, byte for byte what nostr-mailbox's encoder makes of the same
+    declaration; a magic-URL MCP client posts with it; a second token for the same room and
+    key, joined by nostr-mailbox's own CLI through its join link, decrypts that post; and
+    the client reads the CLI's answer. The NIP-07 signer and localStorage, which only a
+    browser has, stand outside: the member signs here with its own key."""
+    sys.path.insert(0, os.environ["NOSTR_MAILBOX_SRC"])
+    from nostr_mailbox import bech32  # type: ignore[import-not-found]
+    from nostr_mailbox import cli as mailbox_cli  # type: ignore[import-not-found]
+    from nostr_mailbox.profile import Trust  # type: ignore[import-not-found]
+
+    page = worker.http("GET", "/")[2].decode()
+    script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
+    assert "packInvite({ relay: RELAY_URL, campaign: room, operator: state.me, campaignKey: key.hex, code: code });" in script
+    assert "var events = await query({ kinds: [28935], limit: 1 });" in script
+    relay = WorkerRelay(worker)
+    [(member, wire)] = enrolled(relay, 1)
+
+    def minted_code() -> str:
+        invite = wire.invite()
+        assert invite["pubkey"] == relay_pubkey(relay) and event_is_signed(invite), "the console checks this too"
+        return next(t[1] for t in invite["tags"] if t[0] == "claim")
+
+    room = f"agents-{os.urandom(3).hex()}"
+    code = minted_code()
+    first = console_mint(tmp_path, script, ORIGIN, relay=f"wss://{RELAY_HOST}", campaign=f"#{room}",
+                         operator=member.pubkey, code=code)
+    key, token = first["key"], first["token"]
+    assert re.fullmatch(r"[0-9a-f]{64}", key) and first["npub"] == bech32.encode("npub", bytes.fromhex(member.pubkey))
+    declared = Trust.from_mapping({"schema": "cf.transport/1", "relay": f"wss://{RELAY_HOST}", "campaign": room,
+                                   "operator_pubkeys": [first["npub"]], "campaign_key": key}, source="the console's room")
+    assert token == mailbox_cli._encode_invite_token(declared, code), "nostr-mailbox's own encoder, byte for byte"
+    assert first["urls"] == {"oauth": RESOURCE, "mcp": f"{ORIGIN}/mcp/s/{token}",
+                             "openapi": f"{ORIGIN}/mcp/s/{token}/openapi.json", "join": f"{ORIGIN}/join/#{token}"}
+
+    # The 1-paste magic URL: an MCP client set to Authentication: None, on the room's bus.
+    status, _, body = worker.http("GET", urllib.parse.urlsplit(first["urls"]["openapi"]).path)
+    assert (status, json.loads(body)["servers"]) == (200, [{"url": first["urls"]["mcp"]}])
+    chatgpt = Mcp(worker, urllib.parse.urlsplit(first["urls"]["mcp"]).path.rsplit("/", 1)[1], magic=True)
+    chatgpt.initialize()
+    listed = chatgpt.call("mailbox_list")
+    assert (listed["campaign"], listed["relay_member"], listed["token"]["redeemed"]) == (room, False, False)
+    posted = chatgpt.call("mailbox_post", {"channel": "bus", "body": "From ChatGPT, on a token the console minted"})
+    assert posted["accepted"] and posted["topic"] == "bus"
+    [stored] = wire.read({"ids": [posted["id"]]})
+    assert ["t", f"{room}:bus"] in stored["tags"] and ["epoch", "1"] in stored["tags"]
+    assert "console minted" not in stored["content"], "the relay keeps NIP-44 ciphertext only"
+
+    # A second Mint for the same room carries the same key. The CLI dials the harness on
+    # loopback, so this token names the relay's public name as relay_auth_url, as a seat
+    # behind a port-forward does; the console itself never sets it.
+    second = console_mint(tmp_path, script, ORIGIN, relay=f"ws://127.0.0.1:{worker.port}", campaign=room,
+                          operator=member.pubkey, code=minted_code(), campaignKey=key, relayAuthUrl=f"wss://{RELAY_HOST}")
+    home = tmp_path / "agent"
+    joined = nostr_mailbox_cli(home, "join", second["urls"]["join"])
+    assert (joined["joined"], joined["campaign"]) == (f"ws://127.0.0.1:{worker.port}", room)
+    check = nostr_mailbox_cli(home, "relay", "check")
+    assert (check["ok"], check["authenticated"], check["relay_access"]) == (True, True, True)
+    seen = nostr_mailbox_cli(home, "watch", "bus", "--wait-seconds", "0")
+    assert "rejected" not in seen, seen["rejected"]
+    assert [(m["id"], m["body"]) for m in seen["messages"]] == [(posted["id"], "From ChatGPT, on a token the console minted")]
+    reply = nostr_mailbox_cli(home, "post", "bus", "From the local agent, on the same room key")
+    messages = chatgpt.call("mailbox_watch", {"channel": "bus"})["messages"]
+    assert [(m["id"], m["body"], m["author"]) for m in messages] == [
+        (reply["id"], "From the local agent, on the same room key", bech32.pubkey_hex(joined["npub"]))]
 
 
 def test_oauth_and_magic_url_clients_talk_with_a_local_agent(worker, keeper):

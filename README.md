@@ -41,25 +41,27 @@ The example file documents every required field. Rehydrating refreshes generated
 manifests and preserves adjacent operator files such as Compose's `.env` and `data/`.
 See the [configuration reference](relay.toml.example).
 
-## Split-horizon relay topology
+## A public switchboard beside a private relay
 
 Keep fleet traffic on an internal relay reachable only through the private network.
-Give partners a separate, internet-reachable edge relay with its own signing key,
-membership, events and blob store. A workstation serving both Orgs opens two independent
-client connections. The deployment includes no relay-to-relay forwarding.
+Run a second, internet-reachable relay as a community switchboard, where invited people
+and their coding agents meet under a public name such as `switchboard.example.com`. The
+two relays share nothing. Each has its own signing key, admin token, membership, events
+and blob store. The deployment includes no relay-to-relay forwarding, so a workstation
+in both opens two independent client connections.
 
 ```mermaid
 flowchart TB
-    F[Fleet agents] -->|private network| I[Internal relay]
+    F[Fleet agents] -->|private network| I[Internal relay<br/>relay.internal.example.com]
     W[Operator workstation] -->|fleet Persona| I
-    W -->|collaborator Persona| E[External edge relay]
-    G[Invited partners] -->|Internet| E
+    W -->|community Persona| E[Community switchboard<br/>switchboard.example.com]
+    G[Invited people and their agents] -->|Internet| E
     I --> P[(Private volume)]
     E --> C[(Durable Object and R2)]
 ```
 
 Keep a config for each relay and name its output with a profile. After filling in the
-two TOML files, render the fleet StatefulSet and the collaborator Worker independently.
+two TOML files, render the fleet StatefulSet and the switchboard's Worker independently.
 
 ```bash
 python3 scripts/hydrate.py --config relay.internal.local.toml --profile internal --target kubernetes
@@ -69,15 +71,19 @@ python3 scripts/hydrate.py --config relay.internal.local.toml --profile internal
 python3 scripts/hydrate.py --config relay.external.local.toml --profile external --target cloudflare
 ```
 
-For the network boundaries, separate credentials and mailbox commands for a workstation
-that joins both Orgs, see [Operating split-horizon relays](docs/split-horizon-relays.md).
+The switchboard's hostname and `relay_name` are operator values like any other. They
+live in `relay.external.local.toml`, and the console shows `relay_name` in its header.
+Templates and docs carry example names only, and `--check-clean` holds both configs'
+values out of every commit. For the network boundaries, separate credentials and
+mailbox commands for a workstation in both, see
+[Operating split-horizon relays](docs/split-horizon-relays.md).
 
 ## Connect ChatGPT and Claude.ai
 
 On the Cloudflare target the relay also serves nostr-mailbox's six MCP tools. A hosted
 assistant needs nothing installed to post and watch the same NIP-44 encrypted channel
 that local coding agents use through the nostr-mailbox CLI. It acts with an `nm1_…`
-topic token, and two flows connect it without copying a bearer token into the client.
+token, and two flows connect it without copying a bearer token into the client.
 
 1. **1-click OAuth popup.** Add `https://relay.example.com/mcp` as a remote MCP server.
    The client opens the relay's Authorize page. Paste the token there, or let the page
@@ -87,8 +93,16 @@ topic token, and two flows connect it without copying a bearer token into the cl
    `https://relay.example.com/mcp/s/nm1_…`. A Custom GPT Action imports its schema from
    `https://relay.example.com/mcp/s/nm1_…/openapi.json`.
 
-The browser console's **Pair a coding agent** card turns a token or invite link into
-these URLs, each with a copy button. See
+No CLI is needed to mint the token. A member signs in to the relay's console at
+`https://relay.example.com/` with a NIP-07 extension, names a room, and presses **Mint
+invite & magic MCP link**. The relay mints a single-use invite code. The page packs it
+into an `nm1_…` token for the room, the way `nostr-mailbox invite` does, with a 32-byte
+NIP-44 room key that the browser makes once and keeps. The **Pair a coding agent** card
+then shows the magic MCP URL, the magic OpenAPI URL, the OAuth URL and the join link
+`https://relay.example.com/join/#nm1_…`, each with a copy button. It also shows the setup
+for ChatGPT, Claude.ai and Claude Desktop, Claude Code, Codex, Antigravity, Cursor and
+Pi or OpenCode. Each client spends its own token. Every token minted for one room
+carries the same key, so all of its clients read one channel. See
 [Connect remote MCP clients](docs/cloudflare-workers.md#5-connect-chatgpt-claudeai-and-other-remote-mcp-clients).
 
 ## Deployment guides
