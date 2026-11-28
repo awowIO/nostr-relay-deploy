@@ -1028,7 +1028,8 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
         expected.add(("a", "https://github.com/awowIO/nostr-relay-deploy"))
     assert {(t, a["href"]) for t, a in links} == expected
     anchors = [a["href"] for _, a in parsed.tags if a.get("href", "").startswith("#")]
-    assert anchors == (["#switchboard", "#docs", "#acls", "#architecture"] if console_page else [])
+    assert anchors == (["#switchboard", "#docs", "#acls", "#architecture",
+                        "#docs", "#acls", "#architecture"] if console_page else [])
     assert all(a.get("target") == "_blank" and a.get("rel") == "noopener noreferrer" for _, a in links)
     header = re.search(r"<header .*?</header>", page, re.DOTALL).group(0)
     link = re.search(rf'<a class="hdr-link" href="{re.escape(SOURCE_URL)}"[^>]*>(.*?)</a>', header, re.DOTALL)
@@ -1040,11 +1041,16 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     assert not [(t, a) for t, a in parsed.tags if "style" in a]
     assert re.search(r"#maywe-website \{ position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; "
                      r"pointer-events: none; \}", parsed.style)
-    # The two ways in come first, side by side: already invited, and asking for an invite.
-    cards = re.findall(r"<section[^>]*>.*?</section>", page[page.index('<div class="grid">'):], re.DOTALL)
-    titles = (("Sign In or Redeem Invite", "Request an Invite via MayWe") if console_page
-              else ("Already invited", "Request an invite"))
-    assert f">01 · {titles[0]}</h2>" in cards[0] and f">02 · {titles[1]}</h2>" in cards[1]
+    if console_page:
+        admission = page[page.index('id="admission"'):page.index('id="workspace"')]
+        steps = re.findall(r'<h3 id="(?:invited|maywe)-title">(.*?)</h3>', admission)
+        assert steps == ["01 · Already invited — Open your room", "02 · Request an invite — Waitlist via MayWe"]
+        drawer = re.search(r'<details class="returning" id="returning">(.*?)</details>', admission, re.DOTALL)
+        assert drawer and all(f'id="{field}"' in drawer[1] for field in
+                              ("key-form", "nsec", "signin", "reconnect", "extension-choice", "use-extension"))
+    else:
+        cards = re.findall(r"<section[^>]*>.*?</section>", page[page.index('<div class="grid">'):], re.DOTALL)
+        assert ">01 · Already invited</h2>" in cards[0] and ">02 · Request an invite</h2>" in cards[1]
     opener = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "open-form")
     assert "action" not in opener
     pasted = next(a for t, a in parsed.tags if t == "input" and a.get("id") == "open-token")
@@ -3747,7 +3753,7 @@ def test_console_documentation_deep_links(worker, tmp_path, path, fragment, acti
             if not seen["elements"][tab]["hidden"]] == [active]
     assert not any("replaceState" in request for request in seen["requests"])
     assert seen["elements"]["workspace"]["hidden"]
-    assert re.findall(r'<svg role="img".*?viewBox="([^"]+)"', page) == ["0 0 1200 310", "0 0 1200 420"]
+    assert re.findall(r'<svg role="img".*?viewBox="([^"]+)"', page) == ["0 0 1120 320"] * 2
     for svg in re.findall(r"<svg .*?</svg>", page, re.DOTALL):
         assert 'var(--' in svg and not re.search(r'(?:fill|stroke)="#', svg)
 

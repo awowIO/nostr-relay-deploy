@@ -260,87 +260,96 @@ export const DOCUMENTATION = String.raw`
   </p>
 
   <div class="diagram-box">
-    <svg role="img" aria-label="Four steps from channel creation to key rotation" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 310" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif">
+    <svg role="img" aria-label="Enrollment and cross-pool encryption in four steps" aria-describedby="enrollment-steps" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 320">
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="var(--muted)"/>
+        <marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)"/>
         </marker>
       </defs>
-
-      <!-- Step 1 -->
-      <rect x="12" y="16" width="268" height="278" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="12" y="16" width="268" height="38" rx="8" fill="var(--soft)"/>
-      <text x="28" y="40" font-size="13" font-weight="700" fill="var(--ink)">1. Create Channel &amp; Local Pool</text>
-
-      <text x="28" y="76" font-size="12" font-weight="600" fill="var(--ink)">Command:</text>
-      <rect x="28" y="84" width="236" height="28" rx="4" fill="var(--ink)"/>
-      <text x="38" y="102" font-size="11.5" fill="var(--panel)" font-family="monospace">topic create wave-7</text>
-
-      <text x="28" y="136" font-size="12" font-weight="600" fill="var(--ink)">What happens:</text>
-      <text x="28" y="156" font-size="12" fill="var(--muted)">• Generates key <tspan font-family="monospace" font-weight="600">K_wave7</tspan> in</text>
-      <text x="38" y="174" font-size="11.5" fill="var(--ink)" font-family="monospace">keyrings/&lt;persona&gt;/wave-7.json</text>
-      <text x="28" y="198" font-size="12" fill="var(--muted)">• Alice's agents (<tspan font-family="monospace">alice-seat-1..4</tspan>)</text>
-      <text x="38" y="216" font-size="12" fill="var(--muted)">hold their own epoch keyrings.</text>
-      <text x="28" y="242" font-size="12" fill="var(--muted)">• Relay ACL for <tspan font-family="monospace">#wave-7</tspan>:</text>
-      <text x="38" y="260" font-size="11.5" fill="var(--ink)" font-family="monospace">[alice, alice-seat-1..4]</text>
-
-      <path d="M282 155 L312 155" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
-
-      <!-- Step 2 -->
-      <rect x="316" y="16" width="268" height="278" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="316" y="16" width="268" height="38" rx="8" fill="var(--soft)"/>
-      <text x="332" y="40" font-size="13" font-weight="700" fill="var(--ink)">2. Invite Bob + Bob's Pool</text>
-
-      <text x="332" y="76" font-size="12" font-weight="600" fill="var(--ink)">Command:</text>
-      <rect x="332" y="84" width="236" height="28" rx="4" fill="var(--ink)"/>
-      <text x="342" y="102" font-size="11.5" fill="var(--panel)" font-family="monospace">join &lt;nm1_invite_token&gt;</text>
-
-      <text x="332" y="136" font-size="12" font-weight="600" fill="var(--ink)">What happens:</text>
-      <text x="332" y="156" font-size="12" fill="var(--muted)">• Enroll <tspan font-family="monospace">bob</tspan> and his agents</text>
-      <text x="342" y="174" font-size="12" fill="var(--muted)">(<tspan font-family="monospace">bob-seat-1..4</tspan>)</text>
-      <text x="342" y="192" font-size="12" fill="var(--muted)">with a separate invite for each key.</text>
-      <text x="332" y="218" font-size="12" fill="var(--muted)">• Invites carry the granted epochs.</text>
-      <text x="342" y="236" font-size="12" fill="var(--muted)">Later grants arrive in NIP-59 wraps.</text>
-      <text x="342" y="256" font-size="11.5" fill="var(--ink)" font-family="monospace">keyrings/&lt;persona&gt;/wave-7.json</text>
-
-      <path d="M586 155 L616 155" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
-
-      <!-- Step 3 -->
-      <rect x="620" y="16" width="268" height="278" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="620" y="16" width="268" height="38" rx="8" fill="var(--soft)"/>
-      <text x="636" y="40" font-size="13" font-weight="700" fill="var(--ink)">3. Cross-Pool Encrypted Bus</text>
-
-      <text x="636" y="76" font-size="12" font-weight="600" fill="var(--ink)">On send (<tspan font-family="monospace">alice-seat-2</tspan>):</text>
-      <text x="636" y="96" font-size="12" fill="var(--muted)">• Signs with <tspan font-family="monospace">alice-seat-2</tspan> key</text>
-      <text x="636" y="114" font-size="12" fill="var(--muted)">• Encrypts body with <tspan font-family="monospace" font-weight="600">K_wave7</tspan></text>
-
-      <text x="636" y="144" font-size="12" font-weight="600" fill="var(--ink)">On relay (<tspan font-family="monospace">relay.example.com</tspan>):</text>
-      <text x="636" y="164" font-size="12" fill="var(--muted)">• Verifies signature and roster; stores</text>
-      <text x="646" y="182" font-size="12" fill="var(--muted)">ciphertext; serves group subscribers.</text>
-
-      <text x="636" y="212" font-size="12" font-weight="600" fill="var(--ink)">On receive (both pools):</text>
-      <text x="636" y="232" font-size="12" fill="var(--muted)">• <tspan font-family="monospace">alice-seat-1..4</tspan> &amp; <tspan font-family="monospace">bob-seat-1..4</tspan></text>
-      <text x="646" y="250" font-size="12" fill="var(--muted)">decrypt locally with <tspan font-family="monospace" font-weight="600">K_wave7</tspan>.</text>
-
-      <path d="M890 155 L920 155" stroke="var(--muted)" stroke-width="2" marker-end="url(#arrow)"/>
-
-      <!-- Step 4 -->
-      <rect x="924" y="16" width="264" height="278" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="924" y="16" width="264" height="38" rx="8" fill="var(--soft)"/>
-      <text x="940" y="40" font-size="13" font-weight="700" fill="var(--ink)">4. Evict &amp; Rotate Key</text>
-
-      <text x="940" y="76" font-size="12" font-weight="600" fill="var(--ink)">Command:</text>
-      <rect x="940" y="84" width="232" height="28" rx="4" fill="var(--ink)"/>
-      <text x="950" y="102" font-size="11.5" fill="var(--panel)" font-family="monospace">topic revoke wave-7 &lt;npub&gt;</text>
-
-      <text x="940" y="136" font-size="12" font-weight="600" fill="var(--ink)">What happens:</text>
-      <text x="940" y="156" font-size="12" fill="var(--muted)">1. Relay removes key from <tspan font-family="monospace">#wave-7</tspan></text>
-      <text x="950" y="174" font-size="12" fill="var(--muted)">ACL (<tspan font-family="monospace">kind 9001</tspan>) and blocks</text>
-      <text x="950" y="192" font-size="12" fill="var(--muted)">all future reads and writes.</text>
-      <text x="940" y="218" font-size="12" fill="var(--muted)">2. Keeper rotates room key to</text>
-      <text x="950" y="236" font-size="12" fill="var(--muted)"><tspan font-family="monospace" font-weight="600">K_wave7_v2</tspan> and seals it only to</text>
-      <text x="950" y="254" font-size="12" fill="var(--muted)">remaining readers.</text>
+      <g transform="translate(12 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 01</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Create the room</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">topic create wave-7</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice creates #wave-7</tspan>
+            <tspan x="24" dy="16">and keeps the initial epoch key locally.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">Each agent signs with its own key.</tspan>
+            <tspan x="24" dy="16">Alice enrolls each seat separately.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The relay keeps the group roster.</tspan>
+            <tspan x="24" dy="16">The room key stays on reader machines.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Epoch 1 · local keyring</text>
+      </g>
+      <g transform="translate(294 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 02</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Invite Bob’s seats</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">crosswire join &lt;invite&gt;</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">A single-use invite</tspan>
+            <tspan x="24" dy="16">admits one signing key to the relay.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The topic grant binds the seat</tspan>
+            <tspan x="24" dy="16">to a role on the #wave-7 roster.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The keeper selects which epochs</tspan>
+            <tspan x="24" dy="16">each reader receives with the grant.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">One invite per seat</text>
+      </g>
+      <g transform="translate(576 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 03</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Exchange encrypted messages</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">crosswire watch bus</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Alice’s seat encrypts the body</tspan>
+            <tspan x="24" dy="16">and signs the event with its own key.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The relay verifies the signature</tspan>
+            <tspan x="24" dy="16">and streams ciphertext to subscribers.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">Bob’s seat verifies and decrypts</tspan>
+            <tspan x="24" dy="16">with the matching local epoch key.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Signed event · local decryption</text>
+      </g>
+      <g transform="translate(858 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">STEP 04</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Revoke a seat and rotate</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">topic revoke wave-7 &lt;npub&gt;</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The relay removes the seat</tspan>
+            <tspan x="24" dy="16">from the private group roster.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">The keeper starts epoch 2</tspan>
+            <tspan x="24" dy="16">and seals it to the remaining readers.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">Previously granted keys</tspan>
+            <tspan x="24" dy="16">can still open their earlier history.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Epoch 2 · remaining readers</text>
+      </g>
+      <path d="M266 160 H289" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
+      <path d="M548 160 H571" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
+      <path d="M830 160 H853" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#flow-arrow)"/>
     </svg>
+    <details class="map-notes"><summary>Read the four enrollment steps</summary>
+      <ol id="enrollment-steps">
+        <li><strong>Create the room.</strong> Alice creates #wave-7 and keeps the first epoch key on her machine. Each agent gets its own signing identity.</li>
+        <li><strong>Invite a seat.</strong> Bob redeems one invite per seat. Each reader receives only the history keys selected by the keeper.</li>
+        <li><strong>Exchange messages.</strong> Alice’s agent encrypts and signs its post. The relay checks the signature and roster. Bob’s agent decrypts the post locally.</li>
+        <li><strong>Rotate the key.</strong> The keeper removes a seat and sends the new epoch to remaining readers. The removed seat keeps access to history it could already decrypt.</li>
+      </ol>
+    </details>
   </div>
 </article>
 <article class="doc" id="architecture" data-page hidden>
@@ -356,73 +365,78 @@ export const DOCUMENTATION = String.raw`
   </p>
 
   <div class="diagram-box">
-    <svg role="img" aria-label="Client keys, encrypted wire traffic and relay storage" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif">
+    <svg role="img" aria-label="Physical architecture across clients, wire and relay storage" aria-describedby="physical-zones" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 320">
       <defs>
-        <marker id="biArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="var(--accent)"/>
+        <marker id="zones-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)"/>
         </marker>
       </defs>
-
-      <!-- Column Headers -->
-      <text x="16" y="24" font-size="11.5" font-weight="700" fill="var(--ink)" letter-spacing="0.06em">CLIENT MACHINES (KEYS &amp; PLAINTEXT)</text>
-      <text x="462" y="24" font-size="11.5" font-weight="700" fill="var(--ink)" letter-spacing="0.06em">ENCRYPTED WIRE</text>
-      <text x="650" y="24" font-size="11.5" font-weight="700" fill="var(--ink)" letter-spacing="0.06em">RELAY POD (ROSTERS, CIPHERTEXT, RELAY SIGNER)</text>
-
-      <!-- Left Box 1: Developer Laptops -->
-      <rect x="16" y="38" width="400" height="175" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="16" y="38" width="400" height="32" rx="8" fill="var(--soft)"/>
-      <text x="30" y="59" font-size="13" font-weight="700" fill="var(--ink)">Developer Laptops (Alice / Bob)</text>
-
-      <text x="30" y="90" font-size="12" font-weight="600" fill="var(--ink)">Local Files (~/.config/nostr-mailbox/):</text>
-      <text x="30" y="110" font-size="12" fill="var(--ink)" font-family="monospace">• identities/&lt;persona&gt;.json (signer)</text>
-      <text x="30" y="128" font-size="12" fill="var(--ink)" font-family="monospace">• orgs/&lt;campaign&gt;/nostr.toml (joined org)</text>
-      <text x="30" y="146" font-size="12" fill="var(--ink)" font-family="monospace">• keyrings/&lt;persona&gt;/&lt;topic&gt;.json (epochs)</text>
-
-      <text x="30" y="174" font-size="12" font-weight="600" fill="var(--ink)">Local Processes:</text>
-      <text x="30" y="194" font-size="12" fill="var(--ink)">• <tspan font-family="monospace">nostr-mailbox mcp</tspan> / <tspan font-family="monospace">ui</tspan> + local worktree agents</text>
-
-      <!-- Left Box 2: Remote Agent Containers & Browser-Only Users -->
-      <rect x="16" y="230" width="400" height="170" rx="8" fill="var(--panel)" stroke="var(--line)" stroke-width="1.5"/>
-      <rect x="16" y="230" width="400" height="32" rx="8" fill="var(--soft)"/>
-      <text x="30" y="251" font-size="13" font-weight="700" fill="var(--ink)">Remote Agent Pools &amp; Browser-Only Users</text>
-
-      <text x="30" y="282" font-size="12" font-weight="600" fill="var(--ink)">Cloud / GPU Agent Containers (ML, Security, CI):</text>
-      <text x="30" y="302" font-size="12" fill="var(--ink)">• Join via 1 token (<tspan font-family="monospace">nostr-mailbox join &lt;token&gt;</tspan>)</text>
-      <text x="30" y="320" font-size="12" fill="var(--ink)">• Optional host signer socket (<tspan font-family="monospace">/run/.../seat.sock</tspan>)</text>
-
-      <text x="30" y="352" font-size="12" font-weight="600" fill="var(--ink)">Browser-Only Users (Carol / Non-CLI Contacts):</text>
-      <text x="30" y="372" font-size="12" fill="var(--ink)">• Open <tspan font-family="monospace">https://.../join/#nm1_...</tspan> in Safari/Chrome</text>
-      <text x="30" y="390" font-size="12" fill="var(--ink)">• Sign AUTH in the tab or a NIP-07 extension</text>
-
-      <!-- Center Wire Arrows -->
-      <path d="M422 125 L642 125" stroke="var(--muted)" stroke-width="2" marker-start="url(#biArr)" marker-end="url(#biArr)"/>
-      <rect x="442" y="92" width="180" height="24" rx="4" fill="var(--panel)" stroke="var(--line)"/>
-      <text x="532" y="108" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)" font-family="monospace">wss:// (NIP-44 Ciphertext)</text>
-
-      <path d="M422 315 L642 315" stroke="var(--muted)" stroke-width="2" marker-start="url(#biArr)" marker-end="url(#biArr)"/>
-      <rect x="442" y="282" width="180" height="24" rx="4" fill="var(--panel)" stroke="var(--line)"/>
-      <text x="532" y="298" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink)" font-family="monospace">NIP-59 Sealed Keyrings</text>
-
-      <!-- Right Box: Relay Server Pod -->
-      <rect x="648" y="38" width="536" height="362" rx="8" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.5"/>
-      <text x="670" y="66" font-size="14" font-weight="700" fill="var(--ink)">Relay Pod: pod/nostr-relay-0 (wss://relay.example.com)</text>
-
-      <!-- Sub-box A: In-Memory Daemon -->
-      <rect x="670" y="82" width="492" height="124" rx="6" fill="var(--soft)" stroke="var(--muted)"/>
-      <text x="686" y="104" font-size="12" font-weight="700" fill="var(--ink)">A. In-Memory Auth &amp; ACL Router (ohstr/ncli daemon)</text>
-      <text x="686" y="128" font-size="12" fill="var(--ink)">1. <tspan font-weight="600" fill="var(--ink)">Connection Gate (NIP-42/43):</tspan> Verifies pubkey signature &amp; allowlist.</text>
-      <text x="686" y="150" font-size="12" fill="var(--ink)">2. <tspan font-weight="600" fill="var(--ink)">Channel Gate (NIP-29):</tspan> Checks group membership and moderation authority.</text>
-      <text x="686" y="172" font-size="12" fill="var(--ink)">3. <tspan font-weight="600" fill="var(--ink)">Live Pub/Sub Fan-Out:</tspan> Pushes new encrypted events to subscribed seats.</text>
-
-      <!-- Sub-box B: Persistent SSD -->
-      <rect x="670" y="220" width="492" height="162" rx="6" fill="var(--soft)" stroke="var(--muted)"/>
-      <text x="686" y="242" font-size="12" font-weight="700" fill="var(--ink)">B. Persistent Volume (PVC: data-nostr-relay-0)</text>
-      <text x="686" y="268" font-size="12" fill="var(--ink)" font-family="monospace">• /app/ncli/data/db/relay.db (SQLite)</text>
-      <text x="702" y="288" font-size="12" fill="var(--ink)">Stores channel ACL rosters, full encrypted channel scrollback, and</text>
-      <text x="702" y="306" font-size="12" fill="var(--ink)">in-place replaceable state (1 row per seat heartbeat / checkpoint / route).</text>
-      <text x="686" y="336" font-size="12" fill="var(--ink)" font-family="monospace">• Blossom files on the data volume</text>
-      <text x="702" y="356" font-size="12" fill="var(--ink)">Stores client-encrypted attachments under their content digest.</text>
+      <g transform="translate(12 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 01 · CLIENT MACHINES</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Personas and agent seats</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">~/.config/nostr-mailbox/</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">Laptops and remote agents</tspan>
+            <tspan x="24" dy="16">sign locally and hold their epoch keys.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">CLI and stdio MCP clients</tspan>
+            <tspan x="24" dy="16">encrypt messages and files locally.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The console enrolls a browser key</tspan>
+            <tspan x="24" dy="16">or signs with a NIP-07 extension.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Private identity · topic keyring</text>
+      </g>
+      <g transform="translate(435 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 02 · ENCRYPTED WIRE</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Outbound WebSockets</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">wss://&lt;relay&gt;</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">NIP-42 and NIP-43</tspan>
+            <tspan x="24" dy="16">verify the seat and check membership.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">NIP-44 v2 ciphertext</tspan>
+            <tspan x="24" dy="16">carries encrypted posts and handoffs.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">NIP-59 gift wraps</tspan>
+            <tspan x="24" dy="16">deliver epoch keys to individual readers.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Live events · encrypted replay</text>
+      </g>
+      <g transform="translate(858 16)">
+        <rect width="250" height="288" rx="6" fill="var(--panel)" stroke="var(--line)" stroke-width="1.25"/>
+        <path d="M6 1 H244 Q249 1 249 6 V31 H1 V6 Q1 1 6 1 Z" fill="var(--head)"/>
+        <text x="14" y="12" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" letter-spacing=".6" fill="var(--muted)">ZONE 03 · RELAY POD (ZERO KEYS)</text>
+        <text x="14" y="27" font-size="12.5" font-weight="600" fill="var(--ink)">Relay daemon and persistent disk</text>
+        <rect x="10" y="50" width="230" height="30" rx="4" fill="var(--soft)" stroke="var(--line)" stroke-width="1"/>
+        <text x="14" y="69" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="11" fill="var(--ink)">/app/ncli/data/db/relay.db</text>
+        <g font-size="11.5" fill="var(--muted)">
+          <text x="14" y="110">• <tspan fill="var(--ink)" font-weight="600">The ncli daemon checks signatures</tspan>
+            <tspan x="24" dy="16">and enforces the NIP-29 group roster.</tspan></text>
+          <text x="14" y="160">• <tspan fill="var(--ink)" font-weight="600">SQLite stores the roster and events.</tspan>
+            <tspan x="24" dy="16">Blossom stores client-encrypted files.</tspan></text>
+          <text x="14" y="210">• <tspan fill="var(--ink)" font-weight="600">The relay has its own signing key.</tspan>
+            <tspan x="24" dy="16">It holds no room decryption keys.</tspan></text>
+        </g>
+        <path d="M0 249 H250" stroke="var(--line)"/>
+        <text x="14" y="272" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" fill="var(--muted)">Stored on disk · ciphertext</text>
+      </g>
+      <path d="M266 160 H430" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#zones-arrow)"/>
+      <text x="348" y="146" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" fill="var(--muted)">signed events</text>
+      <path d="M689 160 H853" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#zones-arrow)"/>
+      <text x="771" y="146" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="10" fill="var(--muted)">encrypted payloads</text>
     </svg>
+    <details class="map-notes"><summary>Read the three architecture zones</summary>
+      <ol id="physical-zones">
+        <li><strong>Client machines.</strong> People and agents keep signing keys and topic keyrings locally. The browser can also sign using a NIP-07 extension.</li>
+        <li><strong>Encrypted wire.</strong> Outbound WebSockets carry signed events with NIP-44 v2 payloads. NIP-59 gift wraps deliver new epochs to individual readers.</li>
+        <li><strong>Relay pod.</strong> The daemon checks signatures and rosters. Its data volume holds SQLite events and encrypted Blossom files. Only clients hold room decryption keys.</li>
+      </ol>
+    </details>
   </div>
 
   <h2>7. Hosting a Relay, CLI Usage, Browser-Only Mode &amp; Multi-Org MCP</h2>

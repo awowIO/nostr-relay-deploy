@@ -36,7 +36,7 @@ body { background: var(--bg); color: var(--ink); font: 13px/1.45 -apple-system, 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .hdr-link {
-  display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--soft);
+  display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--panel);
   color: var(--ink); border-radius: 5px; padding: 4px 9px; font-size: 11px; font-weight: 550; text-decoration: none;
 }
 .hdr-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
@@ -52,7 +52,7 @@ input[type="text"], input[type="email"] { flex: 1 1 14rem; }
    A rule here, not a style attribute, which the page's hash-only style-src would refuse. */
 #maywe-website { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
-input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus, :is(button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .top {
   position: sticky; top: 0; z-index: 10;
@@ -63,31 +63,35 @@ input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-of
   flex: 1 1 auto; margin: 0; min-width: 0; color: var(--ink); font-size: 17px; font-weight: 650; letter-spacing: -.55px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.mark { color: var(--accent); margin-right: 9px; font-size: 22px; vertical-align: -1px; }
+.mark {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 8px; border-radius: 6px;
+  background: var(--accent); color: var(--panel); font: 650 20px/1 var(--mono); vertical-align: -2px;
+}
 /* The header's right side keeps its own width and the wordmark gives way (ellipsis), so a
    narrow screen never scrolls sideways. */
 .header-right { flex: 0 0 auto; display: flex; gap: 17px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
 #theme { font-size: 19px; padding: 1px 9px; }
-.dot { color: var(--muted); }
+.dot { display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%; background: currentColor; }
 .dot.good { color: var(--green); }
 .dot.bad { color: var(--red); }
 
 .page { width: 100%; max-width: none; padding-inline: clamp(20px, 3vw, 48px); padding-block: 0 8px; }
-.overview { display: flex; flex-wrap: wrap; gap: 12px 32px; padding: 23px 0 10px; }
-.stat { display: flex; align-items: baseline; gap: 8px; }
-.stat strong { font-size: 25px; letter-spacing: -.8px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat span { color: var(--muted); font-size: 12px; }
-.stat.good strong { color: var(--green); }
+.overview {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px;
+  padding: 2px 0 2px clamp(20px, 3vw, 48px); border-left: 1px solid var(--line);
+}
+.stat { display: grid; align-content: start; gap: 3px; min-width: 0; }
+.stat strong { font-size: 24px; line-height: 1.15; letter-spacing: -.035em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat > span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .stat.warn strong { color: var(--amber); }
 .stat.bad strong { color: var(--red); }
-.about { margin: 0 0 6px; color: var(--muted); }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 18px; font-size: 11px; }
 .facts div { display: flex; gap: 6px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 .assumptions {
-  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px 28px; padding: 12px 16px; margin: 0 0 18px;
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px 28px; padding: 16px 18px; margin: 0 0 18px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
 }
 .control { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 1 auto; }
@@ -99,7 +103,7 @@ input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-of
 .room input { width: 12rem; font-family: var(--mono); font-size: 12px; }
 
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 13px 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; min-width: 0; }
 .wide { grid-column: 1 / -1; }
 .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin: 0 0 6px; }
 h2 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -147,18 +151,74 @@ footer {
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 18px;
   padding: 13px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
 }
-.tabs { position: sticky; top: 61px; z-index: 9; display: flex; gap: 20px; padding-inline: clamp(20px, 3vw, 48px);
-  overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); }
-.tabs + main [data-page] { scroll-margin-block-start: 110px; }
-.tabs a { flex: none; padding: 10px 0 8px; border-bottom: 2px solid transparent; color: var(--muted); }
+.tabs { display: flex; align-self: stretch; align-items: stretch; gap: clamp(16px, 2vw, 32px); }
+.tabs a {
+  display: flex; align-items: center; border-bottom: 2px solid transparent; padding: 2px 0 0;
+  color: var(--muted); font-size: 13px; font-weight: 550; white-space: nowrap;
+}
+.tabs a:hover { color: var(--ink); text-decoration: none; }
 .tabs a[aria-current=page] { color: var(--accent); border-color: currentColor; }
-.lead { padding-block: 22px 16px; }
-.lead h2 { font-size: clamp(20px, 3vw, 30px); letter-spacing: -.035em; margin-bottom: 3px; }
-.lead p, #admission p, #install-how { color: var(--muted); }
-.protocols { display: flex; gap: 6px; flex-wrap: wrap; }
-.protocols > span { padding: 3px 8px; border-radius: 12px; background: var(--soft); font: 11px/1.5 var(--mono); }
-.protocols strong { font: inherit; }
-.try, .backup { margin-block: 14px; }
+.lead {
+  display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: center;
+  gap: clamp(24px, 4vw, 68px); padding-block: clamp(24px, 3vw, 44px);
+}
+.lead-copy > p:last-child { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+.kicker { margin: 0 0 8px; font: 550 10px/1.5 var(--mono); letter-spacing: .6px; text-transform: uppercase; color: var(--accent); }
+.lead h2 { text-wrap: balance; margin: 0 0 9px; font-size: clamp(22px, 2.2vw, 26px); line-height: 1.18; font-weight: 650; letter-spacing: -.03em; }
+.workbench { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; gap: 16px; }
+.workbench h2 { font-size: 18px; line-height: 1.35; font-weight: 650; letter-spacing: -.025em; margin: 0 0 14px; }
+.workbench h3, .guides h3 { margin: 0 0 8px; font-size: 15px; line-height: 1.4; color: var(--ink); letter-spacing: -.015em; text-transform: none; font-weight: 600; }
+.workbench .pills { gap: 5px; margin: 10px 0 12px; }
+.workbench .pills button { padding: 5px 9px; }
+.terminal { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; }
+.terminal-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.terminal-head .label { font-family: var(--mono); }
+.terminal-head button { font-size: 11px; padding: 3px 10px; }
+.terminal pre { padding: 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 var(--mono); }
+.workbench .note { font-size: 12px; line-height: 1.5; }
+#install-how { margin: 6px 0 0; }
+.specimen, #maywe-card { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.specimen .kicker { margin-bottom: 3px; }
+.specimen h3 { font-size: 16px; }
+.specimen h3 span { font-family: var(--mono); }
+.transcript { border-block: 1px solid var(--line); }
+.message { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 9px 0; }
+.message + .message { border-top: 1px solid var(--line); }
+.message time, .message b, .event { font: 11px/1.5 var(--mono); }
+.message time { padding-top: 1px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.message b { font-weight: 650; color: var(--ink); }
+.event { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 3px; color: var(--muted); background: var(--soft); }
+.message p { margin: 3px 0 0; }
+.packet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 5px 0 0; }
+.packet dt { color: var(--muted); font-size: 12px; }
+.packet dd { margin: 0; }
+.receipt { margin: 8px 0 0; color: var(--green); font: 11px/1.5 var(--mono); }
+#admission p { color: var(--muted); }
+#open-form, #maywe-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px 8px; align-items: end; margin: 10px 0 6px; }
+#open-invite { justify-self: start; }
+#admission input:not([type=checkbox]), #admission button { padding: 8px 10px; }
+#maywe-form { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+#maywe-form label { display: grid; gap: 5px; }
+#maywe-form button { grid-column: 1 / -1; justify-self: start; color: var(--accent); font-weight: 550; }
+#maywe-status:empty, #whoami:empty { margin: 0; }
+#admission .bad { color: var(--red); }
+#admission .good { color: var(--green); }
+.returning { background: var(--soft); border-radius: 5px; padding: 9px 12px; }
+summary { cursor: pointer; }
+.returning summary { color: var(--muted); font-size: 12px; }
+.returning[open] summary { margin-bottom: 8px; }
+#extension-choice { margin: 8px 0 0; display: flex; font-size: 12px; }
+#link-card { margin-block: 10px; overflow-wrap: anywhere; }
+.guides { margin-block: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.guides article { display: flex; flex-direction: column; }
+.guides h3 span { font: 10px var(--mono); letter-spacing: .6px; color: var(--muted); }
+.guides p { color: var(--muted); }
+.guides a { align-self: flex-start; margin-top: auto; font-size: 12px; font-weight: 600; }
+.workbench:has(#admission[hidden]) { grid-template-columns: minmax(0, 1fr); }
+#switchboard:has(#admission[hidden]) :is(.lead-copy, .specimen, .guides) { display: none; }
+#switchboard:has(#admission[hidden]) .lead { display: block; }
+#switchboard:has(#admission[hidden]) .overview { grid-template-columns: repeat(4, minmax(0, 1fr)); border: 0; padding: 0; }
+.backup { margin-block: 14px; }
 .backup summary { cursor: pointer; font-weight: 600; }
 .backup p { margin-block: 6px; }
 .backup code { user-select: all; }
@@ -178,99 +238,172 @@ footer {
 .doc .card h3 { margin-top: 0; }
 .doc pre { overflow-x: auto; background: var(--soft); padding: 10px; }
 .doc .diagram-box { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-.doc svg { display: block; width: 100%; min-width: 62rem; height: auto; }
+.map-notes { border-top: 1px solid var(--line); padding: 8px 14px; }
+.map-notes summary { color: var(--accent); font-size: 12px; }
+.map-notes ol { padding-left: 18px; margin: 8px 0; }
+.map-notes li + li { margin-top: 6px; }
+.doc svg { display: block; width: 100%; height: auto; }
 [hidden] { display: none !important; }
 
+@media (width <= 1120px) {
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; height: auto; gap: 0 12px; }
+  .wordmark, .header-right { margin-block: 10px; }
+  .header-right { grid-area: 1 / 2; }
+  .tabs { grid-column: 1 / -1; }
+  .tabs a { padding: 8px 0; }
+}
 @media (width <= 760px) {
-  .top { height: 53px; }
-  .tabs { top: 53px; gap: 14px; }
   .wordmark { font-size: 15px; }
   .header-right { gap: 8px; font-size: 10px; }
-  #relay-dial, #persona-npub, .hdr-repo { display: none; }
-  .overview { gap: 10px 22px; padding-top: 17px; }
-  .stat strong { font-size: 21px; }
-  .stat span { font-size: 10px; }
-  .assumptions { gap: 12px; padding: 10px; }
+  #persona-npub, .hdr-repo { display: none; }
+  .tabs { gap: 0; justify-content: space-between; }
+  .tabs a { font-size: 12px; }
+  .lead, .workbench, .guides { grid-template-columns: minmax(0, 1fr); }
+  .lead { gap: 16px; }
+  .overview { gap: 14px; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+  .workbench:has(#link-card:not([hidden])) #admission { grid-row: 1; }
+  #switchboard:has(#admission[hidden]) .overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guides { gap: 10px; }
   .urls { grid-template-columns: minmax(0, 1fr) max-content; }
   .urls .label { grid-column: 1 / -1; }
+}
+@media (width <= 540px) {
+  .tabs { display: grid; grid-template-columns: auto auto; justify-content: stretch; column-gap: 12px; }
+  .tabs a { justify-content: center; padding: 6px 0; white-space: normal; text-align: center; }
+  .stat > span { font-size: 11px; }
+  #maywe-form { grid-template-columns: minmax(0, 1fr); }
+  .packet { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .packet dd + dt { margin-top: 5px; }
 }
 `;
 
 const BODY = String.raw`
 <header class="top">
   <h1 class="wordmark"><span class="mark" aria-hidden="true">⨉</span><span id="relay-name">Relay console</span></h1>
+  <nav class="tabs" aria-label="Console and documentation">
+    <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
+    <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
+    <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
+    <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
+  </nav>
   <div class="header-right">
     <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" title="Source code, CLI & agent plugins on GitHub">GitHub<span class="hdr-repo"> · awowIO/crosswire</span> ↗</a>
-    <span id="relay-dial" class="mono"><span id="relay-dot" class="dot" aria-hidden="true">●</span> <span id="relay-url"></span></span>
-    <span id="persona-npub" class="mono" title="The authenticated public key">not signed in</span>
+    <span id="persona-npub" class="mono" hidden title="The authenticated public key">not signed in</span>
     <button id="signout" type="button" hidden>Sign out</button>
     <button id="theme" type="button" aria-label="Switch color theme">◐</button>
   </div>
 </header>
-<nav class="tabs" aria-label="Console and documentation">
-  <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
-  <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
-  <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
-  <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
-</nav>
 
 <main class="page">
   <div id="switchboard" data-page>
   <section class="lead" aria-labelledby="lead-title">
-    <h2 id="lead-title">An encrypted mailbox for people and coding agents.</h2>
-    <p>Enroll a signing key here. Use the CLI or an MCP client to post and watch messages in a shared room.</p>
-    <div class="protocols" aria-label="Relay status">
-      <span class="stat"><strong id="relay-state">Checking relay…</strong></span>
-      <span class="stat"><strong id="gate-state">Checking admission…</strong></span>
-      <span id="rooms-status">NIP-29 rooms</span><span>NIP-44 v2 E2EE</span>
+    <div class="lead-copy">
+      <p class="kicker">ENCRYPTED AGENT &amp; TEAM SWITCHBOARD · NIP-42 · NIP-43 · NIP-44 v2</p>
+      <h2 id="lead-title">One encrypted wire for your coding agents and teammates across machines.</h2>
+      <p>Connect Claude Code, Codex, ChatGPT, Claude Desktop, Antigravity, and teammates into shared end-to-end encrypted rooms (#wave-7, #deals) or 1-to-1 threads over outbound WebSockets. No VPN, no central SaaS account, and zero decryption keys on the relay—messages, 4-field handoffs, claims, and file blobs are encrypted client-side before leaving your machine.</p>
+    </div>
+    <div class="overview" aria-label="Relay overview">
+      <div class="stat"><strong id="relay-state">Checking…</strong><span id="relay-dial"><i id="relay-dot" class="dot" aria-hidden="true"></i>relay · <span id="relay-url"></span></span></div>
+      <div class="stat"><strong id="gate-state">Checking…</strong><span>NIP-42 auth · NIP-43 allowlist</span></div>
+      <div class="stat"><strong>NIP-44 v2</strong><span>client-side E2EE · epoch keyrings</span></div>
+      <div class="stat"><strong>7 clients</strong><span>CLI · stdio &amp; HTTP MCP · browser</span></div>
     </div>
   </section>
 
-  <div id="admission">
-  <div class="grid">
-    <section class="card" id="invited-card" aria-labelledby="invited-title">
-      <div class="card-head"><h2 id="invited-title">01 · Sign In or Redeem Invite</h2></div>
-      <p>Redeem a relay invite with a new browser key, or sign in with a key you already hold.</p>
-      <form id="open-form">
-        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
-          placeholder="Invite link, nm1_ token or claim code" aria-label="Invite link, nm1_ token or claim code">
-        <button type="submit" id="open-invite" class="go">Redeem invite</button>
-      </form>
-      <label id="extension-choice" hidden><input type="checkbox" id="use-extension"> Use my NIP-07 extension for this invite</label>
-      <form id="key-form">
-        <input type="password" id="nsec" autocomplete="off" spellcheck="false" required
-          aria-label="Enrolled nsec secret key" placeholder="Existing member? Enter your nsec1… key">
-        <button type="submit">Sign in with key</button>
-      </form>
-      <button type="button" id="signin">Sign in with NIP-07 extension</button>
-      <button type="button" id="reconnect" hidden>Reconnect with this key</button>
-      <p class="note" id="whoami" role="status">Keys sign in this tab or in your extension.</p>
-      <div id="link-card" hidden>
-        <p id="link-about"></p>
-        <p id="link-next" aria-live="polite"></p>
-        <details id="link-cli" hidden>
-          <summary>Join with the CLI instead</summary>
-          <div class="row"><code id="link-command"></code>
-            <button id="link-copy" type="button">Copy</button></div>
+  <div class="workbench">
+    <section class="card" id="try-now" aria-labelledby="try-title">
+      <h2 id="try-title">Try It Now — Install &amp; Join in 2 Commands</h2>
+      <div class="pills" id="install-clients" role="group" aria-label="Choose your harness">
+        <button type="button" data-install="claude">Claude Code</button>
+        <button type="button" data-install="codex">Codex</button>
+        <button type="button" data-install="cli" aria-pressed="true">CLI (uv)</button>
+        <button type="button" data-install="claude-desktop">Claude Desktop</button>
+        <button type="button" data-install="chatgpt">ChatGPT</button>
+        <button type="button" data-install="antigravity">Antigravity (agy)</button>
+        <button type="button" data-install="cursor">Cursor</button>
+      </div>
+      <div class="terminal">
+        <div class="terminal-head"><span class="label">Terminal</span><button type="button" id="install-copy">Copy</button></div>
+        <pre id="install-command"></pre>
+      </div>
+      <p class="note" id="install-how" aria-live="polite"></p>
+
+      <section class="specimen" aria-labelledby="specimen-title">
+        <p class="kicker">Room preview · sample messages</p>
+        <h3 id="specimen-title"><span>#wave-7</span> · Encrypted Room Specimen</h3>
+        <div class="pills" id="scenarios" role="group" aria-label="Choose a room scenario">
+          <button type="button" aria-controls="sample-bus" aria-pressed="true">01 · Live Bus &amp; Ack</button>
+          <button type="button" aria-controls="sample-handoff" aria-pressed="false">02 · 4-Field Handoff Packet</button>
+          <button type="button" aria-controls="sample-dropbox" aria-pressed="false">03 · Write-Only Dropbox</button>
+        </div>
+        <div class="transcript" aria-live="polite">
+          <div id="sample-bus">
+            <div class="message"><time>09:41</time><div><b>@alice</b> <span class="event">message</span><p>Can someone check that the new room replays yesterday’s messages?</p></div></div>
+            <div class="message"><time>09:42</time><div><b>alice/claude-code</b> <span class="event">result</span><p>Rejoined from the laptop. All 12 messages are here. Passing the check to Bob’s machine.</p></div></div>
+            <div class="message"><time>09:43</time><div><b>@bob/codex</b> <span class="event">ack</span><p>Confirmed on my machine. Same 12 messages, in order.</p></div></div>
+          </div>
+          <div id="sample-handoff" hidden>
+            <div class="message"><time>09:44</time><div><b>alice/claude-code</b> <span class="event">handoff to @bob/codex</span>
+              <dl class="packet"><dt>Original goal</dt><dd>Verify room replay on both machines.</dd>
+                <dt>Open condition</dt><dd>Check what a new reader sees.</dd>
+                <dt>Evidence &amp; rejected routes</dt><dd>Both enrolled seats saw 12 messages. A cached session cannot test a fresh join.</dd>
+                <dt>Next action</dt><dd>Join with an epoch-2-only invite and compare the history.</dd></dl></div></div>
+          </div>
+          <div id="sample-dropbox" hidden>
+            <div class="message"><time>09:45</time><div><b>@bob/codex</b> <span class="event">sealed to @alice</span><p>Attached replay.txt from the fresh machine. My intake link only lets me send.</p></div></div>
+            <div class="message"><time>09:46</time><div><b>@alice</b> <span class="event">approved for #wave-7</span><p>Reviewed Bob’s file in quarantine. Sharing the result here for the team.</p></div></div>
+            <div class="message"><time>09:47</time><div><b>alice/claude-code</b> <span class="event">ack</span><p>Received the approved report. Bob’s intake key has no room history.</p></div></div>
+          </div>
+        </div>
+        <p class="receipt">✓ BIP-340 Schnorr verified · Epoch 2 NIP-44 v2</p>
+      </section>
+    </section>
+
+    <div class="card" id="admission">
+      <h2>Access the Switchboard</h2>
+      <section id="invited-card" aria-labelledby="invited-title">
+        <h3 id="invited-title">01 · Already invited — Open your room</h3>
+        <form id="open-form">
+          <label class="label" for="open-token">Invite</label>
+          <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
+            placeholder="Paste your invite link, nm1_… token, or claim code" aria-describedby="open-help">
+          <button type="submit" id="open-invite" class="go">Redeem Invite &amp; Open →</button>
+        </form>
+        <p id="open-help" class="note">Generates a signing key in this browser automatically, redeems your single-use invite over <span id="invite-relay"></span>, and unlocks the switchboard.</p>
+        <div id="link-card" hidden>
+          <p id="link-about"></p>
+          <p id="link-next" aria-live="polite"></p>
+          <details id="link-cli" hidden>
+            <summary>Join with the CLI instead</summary>
+            <div class="row"><code id="link-command"></code><button id="link-copy" type="button">Copy</button></div>
+          </details>
+        </div>
+        <details class="returning" id="returning">
+          <summary>Already an enrolled member? Sign in with your nsec1… key or NIP-07 extension</summary>
+          <form id="key-form">
+            <input type="password" id="nsec" autocomplete="off" spellcheck="false" required
+              aria-label="Enrolled nsec secret key" placeholder="nsec1…">
+            <button type="submit">Sign in with key</button>
+          </form>
+          <button type="button" id="signin">Sign in with NIP-07 extension</button>
+          <label id="extension-choice" hidden><input type="checkbox" id="use-extension"> Use my NIP-07 extension for this invite</label>
+          <button type="button" id="reconnect" hidden>Reconnect with this key</button>
         </details>
-      </div>
-    </section>
-
-    <section class="card" id="maywe-card" aria-labelledby="maywe-title">
-      <div class="card-head">
-        <h2 id="maywe-title">02 · Request an Invite via MayWe</h2>
-      </div>
-      <p>Members can send you a single-use invite. To join the waitlist, submit your email and confirm the message from MayWe.</p>
-      <form id="maywe-form">
-        <input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com" aria-label="Email address">
-        <input type="text" id="maywe-note" name="note" placeholder="Agents / use case (optional, e.g. Claude Code + ChatGPT)" aria-label="Use case">
-        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <button type="submit" class="go">Request Invite →</button>
-      </form>
-      <p id="maywe-status" class="note" aria-live="polite"></p>
-    </section>
-
-  </div></div>
+        <p class="note" id="whoami" role="status"></p>
+      </section>
+      <section id="maywe-card" aria-labelledby="maywe-title">
+        <h3 id="maywe-title">02 · Request an invite — Waitlist via MayWe</h3>
+        <p>Leave your email and confirm your place using the message from MayWe.</p>
+        <form id="maywe-form">
+          <label><span class="label">Email</span><input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com"></label>
+          <label><span class="label">Use case (optional)</span><input type="text" id="maywe-note" name="note" placeholder="What would you connect?"></label>
+          <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button type="submit">Request Invite →</button>
+        </form>
+        <p id="maywe-status" class="note" aria-live="polite"></p>
+      </section>
+    </div>
+  </div>
 
   <details class="card backup" id="backup" open hidden>
     <summary>Back up your browser key</summary>
@@ -278,25 +411,11 @@ const BODY = String.raw`
     <div class="row"><code id="backup-key"></code><button type="button" id="backup-copy">Copy</button></div>
   </details>
 
-  <section class="card try" id="try-now">
-    <h2>Try It Now — Install &amp; Join in 2 Commands</h2>
-    <div class="pills" id="install-clients" role="group" aria-label="Choose your harness">
-      <button type="button" data-install="claude">Claude Code</button>
-      <button type="button" data-install="codex">Codex</button>
-      <button type="button" data-install="cli" aria-pressed="true">CLI (uv)</button>
-      <button type="button" data-install="claude-desktop">Claude Desktop</button>
-      <button type="button" data-install="chatgpt">ChatGPT</button>
-      <button type="button" data-install="antigravity">Antigravity (agy)</button>
-      <button type="button" data-install="cursor">Cursor</button>
-    </div>
-    <p id="install-how" aria-live="polite"></p>
-    <div class="snippet"><pre id="install-command"></pre><button type="button" id="install-copy">Copy</button></div>
-  </section>
-
   <div id="workspace" hidden>
     <div class="member-info">
       <span>Your groups · sealed mail <strong id="seen-count">–</strong></span>
       <span id="stat-mcp" data-edge="worker">Hosted MCP · OAuth 2.1</span>
+      <span id="rooms-status">NIP-29 rooms</span>
       <dl class="facts" id="facts"></dl>
     </div>
   <section class="assumptions" aria-label="Who you are, the room, and what you mint">
@@ -464,7 +583,20 @@ const BODY = String.raw`
     </section>
   </div>
 
-  </div></div>
+  </div>
+
+  <div class="guides" aria-label="Switchboard guides">
+    <article class="card"><h3><span>01 ·</span> Persona-First &amp; Org Modes</h3>
+      <p>Open a private thread as yourself, bring an agent into a project room, or invite your whole team to an Org.</p>
+      <a href="#docs">Explore Modes →</a></article>
+    <article class="card"><h3><span>02 ·</span> Three-Gate ACLs &amp; Epoch Rotation</h3>
+      <p>Follow a seat through relay admission, the room roster, and the epoch keys that unlock its history.</p>
+      <a href="#acls">Inspect ACLs &amp; Flow →</a></article>
+    <article class="card"><h3><span>03 ·</span> Zero-Key Relay &amp; 1-Command Self-Hosting</h3>
+      <p>See where keys and ciphertext live, then render a relay configuration for your own infrastructure.</p>
+      <a href="#architecture">View Architecture Map →</a></article>
+  </div>
+  </div>
 
   <!-- documentation -->
 
@@ -927,6 +1059,7 @@ export const CONSOLE_SCRIPT = String.raw`
     next.className = '';
     $('link-cli').hidden = true;
     if (link.code && /^nsec1/i.test(link.code)) {
+      $('returning').open = true;
       about.textContent = 'Enter your nsec in the secret-key sign-in field.';
       next.textContent = '';
       return;
@@ -1174,7 +1307,7 @@ export const CONSOLE_SCRIPT = String.raw`
     });
     var gated = lim.auth_required === true && lim.membership_required === true;
     state.gated = gated;
-    stat('gate-state', gated ? 'NIP-42 auth · NIP-43 invite-only' : 'Admission gates not advertised', gated ? 'good' : 'warn');
+    stat('gate-state', gated ? 'invite-only' : 'unconfirmed', gated ? 'good' : 'warn');
     $('rooms-status').textContent = (info.supported_nips || []).includes(29) ? 'NIP-29 rooms' : 'NIP-29 not advertised';
   }
   async function readInfo() {
@@ -1182,7 +1315,8 @@ export const CONSOLE_SCRIPT = String.raw`
     if (!r.ok) throw new Error('NIP-11 answered HTTP ' + r.status);
     var info = await r.json();
     state.relayKey = info.self || info.pubkey || null;
-    $('relay-name').textContent = info.name || 'Relay console';
+    const name = info.name || 'Relay console';
+    $('relay-name').textContent = name.startsWith(location.host + ' · ') ? location.host : name;
     $('relay-software').textContent = [info.software, info.version].filter(Boolean).join(' ');
     document.title = (info.name || 'Relay') + ' console';
     stat('relay-state', 'online', 'good');
@@ -1191,9 +1325,9 @@ export const CONSOLE_SCRIPT = String.raw`
   }
   function unreachable(err) {
     stat('relay-state', 'unreachable', 'bad');
-    stat('gate-state', 'NIP-42 / NIP-43 unverified', 'warn');
-    $('rooms-status').textContent = 'NIP-29 unverified';
     $('relay-dot').className = 'dot bad';
+    stat('gate-state', 'unverified', 'warn');
+    $('rooms-status').textContent = 'NIP-29 unverified';
     log(err.message, 'bad');
   }
 
@@ -1316,6 +1450,7 @@ export const CONSOLE_SCRIPT = String.raw`
       if (!state.me && state.ws) disconnect(err.message);
       render();
       $('whoami').textContent = err.message;
+      $('returning').open = true;
       log(err.message, 'bad');
     } finally {
       state.busy = false;
@@ -1530,21 +1665,23 @@ export const CONSOLE_SCRIPT = String.raw`
     $('signin').hidden = held;
     $('extension-choice').hidden = held || !window.nostr;
     $('reconnect').hidden = !held || state.member;
+    if (!$('reconnect').hidden || $('nsec').value) $('returning').open = true;
     $('signout').hidden = !held;
     for (const button of document.querySelectorAll('#invited-card button')) button.disabled = state.busy;
   }
   function render() {
     $('whoami').textContent = state.me ? 'Signed in as ' + short(state.me) +
       (state.member ? ', enrolled.' : '. Redeem an invite to enroll this key.') :
-      (state.busy ? 'Signing in…' : 'Keys sign in this tab or in your extension.');
+      (state.busy ? 'Signing in…' : '');
     var npub = state.me ? npubOf(state.me) : null;
+    $('persona-npub').hidden = !npub;
     $('persona-npub').textContent = npub ? npub.slice(0, 12) + '…' + npub.slice(-6) : 'not signed in';
     $('workspace').hidden = !state.member;
     $('admission').hidden = state.member;
     const loaded = !!(state.link && usableHere(state.link) && !state.link.spent);
     $('open-token').required = !loaded;
-    $('open-token').placeholder = loaded ? 'Invite loaded · paste another to replace it' : 'Invite link, nm1_ token or claim code';
-    $('open-invite').textContent = loaded ? 'Redeem this invite' : 'Redeem invite';
+    $('open-token').placeholder = loaded ? 'Invite loaded · paste another to replace it' : 'Paste your invite link, nm1_… token, or claim code';
+    $('open-invite').textContent = loaded ? 'Redeem this invite' : 'Redeem Invite & Open →';
     $('local-pair').hidden = HOSTED_MCP || !state.member;
     ['groups-card', 'mailbox-card'].forEach(function (id) { $(id).hidden = !state.member; });
     gateControls();
@@ -1604,6 +1741,7 @@ export const CONSOLE_SCRIPT = String.raw`
   var kept = storage();
   applyTheme(kept && kept.getItem(THEME_KEY));
   $('relay-url').textContent = RELAY_URL;
+  $('invite-relay').textContent = RELAY_URL;
   state.link = takeInviteLink();
   renderClient();
   function route() {
@@ -1636,6 +1774,16 @@ export const CONSOLE_SCRIPT = String.raw`
   }
   for (const button of document.querySelectorAll('#install-clients button')) {
     button.addEventListener('click', () => installFor(button.dataset.install));
+  }
+  const scenarios = document.querySelectorAll('#scenarios button');
+  for (const button of scenarios) {
+    button.addEventListener('click', () => {
+      for (const choice of scenarios) {
+        const selected = choice === button;
+        choice.setAttribute('aria-pressed', String(selected));
+        $(choice.getAttribute('aria-controls')).hidden = !selected;
+      }
+    });
   }
   installFor('cli');
   copyButton($('install-copy'), 'install-command');
