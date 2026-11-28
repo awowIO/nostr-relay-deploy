@@ -1,57 +1,11 @@
-// The Visual Web Console: the page a browser gets at https://<relay host>/, /join and
-// /join/ from the Cloudflare Worker. One self-contained document, served same-origin with
-// the relay, so it talks to nothing but this relay's WebSocket and NIP-11 document.
-//
-// It opens nostr-mailbox's invite links (…/join/#nm1_…, …/#join=nm1_…, …/#invite=<code>):
-// it reads the fragment once, takes it off the address bar, and fills in the code of a
-// relay invite for this relay. A topic invite, whose keys it cannot keep, and an invite
-// for another relay are shown but never redeemed here.
-//
-// Its "Mint invite & magic MCP link" button mints a whole nm1_ token for a member: the
-// relay mints a single-use invite code (REQ kind 28935), and the page packs it, as
-// nostr-mailbox's `invite` and the Worker's mailbox_invite do, with a cf.transport/1
-// declaration of a room: this relay, the room's slug as its campaign, the member's key as
-// its operator, and the room's 32-byte NIP-44 campaign_key, made here once and kept in
-// this browser's localStorage for that member and room. Every token minted for the room
-// carries the same key, so every client paired with one reads the others on its bus.
-// Topic tokens (9009 group codes, epoch keys, a redeem secret) stay with the topic's
-// keeper's nostr-mailbox CLI: this page holds no topic's keys.
-//
-// Its "Pair a coding agent" card turns an nm1_ token (one minted here, the one an invite
-// link carried, or one pasted in) into the ways a client connects to the relay's MCP
-// server (mcp.ts, oauth.ts) without a token pasted into its settings: the OAuth URL,
-// /mcp, whose consent page fills the token in from this browser when the user asked the
-// card to remember it; the magic URLs /mcp/s/<token> and /mcp/s/<token>/openapi.json; and
-// the join link /join/#<token> that nostr-mailbox's CLI redeems. It builds them in the
-// page. Only when the visitor submits the card's form does it ask the relay whether it
-// honours the token, in an Authorization header, never in a URL: a token carries a room's
-// key, so the page never sends one on its own, not when an invite link opens it and not
-// when a member mints one.
-//
-// "01 · Already invited" reads an invite link or token the visitor pastes the way it reads
-// a link that opened the page, in the page, and "02 · Request an invite" puts an address
-// on the waitlist through MayWe's public subscribe endpoint.
-//
-// What BODY marks data-edge="worker" (the MCP and OAuth parts) is the Worker's alone. The
-// Kubernetes target renders this same page with those parts hidden (scripts/hydrate.py),
-// since the pinned ncli serves no MCP endpoint; the script reads that from the page.
-//
-// It signs with a NIP-07 browser extension (window.nostr), so no secret key reaches the
-// page. Through the relay's own wire protocol, and nothing else, a member:
-//   - signs in (NIP-42), and redeems an invite code if not yet enrolled (NIP-43 28934)
-//   - mints a single-use invite for someone else (REQ kind 28935)
-//   - creates, joins, leaves and runs NIP-29 groups: members, roles, pending join
-//     requests and metadata (9000, 9001, 9002, 9007, 9021, 9022)
-//   - sees which sealed envelopes are addressed to them (1059, 4410, 4411), never their
-//     contents
-//
-// The look is a minimal, dense design system: 13px type, tabular numerals, one accent,
-// a light and a dark theme (the system's, or the one the header's toggle chose), and a
-// full-width layout with fluid gutters and no boxed container.
-//
-// worker.ts serves it with a Content-Security-Policy that admits exactly this script and
-// style, by SHA-256, so neither may change without the hashes changing with them. Both are
-// String.raw literals: the page's own code uses no backtick and no dollar-brace.
+// Self-contained switchboard for the Worker and the Kubernetes nginx console. Hydration
+// reads the raw literals verbatim so both targets serve the same script and CSP hashes.
+// NIP-07 and in-tab keys use the same AUTH / membership / claim path. A generated identity
+// stays in memory. Room keys used for minting remain scoped to a member in localStorage.
+// Invite fragments are read locally. The relay claim carries only the code and a topic
+// join binds its group credential to the same signer. Only the Worker hosts remote MCP.
+
+import { DOCUMENTATION } from "./console-docs.ts";
 
 export const CONSOLE_STYLE = String.raw`
 :root {
@@ -193,10 +147,43 @@ footer {
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 18px;
   padding: 13px 0 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
 }
+.tabs { position: sticky; top: 61px; z-index: 9; display: flex; gap: 20px; padding-inline: clamp(20px, 3vw, 48px);
+  overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); }
+.tabs + main [data-page] { scroll-margin-block-start: 110px; }
+.tabs a { flex: none; padding: 10px 0 8px; border-bottom: 2px solid transparent; color: var(--muted); }
+.tabs a[aria-current=page] { color: var(--accent); border-color: currentColor; }
+.lead { padding-block: 22px 16px; }
+.lead h2 { font-size: clamp(20px, 3vw, 30px); letter-spacing: -.035em; margin-bottom: 3px; }
+.lead p, #admission p, #install-how { color: var(--muted); }
+.protocols { display: flex; gap: 6px; flex-wrap: wrap; }
+.protocols > span { padding: 3px 8px; border-radius: 12px; background: var(--soft); font: 11px/1.5 var(--mono); }
+.protocols strong { font: inherit; }
+.try, .backup { margin-block: 14px; }
+.backup summary { cursor: pointer; font-weight: 600; }
+.backup p { margin-block: 6px; }
+.backup code { user-select: all; }
+#key-form input { flex: 1 1 14rem; }
+#whoami { margin-block: 8px 0; }
+.member-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-block: 16px; }
+.member-info .facts { margin: 0; }
+.doc { padding-block: 6px 16px; }
+.doc h2 { font-size: 20px; margin: 24px 0 8px; letter-spacing: -.02em; }
+.doc h3 { font-size: 14px; color: var(--ink); text-transform: none; letter-spacing: normal; }
+.doc .table-wrap { max-height: none; background: var(--panel); }
+.doc table { min-width: 44rem; }
+.doc .badge { display: inline-block; padding: 2px 5px; margin: 2px; border-radius: 3px; background: var(--soft); font: 11px var(--mono); }
+.doc .badge-on { color: var(--green); }
+.doc .badge-off { color: var(--muted); text-decoration: line-through; }
+.doc .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 12px; margin: 12px 0; }
+.doc .card h3 { margin-top: 0; }
+.doc pre { overflow-x: auto; background: var(--soft); padding: 10px; }
+.doc .diagram-box { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.doc svg { display: block; width: 100%; min-width: 62rem; height: auto; }
 [hidden] { display: none !important; }
 
 @media (width <= 760px) {
   .top { height: 53px; }
+  .tabs { top: 53px; gap: 14px; }
   .wordmark { font-size: 15px; }
   .header-right { gap: 8px; font-size: 10px; }
   #relay-dial, #persona-npub, .hdr-repo { display: none; }
@@ -215,28 +202,104 @@ const BODY = String.raw`
   <div class="header-right">
     <a class="hdr-link" href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer" title="Source code, CLI & agent plugins on GitHub">GitHub<span class="hdr-repo"> · awowIO/crosswire</span> ↗</a>
     <span id="relay-dial" class="mono"><span id="relay-dot" class="dot" aria-hidden="true">●</span> <span id="relay-url"></span></span>
-    <span id="persona-npub" class="mono" title="The key your NIP-07 extension signs with">not signed in</span>
+    <span id="persona-npub" class="mono" title="The authenticated public key">not signed in</span>
+    <button id="signout" type="button" hidden>Sign out</button>
     <button id="theme" type="button" aria-label="Switch color theme">◐</button>
   </div>
 </header>
+<nav class="tabs" aria-label="Console and documentation">
+  <a href="#switchboard" data-tab="switchboard" aria-current="page">Switchboard</a>
+  <a href="#docs" data-tab="docs">How It Works &amp; Modes</a>
+  <a href="#acls" data-tab="acls">ACLs &amp; Encryption</a>
+  <a href="#architecture" data-tab="architecture">Architecture &amp; Self-Hosting</a>
+</nav>
 
 <main class="page">
-  <section class="overview" aria-label="This relay at a glance">
-    <div class="stat" id="stat-relay"><strong id="relay-state">…</strong><span>relay</span></div>
-    <div class="stat" id="stat-gate"><strong id="gate-state">…</strong><span>NIP-42 auth · NIP-43 members</span></div>
-    <div class="stat good"><strong>v2</strong><span>NIP-44 sealed bus</span></div>
-    <div class="stat"><strong id="seen-count">–</strong><span>your groups · sealed mail</span></div>
-    <div class="stat" id="stat-mcp" data-edge="worker"><strong class="mono">/mcp</strong><span>MCP · OAuth 2.1 · magic URLs</span></div>
-  </section>
-  <p id="relay-about" class="about">Reading this relay's NIP-11 document.</p>
-  <dl class="facts" id="facts"></dl>
-
-  <section class="assumptions" aria-label="Who you are, the room, and what you mint">
-    <div class="control">
-      <span class="label">Persona</span>
-      <div class="row"><button id="signin" type="button">Sign in with a NIP-07 extension</button></div>
-      <span id="whoami" class="note" aria-live="polite">Not signed in.</span>
+  <div id="switchboard" data-page>
+  <section class="lead" aria-labelledby="lead-title">
+    <h2 id="lead-title">An encrypted mailbox for people and coding agents.</h2>
+    <p>Enroll a signing key here. Use the CLI or an MCP client to post and watch messages in a shared room.</p>
+    <div class="protocols" aria-label="Relay status">
+      <span class="stat"><strong id="relay-state">Checking relay…</strong></span>
+      <span class="stat"><strong id="gate-state">Checking admission…</strong></span>
+      <span id="rooms-status">NIP-29 rooms</span><span>NIP-44 v2 E2EE</span>
     </div>
+  </section>
+
+  <div id="admission">
+  <div class="grid">
+    <section class="card" id="invited-card" aria-labelledby="invited-title">
+      <div class="card-head"><h2 id="invited-title">01 · Sign In or Redeem Invite</h2></div>
+      <p>Redeem a relay invite with a new browser key, or sign in with a key you already hold.</p>
+      <form id="open-form">
+        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
+          placeholder="Invite link, nm1_ token or claim code" aria-label="Invite link, nm1_ token or claim code">
+        <button type="submit" id="open-invite" class="go">Redeem invite</button>
+      </form>
+      <label id="extension-choice" hidden><input type="checkbox" id="use-extension"> Use my NIP-07 extension for this invite</label>
+      <form id="key-form">
+        <input type="password" id="nsec" autocomplete="off" spellcheck="false" required
+          aria-label="Enrolled nsec secret key" placeholder="Existing member? Enter your nsec1… key">
+        <button type="submit">Sign in with key</button>
+      </form>
+      <button type="button" id="signin">Sign in with NIP-07 extension</button>
+      <button type="button" id="reconnect" hidden>Reconnect with this key</button>
+      <p class="note" id="whoami" role="status">Keys sign in this tab or in your extension.</p>
+      <div id="link-card" hidden>
+        <p id="link-about"></p>
+        <p id="link-next" aria-live="polite"></p>
+        <details id="link-cli" hidden>
+          <summary>Join with the CLI instead</summary>
+          <div class="row"><code id="link-command"></code>
+            <button id="link-copy" type="button">Copy</button></div>
+        </details>
+      </div>
+    </section>
+
+    <section class="card" id="maywe-card" aria-labelledby="maywe-title">
+      <div class="card-head">
+        <h2 id="maywe-title">02 · Request an Invite via MayWe</h2>
+      </div>
+      <p>Members can send you a single-use invite. To join the waitlist, submit your email and confirm the message from MayWe.</p>
+      <form id="maywe-form">
+        <input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com" aria-label="Email address">
+        <input type="text" id="maywe-note" name="note" placeholder="Agents / use case (optional, e.g. Claude Code + ChatGPT)" aria-label="Use case">
+        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button type="submit" class="go">Request Invite →</button>
+      </form>
+      <p id="maywe-status" class="note" aria-live="polite"></p>
+    </section>
+
+  </div></div>
+
+  <details class="card backup" id="backup" open hidden>
+    <summary>Back up your browser key</summary>
+    <p>Save this secret in your password manager. You need it to sign in after closing the tab.</p>
+    <div class="row"><code id="backup-key"></code><button type="button" id="backup-copy">Copy</button></div>
+  </details>
+
+  <section class="card try" id="try-now">
+    <h2>Try It Now — Install &amp; Join in 2 Commands</h2>
+    <div class="pills" id="install-clients" role="group" aria-label="Choose your harness">
+      <button type="button" data-install="claude">Claude Code</button>
+      <button type="button" data-install="codex">Codex</button>
+      <button type="button" data-install="cli" aria-pressed="true">CLI (uv)</button>
+      <button type="button" data-install="claude-desktop">Claude Desktop</button>
+      <button type="button" data-install="chatgpt">ChatGPT</button>
+      <button type="button" data-install="antigravity">Antigravity (agy)</button>
+      <button type="button" data-install="cursor">Cursor</button>
+    </div>
+    <p id="install-how" aria-live="polite"></p>
+    <div class="snippet"><pre id="install-command"></pre><button type="button" id="install-copy">Copy</button></div>
+  </section>
+
+  <div id="workspace" hidden>
+    <div class="member-info">
+      <span>Your groups · sealed mail <strong id="seen-count">–</strong></span>
+      <span id="stat-mcp" data-edge="worker">Hosted MCP · OAuth 2.1</span>
+      <dl class="facts" id="facts"></dl>
+    </div>
+  <section class="assumptions" aria-label="Who you are, the room, and what you mint">
     <div class="control">
       <label class="label" for="room">Room</label>
       <div class="room"><span aria-hidden="true">#</span><input type="text" id="room" value="agents" list="rooms"
@@ -258,56 +321,22 @@ const BODY = String.raw`
   </section>
 
   <div class="grid">
-    <section class="card" id="invited-card" aria-labelledby="invited-title">
-      <div class="card-head">
-        <h2 id="invited-title">01 · Already invited</h2>
-        <span class="note">a single-use nm1_ token or its link</span>
-      </div>
-      <p>Paste the invite link or <code>nm1_…</code> token a member sent you, or open the link itself: this page reads
-      it here and sends it nowhere.</p>
-      <form id="open-form">
-        <input type="text" id="open-token" required autocomplete="off" spellcheck="false"
-          placeholder="…/join/#nm1_… invite link, nm1_… token or invite code" aria-label="Invite link, nm1_ token or invite code">
-        <button type="submit" class="go">Open invite</button>
-      </form>
-      <div id="link-card" hidden>
-        <p id="link-about"></p>
-        <p id="link-next" aria-live="polite"></p>
-        <div id="link-cli" hidden>
-          <p class="muted">Or join with the nostr-mailbox CLI, which makes and keeps a key of its own:</p>
-          <div class="row"><code id="link-command"></code>
-            <button id="link-copy" type="button">Copy</button></div>
-        </div>
-      </div>
-      <div id="join-card" hidden>
-        <h3><label for="join-code">Redeem with the key you signed in with</label></h3>
-        <form id="join-form">
-          <input type="text" id="join-code" required autocomplete="off" spellcheck="false" placeholder="single-use code from the invite">
-          <button type="submit">Redeem</button>
-        </form>
-        <span class="note">Your key is not enrolled yet. Opening an invite fills its code in.</span>
-      </div>
-      <p class="note">An invite admits one key, once, and works as a password until then. A link's fragment never
-      reaches a server, and this page takes it off the address bar.</p>
+    <section class="card wide" id="topic-grant" hidden>
+      <h2 id="topic-title">Topic invite</h2>
+      <p id="topic-status" role="status"></p>
+      <button type="button" id="join-topic">Join this topic</button>
+      <details id="topic-export" hidden><summary>Back up this topic keyring</summary>
+        <p>Save this keyring privately with your signing identity, or retain your original invite. Each epoch key opens the history granted for that epoch.</p>
+        <div class="snippet"><pre id="topic-keys"></pre><button type="button" id="topic-copy">Copy</button></div>
+      </details>
     </section>
-
-    <section class="card" id="maywe-card" aria-labelledby="maywe-title">
-      <div class="card-head">
-        <h2 id="maywe-title">02 · Request an invite</h2>
-        <span class="note">invite-only beta · waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">MayWe · maywe.email</a></span>
-      </div>
-      <p>This switchboard is invite-only. Admitted members mint single-use <code>nm1_</code> invite links for friends and
-      agent seats. No one to ask? Leave your email: MayWe sends a one-click confirmation, and your <code>nm1_</code>
-      admission link follows by mail. Source on <a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">GitHub (awowIO/crosswire) ↗</a>.</p>
-      <form id="maywe-form">
-        <input type="email" id="maywe-email" name="email" required autocomplete="email" placeholder="you@domain.com" aria-label="Email address">
-        <input type="text" id="maywe-note" name="note" placeholder="Agents / use case (optional, e.g. Claude Code + ChatGPT)" aria-label="Use case">
-        <input type="text" id="maywe-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <button type="submit" class="go">Request Invite →</button>
-      </form>
-      <p id="maywe-status" class="note" aria-live="polite"></p>
+    <section class="card wide" id="local-pair" hidden>
+      <h2>Pair a coding agent</h2>
+      <p>Mint a fresh invite for the agent. On its machine, run the install and join commands above with its invite.
+      For a local MCP client, use <code>crosswire mcp</code> as the stdio server command.</p>
+      <div class="snippet" id="local-command-box" hidden><pre id="local-command"></pre>
+        <button id="local-copy" type="button">Copy</button></div>
     </section>
-
     <section class="card wide" id="pair-card" data-edge="worker" aria-labelledby="pair-title">
       <div class="card-head">
         <h2 id="pair-title">Pair a coding agent</h2>
@@ -435,8 +464,12 @@ const BODY = String.raw`
     </section>
   </div>
 
+  </div></div>
+
+  <!-- documentation -->
+
   <footer>
-    <span><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire ↗</a> · Waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">maywe.email</a> · Signs through your NIP-07 extension, so no secret key reaches this page.</span>
+    <span><a href="https://github.com/awowIO/crosswire" target="_blank" rel="noopener noreferrer">github.com/awowIO/crosswire ↗</a> · Waitlist via <a href="https://maywe.email" target="_blank" rel="noopener noreferrer">maywe.email</a></span>
     <span id="relay-software"></span>
   </footer>
 </main>
@@ -447,7 +480,7 @@ export const CONSOLE_SCRIPT = String.raw`
   'use strict';
   var RELAY_URL = 'wss://' + location.host;
   var KIND_NAMES = { 1059: 'gift wrap', 4410: 'envelope', 4411: 'receipt' };
-  var state = { ws: null, me: null, member: false, relayKey: null, challenge: null,
+  var state = { ws: null, me: null, member: false, relayKey: null, signer: null, busy: false, membershipSub: null,
                 pending: new Map(), subs: new Map(), seq: 0, group: null, link: null, pairToken: null,
                 urls: null, client: 'chatgpt', counts: { groups: null, mail: null } };
 
@@ -466,7 +499,7 @@ export const CONSOLE_SCRIPT = String.raw`
   function action(fn) {
     return function (ev) {
       if (ev) ev.preventDefault();
-      Promise.resolve().then(fn).catch(function (err) { log(err && err.message ? err.message : String(err), 'bad'); });
+      return Promise.resolve().then(fn).catch(function (err) { log(err && err.message ? err.message : String(err), 'bad'); });
     };
   }
 
@@ -497,8 +530,8 @@ export const CONSOLE_SCRIPT = String.raw`
     return out;
   }
   function hexOf(bytes) { return Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join(''); }
-  function npubOf(hex) {
-    if (!HEX64.test(hex)) throw new Error('a public key is 64 lowercase hex');
+  function encodeKey(prefix, hex) {
+    if (!HEX64.test(hex)) throw new Error('a key is 64 lowercase hex');
     var data = [], acc = 0, bits = 0;
     for (var i = 0; i < 64; i += 2) {
       acc = (acc << 8) | parseInt(hex.slice(i, i + 2), 16); bits += 8;
@@ -506,28 +539,31 @@ export const CONSOLE_SCRIPT = String.raw`
       acc &= (1 << bits) - 1;
     }
     if (bits > 0) data.push((acc << (5 - bits)) & 31);
-    var mod = polymod(hrpExpand('npub').concat(data, [0, 0, 0, 0, 0, 0])) ^ 1;
+    var mod = polymod(hrpExpand(prefix).concat(data, [0, 0, 0, 0, 0, 0])) ^ 1;
     for (var p = 0; p < 6; p++) data.push((mod >>> (5 * (5 - p))) & 31);
-    return 'npub1' + data.map(function (v) { return CHARSET[v]; }).join('');
+    return prefix + '1' + data.map(function (v) { return CHARSET[v]; }).join('');
   }
+  function npubOf(hex) { return encodeKey('npub', hex); }
   function pubkeyHex(text) {
-    var s = text.trim().toLowerCase();
-    if (HEX64.test(s)) return s;
-    if (s.indexOf('npub1') !== 0) throw new Error('give an npub or a 64-hex public key');
+    return HEX64.test(text.trim().toLowerCase()) ? text.trim().toLowerCase() : decodeKey('npub', text);
+  }
+  function decodeKey(prefix, text) {
+    var raw = text.trim(), s = raw.toLowerCase();
+    if ((raw !== s && raw !== raw.toUpperCase()) || !s.startsWith(prefix + '1')) throw new Error('Expected a ' + prefix + '1 key.');
     var data = [];
-    for (var i = 5; i < s.length; i++) {
+    for (var i = prefix.length + 1; i < s.length; i++) {
       var v = CHARSET.indexOf(s[i]);
-      if (v < 0) throw new Error('that npub has a character bech32 does not use');
+      if (v < 0) throw new Error('that key has a character bech32 does not use');
       data.push(v);
     }
-    if (data.length < 6 || polymod(hrpExpand('npub').concat(data)) !== 1) throw new Error('that npub has a bad checksum');
+    if (data.length < 6 || polymod(hrpExpand(prefix).concat(data)) !== 1) throw new Error('that key has a bad checksum');
     var acc = 0, bits = 0, out = [];
     data.slice(0, -6).forEach(function (v) {
       acc = (acc << 5) | v; bits += 5;
       while (bits >= 8) { bits -= 8; out.push((acc >>> bits) & 0xff); }
       acc &= (1 << bits) - 1;
     });
-    if (out.length !== 32 || bits >= 5 || acc !== 0) throw new Error('that npub is not a 32-byte key');
+    if (out.length !== 32 || bits >= 5 || acc !== 0) throw new Error('that key is not a 32-byte key');
     return hexOf(out);
   }
   function roomSlug(text) {
@@ -562,6 +598,176 @@ export const CONSOLE_SCRIPT = String.raw`
   }
   // END nm1_ token packer
 
+  // Browser signer. The mailbox web client’s BIP-340 arithmetic with Web Crypto SHA-256.
+  const P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+  const N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+  const GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
+  const GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
+  const md = (a) => { const r = a % P; return r < 0n ? r + P : r; };
+  function invert(a, m) {
+    let r0 = m, r1 = ((a % m) + m) % m, t0 = 0n, t1 = 1n;
+    if (r1 === 0n) throw new Error('no inverse of zero');
+    while (r1 !== 0n) { const q = r0 / r1; [r0, r1] = [r1, r0 - q * r1]; [t0, t1] = [t1, t0 - q * t1]; }
+    return ((t0 % m) + m) % m;
+  }
+  function powMod(b, e, m) {
+    let r = 1n; b %= m;
+    while (e > 0n) { if (e & 1n) r = (r * b) % m; b = (b * b) % m; e >>= 1n; }
+    return r;
+  }
+  // Jacobian triples [X, Y, Z] with x = X/Z², y = Y/Z³; null is the point at infinity.
+  function dbl(p) {
+    if (p === null) return null;
+    const [x, y, z] = p;
+    const a = (x * x) % P, b = (y * y) % P, c = (b * b) % P, d = (4n * x * b) % P, e = 3n * a;
+    const x3 = md(e * e - 2n * d);
+    return [x3, md(e * (d - x3) - 8n * c), (2n * y * z) % P];
+  }
+  function addAffine(p, x2, y2) {
+    if (p === null) return [x2, y2, 1n];
+    const [x1, y1, z1] = p;
+    const z1z1 = (z1 * z1) % P;
+    const h = md(x2 * z1z1 - x1), r = md(y2 * z1 * z1z1 - y1);
+    if (h === 0n) return r === 0n ? dbl(p) : null;
+    const hh = (h * h) % P, hhh = (h * hh) % P, v = (x1 * hh) % P;
+    const x3 = md(r * r - hhh - 2n * v);
+    return [x3, md(r * (v - x3) - y1 * hhh), (z1 * h) % P];
+  }
+  function affine(p) {
+    const zi = invert(p[2], P), zi2 = (zi * zi) % P;
+    return [(p[0] * zi2) % P, (p[1] * zi2 % P) * zi % P];
+  }
+  function affineAll(points) {
+    let running = 1n; const prefix = [];
+    for (const p of points) { prefix.push(running); running = (running * p[2]) % P; }
+    let inv = invert(running, P); const out = new Array(points.length);
+    for (let i = points.length - 1; i >= 0; i--) {
+      const [x, y, z] = points[i];
+      const zi = (inv * prefix[i]) % P; inv = (inv * z) % P;
+      const zi2 = (zi * zi) % P;
+      out[i] = [(x * zi2) % P, (y * zi2 % P) * zi % P];
+    }
+    return out;
+  }
+  function multiples(x, y) {               // [1·Q … 15·Q], affine
+    const jac = []; let acc = null;
+    for (let i = 0; i < 15; i++) { acc = addAffine(acc, x, y); jac.push(acc); }
+    return affineAll(jac);
+  }
+  let G_TABLE = null;                      // row i: the multiples of 16^i·G
+  function gTable() {
+    if (G_TABLE === null) {
+      const rows = []; let base = [GX, GY];
+      for (let i = 0; i < 64; i++) {
+        const row = multiples(base[0], base[1]); rows.push(row);
+        base = affine(addAffine([row[14][0], row[14][1], 1n], base[0], base[1]));
+      }
+      G_TABLE = rows;
+    }
+    return G_TABLE;
+  }
+  function mulG(k, acc = null) {
+    const t = gTable(), h = k.toString(16);
+    for (let i = 0; i < h.length; i++) {
+      const digit = parseInt(h[h.length - 1 - i], 16);
+      if (digit) acc = addAffine(acc, t[i][digit - 1][0], t[i][digit - 1][1]);
+    }
+    return acc;
+  }
+  function mul(k, x, y) {
+    const m = multiples(x, y), h = k.toString(16).padStart(64, '0'); let acc = null;
+    for (let i = 0; i < 64; i++) {
+      acc = dbl(dbl(dbl(dbl(acc))));
+      const digit = parseInt(h[i], 16);
+      if (digit) acc = addAffine(acc, m[digit - 1][0], m[digit - 1][1]);
+    }
+    return acc;
+  }
+  function liftX(x) {
+    if (x >= P) return null;
+    const ySq = md(powMod(x, 3n, P) + 7n), y = powMod(ySq, (P + 1n) / 4n, P);
+    if ((y * y) % P !== ySq) return null;
+    return [x, y % 2n === 0n ? y : P - y];
+  }
+  function scalar(secret) {
+    if (!(secret instanceof Uint8Array) || secret.length !== 32) throw new Error('a secret key is 32 bytes');
+    const d = big(secret);
+    if (d < 1n || d >= N) throw new Error('secret key is outside the range 1..n-1');
+    return d;
+  }
+  const utf8 = (text) => new TextEncoder().encode(text);
+  const sha256 = async (bytes) => new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const big = (bytes) => BigInt('0x' + hexOf(bytes));
+  const unhex = (hex) => Uint8Array.from(hex.match(/../g), (byte) => parseInt(byte, 16));
+  const bigBytes = (n) => unhex(n.toString(16).padStart(64, '0'));
+  const randomBytes = (n) => crypto.getRandomValues(new Uint8Array(n));
+  function concat(...parts) {
+    const out = new Uint8Array(parts.reduce((length, bytes) => length + bytes.length, 0));
+    let offset = 0;
+    for (const bytes of parts) { out.set(bytes, offset); offset += bytes.length; }
+    return out;
+  }
+  async function tagged(tag, ...parts) {
+    const digest = await sha256(utf8(tag));
+    return sha256(concat(digest, digest, ...parts));
+  }
+  function getPublicKey(secret) { return bigBytes(affine(mulG(scalar(secret)))[0]); }
+  async function schnorrVerify(msg, pub, sig) {
+    if (!(pub instanceof Uint8Array) || !(sig instanceof Uint8Array) || pub.length !== 32 || sig.length !== 64) return false;
+    const pt = liftX(big(pub)); if (pt === null) return false;
+    const r = big(sig.subarray(0, 32)), s = big(sig.subarray(32));
+    if (r >= P || s >= N) return false;
+    const e = big(await tagged('BIP0340/challenge', sig.subarray(0, 32), pub, msg)) % N;
+    const minusEP = mul((N - e) % N, pt[0], pt[1]);
+    const start = minusEP === null ? null : [...affine(minusEP), 1n];
+    const total = mulG(s, start);
+    if (total === null) return false;
+    const [x, y] = affine(total);
+    return y % 2n === 0n && x === r;
+  }
+  async function schnorrSign(msg, secret, aux) {
+    aux = aux === undefined ? randomBytes(32) : aux;
+    if (aux.length !== 32) throw new Error('aux randomness is 32 bytes');
+    const d0 = scalar(secret);
+    const [px, py] = affine(mulG(d0));
+    const d = py % 2n === 0n ? d0 : N - d0;
+    const pub = bigBytes(px);
+    const masked = bigBytes(d ^ big(await tagged('BIP0340/aux', aux)));
+    const k0 = big(await tagged('BIP0340/nonce', masked, pub, msg)) % N;
+    if (k0 === 0n) throw new Error('nonce derivation produced zero; sign with fresh aux randomness');
+    const [rx, ry] = affine(mulG(k0));
+    const k = ry % 2n === 0n ? k0 : N - k0;
+    const r = bigBytes(rx);
+    const e = big(await tagged('BIP0340/challenge', r, pub, msg)) % N;
+    const sig = concat(r, bigBytes((k + e * d) % N));
+    if (!await schnorrVerify(msg, pub, sig)) throw new Error('the signature just produced does not verify');
+    return sig;
+  }
+  function browserSigner(imported) {
+    let secret;
+    if (imported !== undefined) {
+      secret = unhex(decodeKey('nsec', imported));
+    } else {
+      do { secret = randomBytes(32); } while (big(secret) === 0n || big(secret) >= N);
+    }
+    const pubkey = hexOf(getPublicKey(secret));
+    if (imported === undefined) {
+      $('backup-key').textContent = encodeKey('nsec', hexOf(secret));
+      $('backup').hidden = false;
+    }
+    return {
+      getPublicKey: () => pubkey,
+      clear: () => secret.fill(0),
+      async signEvent(template) {
+        const event = { ...template, pubkey: pubkey };
+        const bytes = await sha256(utf8(JSON.stringify([0, pubkey, event.created_at, event.kind, event.tags, event.content])));
+        event.id = hexOf(bytes);
+        event.sig = hexOf(await schnorrSign(bytes, secret));
+        return event;
+      }
+    };
+  }
+
   // BEGIN invite-link reader
   // The same block runs in the Worker console and on the GitHub Pages page, and
   // tests/test_hydrate.py runs it under Node. It reads what a nostr-mailbox invite link
@@ -572,7 +778,7 @@ export const CONSOLE_SCRIPT = String.raw`
   // and the nm1_ token itself: base64url of the JSON that 'nostr-mailbox join' reads.
   // It returns null when the fragment holds no invite, and throws when it holds one it
   // cannot read. It never sends, stores or logs the token.
-  function readInviteLink(fragment) {
+  function readInviteLink(fragment, includeBundle) {
     var frag = String(fragment || '').replace(/^#/, '');
     var token = null;
     if (frag.indexOf('nm1_') === 0) {
@@ -605,12 +811,13 @@ export const CONSOLE_SCRIPT = String.raw`
     try { relay = new URL(named); } catch (err) { throw new Error('the nm1_ token names no relay URL'); }
     if (relay.protocol !== 'wss:' && relay.protocol !== 'ws:') throw new Error('the nm1_ token names no ws:// or wss:// relay');
     return {
+      ...(includeBundle ? { bundle: bundle } : {}),
       token: token, code: bundle.code, relay: named, host: relay.host.toLowerCase(),
       campaign: typeof bundle.campaign === 'string' ? bundle.campaign : null,
       member: typeof bundle.member === 'string' ? bundle.member : null,
       topic: typeof bundle.topic === 'string' ? bundle.topic : hint.topic,
       role: hint.role,
-      // A topic invite carries the channel's keys, which only nostr-mailbox keeps.
+      // A topic invite also carries group admission credentials.
       channel: typeof bundle.group_code === 'string' || (!!bundle.epochs && typeof bundle.epochs === 'object'),
     };
   }
@@ -660,33 +867,58 @@ export const CONSOLE_SCRIPT = String.raw`
   }
 
   // ------------------------------------------------------------------ invite links
+  function readGateInvite(fragment) {
+    const link = readInviteLink(fragment, true);
+    if (!link || !link.token || !forThisRelay(link)) return link;
+    const bundle = link.bundle;
+    if (bundle.campaign_key !== undefined && !HEX64.test(bundle.campaign_key)) throw new Error('Invalid campaign key.');
+    if (bundle.campaign_key) roomSlug(bundle.campaign);
+    if (link.channel || bundle.redeem !== undefined || bundle.group_code !== undefined || bundle.epochs !== undefined) {
+      link.channel = true;
+      const role = bundle.role || 'read-write';
+      if (typeof bundle.topic !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(bundle.topic) || bundle.keyring !== bundle.topic ||
+          typeof bundle.campaign !== 'string' || !ROOM.test(bundle.campaign) || !bundle.group_code || typeof bundle.group_code !== 'string' ||
+          !HEX64.test(bundle.owner) || !HEX64.test(bundle.redeem) || !['read-only', 'read-write', 'write-only'].includes(role)) {
+        throw new Error('Incomplete topic credentials. Ask the keeper for a fresh invite.');
+      }
+      scalar(unhex(bundle.redeem)); // Validate before spending the relay claim.
+      if (role === 'write-only') {
+        if (bundle.epochs !== undefined || bundle.current !== undefined) throw new Error('Unexpected keys in a write-only invite.');
+      } else {
+        const epochs = bundle.epochs && !Array.isArray(bundle.epochs) ? Object.entries(bundle.epochs) : [];
+        if (!epochs.length || epochs.some(([n, key]) => !/^[1-9][0-9]*$/.test(n) || !Number.isSafeInteger(Number(n)) || !HEX64.test(key)) ||
+            bundle.current !== Math.max(...epochs.map(([n]) => Number(n)))) throw new Error('Invalid topic epoch keys.');
+      }
+    }
+    return link;
+  }
   function takeInviteLink() {
-    if (!location.hash) return null;
+    if (!/^#(?:nm1_|join=|invite=)/.test(location.hash)) return null;
     var fragment = location.hash;
     // Off the address bar and out of the history: until it is redeemed, the token is a
     // bearer secret.
     history.replaceState(null, '', location.pathname + location.search);
-    try { return readInviteLink(fragment); } catch (err) { return { error: err.message }; }
+    try { return readGateInvite(fragment); } catch (err) { return { error: err.message }; }
   }
-  // 01 · Already invited: what a visitor pastes (a whole link, its fragment, a token or a
-  // bare relay code) gets the preview a link that opened the page gets. Nothing is sent.
+  // Parse before selecting a signer or opening a socket.
   function openGiven() {
     var given = $('open-token').value.trim();
     var at = given.indexOf('#');
     var link;
-    try { link = readInviteLink(at < 0 ? given : given.slice(at)); } catch (err) { link = { error: err.message }; }
+    try { link = readGateInvite(at < 0 ? given : given.slice(at)); } catch (err) { link = { error: err.message }; }
     if (link === null) {
       if (at >= 0 || !/^[A-Za-z0-9_-]+$/.test(given)) throw new Error('that is no invite link, nm1_ token or invite code');
       link = { token: null, code: given, topic: null, role: null };
     }
     $('open-token').value = '';
     state.link = link;
-    if (usableHere(link)) $('join-code').value = link.code;
-    if (HOSTED_MCP && link.token && !link.error && forThisRelay(link)) showConnection(link.token);
+    if (given.includes('://') && !link.token && !link.error && new URL(given).host !== location.host) {
+      link.error = 'The claim link names another relay';
+    }
     renderLink();
   }
-  function forThisRelay(link) { return !link.token || link.host === location.host.toLowerCase(); }
-  function usableHere(link) { return !link.error && !link.channel && forThisRelay(link); }
+  function forThisRelay(link) { return !link.token || new URL(link.relay).href === RELAY_URL + '/'; }
+  function usableHere(link) { return !link.error && !/^nsec1/i.test(link.code) && forThisRelay(link); }
   function renderLink() {
     var link = state.link;
     $('link-card').hidden = !link;
@@ -694,6 +926,11 @@ export const CONSOLE_SCRIPT = String.raw`
     var about = $('link-about'), next = $('link-next');
     next.className = '';
     $('link-cli').hidden = true;
+    if (link.code && /^nsec1/i.test(link.code)) {
+      about.textContent = 'Enter your nsec in the secret-key sign-in field.';
+      next.textContent = '';
+      return;
+    }
     if (link.error) {
       about.textContent = 'This invite link could not be read: ' + link.error + '. Nothing was sent; ask for a new link.';
       next.textContent = '';
@@ -705,23 +942,19 @@ export const CONSOLE_SCRIPT = String.raw`
       return;
     }
     if (link.token) {
-      $('link-command').textContent = 'nostr-mailbox join ' + link.token;
+      $('link-command').textContent = 'crosswire join ' + link.token;
       $('link-cli').hidden = false;
     }
     var where = link.campaign ? 'campaign ' + link.campaign + ' on this relay' : 'this relay';
     if (link.channel) {
-      about.textContent = 'An invite into the channel ' + (link.topic || '(unnamed)') + ' of ' + where +
-        (link.member ? ', for ' + link.member : '') + '. It carries the channel keys, which this console cannot keep.';
-      next.textContent = 'Redeeming its code here would spend it on your browser key and leave you without the keys: join with the nostr-mailbox CLI below' +
-        (HOSTED_MCP ? ', or pair a coding agent with it.' : '.');
+      about.textContent = 'An invite to #' + link.topic + ' in ' + where + ' (' + (link.bundle.role || 'read-write') + ').';
+      next.textContent = 'Redeem to enroll this signing key and join the group. Keep the original invite as a backup of the topic grant.';
       return;
     }
     about.textContent = 'An invite to ' + where + (link.member ? ', for ' + link.member : '') +
       (link.topic ? ', to ask for the channel ' + link.topic + ' next' : '') + '.';
-    if (link.spent) { next.textContent = 'Redeemed: ' + short(state.me) + ' is a member now.'; next.className = 'good'; }
-    else if (!state.me) next.textContent = 'Sign in with your NIP-07 extension (Persona, above), then press Redeem: the code is filled in, and it admits the key your extension holds.';
-    else if (state.member) next.textContent = short(state.me) + ' is already a member; the invite was not used.';
-    else next.textContent = 'Press Redeem below to admit ' + short(state.me) + '.';
+    if (link.spent) { next.textContent = 'The relay accepted this invite.'; next.className = 'good'; }
+    else next.textContent = state.me ? 'Redeem with ' + short(state.me) + '.' : 'Redeem here to enroll your signing key.';
   }
 
   // ------------------------------------------------------------ pair a coding agent
@@ -801,6 +1034,7 @@ export const CONSOLE_SCRIPT = String.raw`
     pairStatus('This relay refuses the token: ' + why.error, 'bad');
   }
   async function pairGiven() {
+    if (!state.member || !HOSTED_MCP) return;
     var given = $('pair-token').value.trim();
     var at = given.indexOf('#');
     var link = readInviteLink(at < 0 ? given : given.slice(at + 1));
@@ -830,63 +1064,100 @@ export const CONSOLE_SCRIPT = String.raw`
 
   // --------------------------------------------------------------------- the wire
   function send(message) {
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) throw new Error('not connected: sign in first');
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) throw new Error('Connection closed. Sign in again.');
     state.ws.send(JSON.stringify(message));
   }
+  function waitFor(map, id, write) {
+    return new Promise(function (resolve, reject) {
+      const timer = setTimeout(() => {
+        map.delete(id);
+        reject(new Error('The relay did not answer in time. Reconnect and try again.'));
+      }, 20000);
+      map.set(id, {
+        events: [],
+        resolve(value) { clearTimeout(timer); resolve(value); },
+        reject(err) { clearTimeout(timer); reject(err); }
+      });
+      try { if (write) write(); } catch (err) {
+        map.get(id).reject(err);
+        map.delete(id);
+      }
+    });
+  }
+  function disconnect(reason) {
+    const ws = state.ws;
+    state.ws = null;
+    state.me = null;
+    state.member = false;
+    state.membershipSub = null;
+    for (const map of [state.pending, state.subs]) {
+      for (const request of map.values()) request.reject(new Error(reason));
+      map.clear();
+    }
+    if (ws) ws.close();
+    $('topic-grant').hidden = $('topic-export').hidden = true;
+    $('topic-keys').textContent = $('topic-status').textContent = '';
+    $('join-topic').disabled = $('join-topic').hidden = false;
+    render();
+    $('whoami').textContent = reason;
+  }
   function onFrame(frame) {
-    var verb = frame[0];
-    if (verb === 'AUTH') { state.challenge = frame[1]; if (state.onChallenge) { state.onChallenge(frame[1]); state.onChallenge = null; } return; }
+    var verb = frame[0], id = frame[1];
+    if (verb === 'AUTH' && typeof id === 'string' && id.length) {
+      const waiting = state.pending.get('challenge');
+      if (waiting) { state.pending.delete('challenge'); waiting.resolve(id); }
+      return;
+    }
     if (verb === 'OK') {
-      log((frame[2] ? 'accepted ' : 'refused ') + short(frame[1]) + (frame[3] ? ': ' + frame[3] : ''), frame[2] ? 'good' : 'bad');
-      var done = state.pending.get(frame[1]);
-      if (done) { state.pending.delete(frame[1]); done({ ok: frame[2], message: frame[3] }); }
+      log((frame[2] ? 'accepted ' : 'refused ') + short(id) + (frame[3] ? ': ' + frame[3] : ''), frame[2] ? 'good' : 'bad');
+      var done = state.pending.get(id);
+      if (done) { state.pending.delete(id); done.resolve({ ok: frame[2] === true, message: frame[3] }); }
       return;
     }
     if (verb === 'EVENT' || verb === 'EOSE' || verb === 'CLOSED') {
-      var sub = state.subs.get(frame[1]);
-      if (!sub) return;
+      var sub = state.subs.get(id);
+      if (!sub) {
+        if (verb === 'CLOSED' && id === state.membershipSub) disconnect(frame[2] || 'Membership subscription closed.');
+        return;
+      }
       if (verb === 'EVENT') { sub.events.push(frame[2]); return; }
-      state.subs.delete(frame[1]);
-      if (verb === 'EOSE') { send(['CLOSE', frame[1]]); sub.resolve(sub.events); }
-      else { log('closed: ' + frame[2], 'bad'); sub.reject(new Error(frame[2])); }
+      state.subs.delete(id);
+      if (verb === 'EOSE') {
+        if (id !== state.membershipSub) send(['CLOSE', id]);
+        sub.resolve(sub.events);
+      } else {
+        if (id === state.membershipSub) state.membershipSub = null;
+        sub.reject(new Error(frame[2] || 'The relay closed the subscription.'));
+      }
       return;
     }
     if (verb === 'NOTICE') log('notice: ' + frame[1], 'bad');
   }
-  function query(filter) {
+  function query(filter, monitorMembership) {
     var id = 'c' + (++state.seq);
-    return new Promise(function (resolve, reject) {
-      state.subs.set(id, { events: [], resolve: resolve, reject: reject });
-      send(['REQ', id, filter]);
-    });
-  }
-  function signer() {
-    if (!window.nostr) throw new Error('no NIP-07 extension in this browser: install one that holds your key');
-    return window.nostr;
+    if (monitorMembership) state.membershipSub = id;
+    return waitFor(state.subs, id, () => send(['REQ', id, filter]));
   }
   async function signed(kind, tags, content) {
-    var e = await signer().signEvent({ kind: kind, created_at: now(), tags: tags, content: content || '' });
-    if (state.me && e.pubkey !== state.me) throw new Error('the extension signed with a different key than the one signed in');
+    const ws = state.ws;
+    var e = await state.signer.signEvent({ kind: kind, created_at: now(), tags: tags, content: content || '' });
+    if (!ws || ws !== state.ws) throw new Error('The signing session ended.');
+    if (state.me && e.pubkey !== state.me) throw new Error('The signer changed its public key. Sign out and sign in again.');
     return e;
   }
   async function publish(kind, tags, content) {
     var e = await signed(kind, tags, content);
-    var answer = await new Promise(function (resolve) { state.pending.set(e.id, resolve); send(['EVENT', e]); });
-    if (!answer.ok) throw new Error(answer.message || 'refused');
+    var answer = await waitFor(state.pending, e.id, () => send(['EVENT', e]));
+    if (!answer.ok) throw new Error(answer.message || 'The relay refused the event.');
     return answer;
   }
   function connect() {
-    return new Promise(function (resolve, reject) {
-      var ws = new WebSocket(RELAY_URL);
-      state.ws = ws;
-      state.onChallenge = resolve;
-      ws.onmessage = function (m) { onFrame(JSON.parse(m.data)); };
-      ws.onerror = function () { reject(new Error('cannot reach ' + RELAY_URL)); };
-      ws.onclose = function (ev) {
-        log('the connection closed (' + ev.code + ')', 'bad');
-        state.ws = null; state.me = null; state.member = false; render();
-      };
-    });
+    const ws = new WebSocket(RELAY_URL);
+    state.ws = ws;
+    ws.onmessage = (m) => { if (ws === state.ws) onFrame(JSON.parse(m.data)); };
+    ws.onerror = () => { if (ws === state.ws) disconnect('Cannot reach ' + RELAY_URL); };
+    ws.onclose = () => { if (ws === state.ws) disconnect('The relay connection closed. Reconnect with this key.'); };
+    return waitFor(state.pending, 'challenge');
   }
 
   // ------------------------------------------------------------------------ NIP-11
@@ -898,19 +1169,20 @@ export const CONSOLE_SCRIPT = String.raw`
     [['auth required', String(lim.auth_required === true)],
      ['members only', String(lim.membership_required === true)],
      ['NIPs', (info.supported_nips || []).join(', ')],
-     ['relay key', info.self ? short(info.self) : 'not advertised']].forEach(function (pair) {
+     ['relay key', state.relayKey ? short(state.relayKey) : 'not advertised']].forEach(function (pair) {
       var d = el('div'); d.appendChild(el('dt', pair[0])); d.appendChild(el('dd', pair[1])); list.appendChild(d);
     });
     var gated = lim.auth_required === true && lim.membership_required === true;
-    stat('gate-state', gated ? 'on' : 'off', gated ? 'good' : 'warn');
+    state.gated = gated;
+    stat('gate-state', gated ? 'NIP-42 auth · NIP-43 invite-only' : 'Admission gates not advertised', gated ? 'good' : 'warn');
+    $('rooms-status').textContent = (info.supported_nips || []).includes(29) ? 'NIP-29 rooms' : 'NIP-29 not advertised';
   }
   async function readInfo() {
     var r = await fetch('/', { headers: { Accept: 'application/nostr+json' } });
     if (!r.ok) throw new Error('NIP-11 answered HTTP ' + r.status);
     var info = await r.json();
-    state.relayKey = info.self || null;
+    state.relayKey = info.self || info.pubkey || null;
     $('relay-name').textContent = info.name || 'Relay console';
-    $('relay-about').textContent = info.description || '';
     $('relay-software').textContent = [info.software, info.version].filter(Boolean).join(' ');
     document.title = (info.name || 'Relay') + ' console';
     stat('relay-state', 'online', 'good');
@@ -919,43 +1191,158 @@ export const CONSOLE_SCRIPT = String.raw`
   }
   function unreachable(err) {
     stat('relay-state', 'unreachable', 'bad');
+    stat('gate-state', 'NIP-42 / NIP-43 unverified', 'warn');
+    $('rooms-status').textContent = 'NIP-29 unverified';
     $('relay-dot').className = 'dot bad';
     log(err.message, 'bad');
   }
 
   // --------------------------------------------------------------- sign in, enrol
   async function signIn() {
-    var me = await signer().getPublicKey();
-    if (!/^[0-9a-f]{64}$/.test(me)) throw new Error('the extension gave no public key');
-    if (state.ws) state.ws.close();
+    if (state.ws) disconnect('Reconnecting…');
+    const signer = state.signer;
+    const me = await signer.getPublicKey();
+    if (!HEX64.test(me) || signer !== state.signer) throw new Error('The signing key is unavailable.');
     var challenge = await connect();
     var proof = await signed(22242, [['relay', RELAY_URL], ['challenge', challenge]], '');
-    if (proof.pubkey !== me) throw new Error('the extension signed with a different key than it reported');
-    var answer = await new Promise(function (resolve) { state.pending.set(proof.id, resolve); send(['AUTH', proof]); });
-    if (!answer.ok) throw new Error('the relay refused the sign-in: ' + answer.message);
+    if (proof.pubkey !== me) throw new Error('The signer returned a different public key.');
+    var answer = await waitFor(state.pending, proof.id, () => send(['AUTH', proof]));
+    if (!answer.ok) throw new Error('The relay refused sign-in: ' + answer.message);
     state.me = me;
-    listRooms();
     await probeMembership();
   }
   async function probeMembership() {
-    // A REQ for nothing: a member gets EOSE, anyone else CLOSED.
-    try { await query({ ids: ['0'.repeat(64)] }); state.member = true; } catch (err) { state.member = false; }
+    // Both relay implementations gate every REQ on NIP-43 membership. Keep this empty
+    // subscription open after EOSE so a relay closing it on revocation locks the UI.
+    try { await query({ ids: ['0'.repeat(64)] }, true); }
+    catch (err) {
+      state.member = false;
+      if (!err.message.startsWith('restricted:')) {
+        disconnect(err.message);
+        throw err;
+      }
+      render();
+      return;
+    }
+    if (!state.ws || !state.me || !state.membershipSub) throw new Error('The membership check was interrupted.');
+    state.member = true;
+    listRooms();
     render();
-    if (state.member) { await loadGroups(); await loadMail(); }
   }
-  async function redeem() {
-    var code = $('join-code').value.trim();
-    if (!code) throw new Error('paste the invite code first');
-    await publish(28934, [['-'], ['claim', code]], '');
-    $('join-code').value = '';
-    if (state.link && state.link.code === code) state.link.spent = true;
-    await probeMembership();
+  async function joinTopic() {
+    const link = state.link;
+    if (!state.member || !link || !link.channel || !usableHere(link)) return;
+    const grant = link.bundle;
+    const button = $('join-topic');
+    button.disabled = true;
+    try {
+      // The keeper verifies this proof to bind the invite and its role to this seat.
+      const msg = await sha256(concat(utf8('nostr-mailbox/topic-redeem/v1'), await sha256(utf8(grant.group_code)), unhex(state.me)));
+      const proof = hexOf(await schnorrSign(msg, unhex(grant.redeem)));
+      await publish(9021, [['h', grant.topic], ['code', grant.group_code], ['proof', proof]], '');
+      const seats = await query({ kinds: [39002], '#d': [grant.topic], '#p': [state.me] });
+      if (!byD(seats, 39002).has(grant.topic)) throw new Error('The relay has not confirmed the topic roster yet.');
+      const ring = { schema: 'cf.keyring-file/1', name: grant.topic, campaign: grant.campaign,
+        owner: state.me, relay: RELAY_URL, authorities: [grant.owner], epochs: grant.epochs || {}, current: grant.current || 0, seen: [] };
+      $('topic-keys').textContent = JSON.stringify(ring, null, 2);
+      $('topic-status').textContent = 'Joined as ' + (grant.role || 'read-write') + '.';
+      $('topic-export').hidden = !grant.epochs;
+      button.hidden = true;
+      link.spent = true;
+    } catch (err) {
+      $('topic-status').textContent = err.message;
+      button.disabled = false;
+    }
+  }
+  async function enter(mode) {
+    if (state.busy || state.member) return;
+    state.busy = true;
+    render();
+    try {
+      const claiming = mode === 'claim';
+      if (claiming && $('open-token').value.trim()) openGiven();
+      if (claiming && (!state.link || !usableHere(state.link))) {
+        render();
+        $('whoami').textContent = 'Use an invite issued for this relay.';
+        return;
+      }
+      if (!state.gated) {
+        await readInfo();
+        if (!state.gated) throw new Error('The relay does not advertise authenticated, invite-only access.');
+      }
+      if (!state.signer) {
+        if (mode === 'extension' || (claiming && $('use-extension').checked)) {
+          if (!window.nostr) throw new Error('No NIP-07 extension found. Use a browser key or enter your nsec.');
+          const ext = window.nostr;
+          state.signer = { getPublicKey: () => ext.getPublicKey(), signEvent: (e) => ext.signEvent(e) };
+        } else if (mode === 'import') {
+          const secret = $('nsec').value;
+          $('nsec').value = '';
+          state.signer = browserSigner(secret);
+        } else {
+          state.signer = browserSigner();
+        }
+      }
+      gateControls();
+      if (!state.me || mode === 'resume') await signIn();
+      if (claiming && !state.member) {
+        const code = state.link.code;
+        $('whoami').textContent = 'Redeeming invite…';
+        await publish(28934, [['-'], ['claim', code]], '');
+        state.link.spent = true;
+        await probeMembership();
+        if (!state.member) throw new Error('The relay accepted the claim but could not confirm membership. Reconnect to check.');
+      }
+      if (state.member) {
+        const link = state.link;
+        if (link && link.channel && usableHere(link)) {
+          $('topic-grant').hidden = false;
+          $('topic-title').textContent = 'Topic invite · #' + link.topic;
+          if (claiming) await joinTopic();
+        } else if (claiming && link.bundle && link.bundle.campaign_key) {
+          // A room invite carries the existing bus key. Never replace a held room key.
+          const room = roomSlug(link.campaign), name = ROOM_KEY_PREFIX + state.me + '/' + room;
+          if (kept && !kept.getItem(name)) kept.setItem(name, link.bundle.campaign_key);
+          $('room').value = room;
+          listRooms();
+        }
+        const pairWith = link && link.token && !link.error && !link.spent && forThisRelay(link)
+          ? link.token : kept && kept.getItem(TOKEN_KEY);
+        if (HOSTED_MCP && pairWith) showConnection(pairWith);
+        await loadGroups();
+        await loadMail();
+      }
+    } catch (err) {
+      if (!state.me && state.ws) disconnect(err.message);
+      render();
+      $('whoami').textContent = err.message;
+      log(err.message, 'bad');
+    } finally {
+      state.busy = false;
+      gateControls();
+    }
+  }
+  function signOut() {
+    if (state.signer && state.signer.clear) state.signer.clear();
+    state.signer = null;
+    state.link = null;
+    state.urls = null;
+    state.pairToken = null;
+    $('backup-key').textContent = '';
+    $('backup').hidden = true;
+    $('nsec').value = '';
+    $('open-token').value = '';
+    disconnect('Signed out.');
+    try { if (kept) kept.removeItem(TOKEN_KEY); }
+    finally {
+      history.replaceState(null, '', '/');
+      location.reload(); // Discard pending UI work and all member data, including on a docs tab.
+    }
   }
   // A whole nm1_ token for the room: the relay's single-use code, packed with the
   // room's declaration and key, and at once the URLs that pair a client with it.
   async function mint() {
     var room = roomSlug($('room').value);
-    if (!state.me) await signIn();
     if (!state.member) throw new Error('only a member mints an invite: redeem one first');
     var events = await query({ kinds: [28935], limit: 1 });
     var invite = events[0];
@@ -975,6 +1362,10 @@ export const CONSOLE_SCRIPT = String.raw`
       (HOSTED_MCP ? ', or pair a client with it below.' : '.');
     $('mint-status').className = 'note good';
     if (HOSTED_MCP) showConnection(token);
+    else {
+      $('local-command').textContent = "crosswire join '" + connectionUrls(location.origin, token).join + "' && crosswire watch bus";
+      $('local-command-box').hidden = false;
+    }
   }
 
   // ------------------------------------------------------------------------ groups
@@ -1133,16 +1524,33 @@ export const CONSOLE_SCRIPT = String.raw`
   }
 
   // ------------------------------------------------------------------------ render
+  function gateControls() {
+    const held = !!state.signer;
+    $('key-form').hidden = held;
+    $('signin').hidden = held;
+    $('extension-choice').hidden = held || !window.nostr;
+    $('reconnect').hidden = !held || state.member;
+    $('signout').hidden = !held;
+    for (const button of document.querySelectorAll('#invited-card button')) button.disabled = state.busy;
+  }
   function render() {
-    $('whoami').textContent = !state.me ? 'Not signed in.' :
-      'Signed in as ' + short(state.me) + (state.member ? ', an enrolled member.' : ', not enrolled on this relay.');
-    $('signin').textContent = state.me ? 'Sign in again' : 'Sign in with a NIP-07 extension';
+    $('whoami').textContent = state.me ? 'Signed in as ' + short(state.me) +
+      (state.member ? ', enrolled.' : '. Redeem an invite to enroll this key.') :
+      (state.busy ? 'Signing in…' : 'Keys sign in this tab or in your extension.');
     var npub = state.me ? npubOf(state.me) : null;
     $('persona-npub').textContent = npub ? npub.slice(0, 12) + '…' + npub.slice(-6) : 'not signed in';
-    $('join-card').hidden = !state.me || state.member;
+    $('workspace').hidden = !state.member;
+    $('admission').hidden = state.member;
+    const loaded = !!(state.link && usableHere(state.link) && !state.link.spent);
+    $('open-token').required = !loaded;
+    $('open-token').placeholder = loaded ? 'Invite loaded · paste another to replace it' : 'Invite link, nm1_ token or claim code';
+    $('open-invite').textContent = loaded ? 'Redeem this invite' : 'Redeem invite';
+    $('local-pair').hidden = HOSTED_MCP || !state.member;
     ['groups-card', 'mailbox-card'].forEach(function (id) { $(id).hidden = !state.member; });
+    gateControls();
     if (!state.member) { $('group-card').hidden = true; state.counts = { groups: null, mail: null }; counted(); }
     renderLink();
+    if (state.install) installFor(state.install);
   }
 
   // ---------------------------------------------------------------- 02 · waitlist
@@ -1197,12 +1605,40 @@ export const CONSOLE_SCRIPT = String.raw`
   applyTheme(kept && kept.getItem(THEME_KEY));
   $('relay-url').textContent = RELAY_URL;
   state.link = takeInviteLink();
-  if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;
-  var pairWith = state.link && !state.link.error && state.link.token && forThisRelay(state.link) ? state.link.token
-    : kept && kept.getItem(TOKEN_KEY);
   renderClient();
-  // Shown, never sent: the relay hears about a token only when the visitor asks it to.
-  if (pairWith && HOSTED_MCP) showConnection(pairWith);
+  function route() {
+    const tab = location.hash.slice(1);
+    const pages = ['switchboard', 'docs', 'acls', 'architecture'];
+    const active = pages.includes(tab) ? tab : (/^\/docs\/?$/.test(location.pathname) ? 'docs' : 'switchboard');
+    for (const id of pages) $(id).hidden = id !== active;
+    for (const link of document.querySelectorAll('[data-tab]')) {
+      if (link.dataset.tab === active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    }
+  }
+  window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+  route();
+  function installFor(client) {
+    const repo = 'https://github.com/awowIO/crosswire';
+    const cli = client === 'cli' || client === 'chatgpt';
+    const install = cli ? 'uv tool install git+' + repo :
+      'git clone ' + repo + ' && python3 crosswire/scripts/sync_plugin.py --install --harness ' + client;
+    const link = state.link;
+    const token = link && usableHere(link) && !link.spent && link.token;
+    const watch = token && link.channel ? 'crosswire --topic ' + link.topic + ' watch bus' : 'crosswire watch bus';
+    $('install-command').textContent = install + "\ncrosswire join '" + (token || '<nm1_ token or join link>') + "' && " + watch;
+    let note = cli ? 'Requires uv.' : 'Run from the checkout’s parent directory. Keep the checkout and put ~/.local/bin on PATH.';
+    if (client === 'chatgpt') note += ' Run these on your connector host. Then run crosswire mcp --http behind public HTTPS and add its MCP URL in ChatGPT.';
+    if (client === 'claude-desktop') note += ' Restart Claude Desktop to load its stdio server.';
+    $('install-how').textContent = note + (token ? ' This invite is ready to use once.' : ' Replace the quoted placeholder with an unused invite.');
+    for (const button of document.querySelectorAll('#install-clients button')) button.setAttribute('aria-pressed', String(button.dataset.install === client));
+    state.install = client;
+  }
+  for (const button of document.querySelectorAll('#install-clients button')) {
+    button.addEventListener('click', () => installFor(button.dataset.install));
+  }
+  installFor('cli');
+  copyButton($('install-copy'), 'install-command');
   $('theme').addEventListener('click', action(toggleTheme));
   Array.from(document.querySelectorAll('#pair-clients button')).forEach(function (button) {
     button.addEventListener('click', action(function () { chooseClient(button.dataset.client); }));
@@ -1214,12 +1650,18 @@ export const CONSOLE_SCRIPT = String.raw`
   copyButton($('pair-openapi-copy'), 'pair-openapi');
   copyButton($('pair-join-copy'), 'pair-join');
   copyButton($('pair-snippet-copy'), 'pair-snippet');
+  $('join-topic').addEventListener('click', action(async () => { await joinTopic(); await loadGroups(); }));
+  copyButton($('topic-copy'), 'topic-keys');
+  copyButton($('local-copy'), 'local-command');
   copyButton($('link-copy'), 'link-command');
   copyButton($('invite-copy'), 'invite-code');
   copyButton($('invite-link-copy'), 'invite-link');
-  $('open-form').addEventListener('submit', action(openGiven));
-  $('signin').addEventListener('click', action(signIn));
-  $('join-form').addEventListener('submit', action(redeem));
+  $('open-form').addEventListener('submit', action(() => enter('claim')));
+  $('key-form').addEventListener('submit', action(() => enter('import')));
+  $('signin').addEventListener('click', action(() => enter('extension')));
+  $('reconnect').addEventListener('click', action(() => enter('resume')));
+  $('signout').addEventListener('click', signOut);
+  copyButton($('backup-copy'), 'backup-key');
   $('mint').addEventListener('click', action(mint));
   $('maywe-form').addEventListener('submit', action(requestMayweInvite));
   $('create-form').addEventListener('submit', action(createGroup));
@@ -1239,6 +1681,6 @@ export function consoleHtml(): string {
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
     '<meta name="color-scheme" content="light dark">\n' +
     '<meta name="referrer" content="no-referrer">\n<title>Relay console</title>\n' +
-    `<style>${CONSOLE_STYLE}</style>\n</head>\n<body>${BODY}<script>${CONSOLE_SCRIPT}</script>\n</body>\n</html>\n`
+    `<style>${CONSOLE_STYLE}</style>\n</head>\n<body>${BODY.replace("<!-- documentation -->", () => DOCUMENTATION)}<script>${CONSOLE_SCRIPT}</script>\n</body>\n</html>\n`
   );
 }

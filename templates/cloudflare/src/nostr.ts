@@ -509,11 +509,10 @@ export function matchesFilter(f: Filter, e: NostrEvent): boolean {
 // tests/test_hydrate.py holds all three to one table.
 export const BLOB_PATH = /^\/(media\/)?([0-9a-f]{64})([.][a-z0-9]{1,8})?$/;
 const NIP11_TYPE = "application/nostr+json";
-// Where nostr-mailbox's invite links point: `invite` and `topic invite` print a
-// `join_url` of https://<relay host>/join/#nm1_… The token rides in the fragment, which a
-// browser never sends, so the path alone is the route. Only the Worker serves it: the
-// pinned ncli has no page there (it answers 404), so the two ncli edges keep it shut.
+// Join tokens ride in the URL fragment. These exact paths serve the same self-contained
+// page on the Worker and, when enabled, the Kubernetes console.
 export const JOIN_PATHS = ["/join", "/join/"];
+const CONSOLE_PATHS = [...JOIN_PATHS, "/docs", "/docs/"];
 // The remote MCP server and its OpenAPI twin (mcp.ts), for ChatGPT, Claude.ai and any
 // other remote client that holds an nm1_ token, and the OAuth 2.1 server that hands such
 // a client an access token for one (oauth.ts). Only the Worker serves them: the pinned
@@ -541,7 +540,7 @@ export const TOKEN_PATH = "/oauth/token";
 //   unacceptable  an Accept list that names application/nostr+json among others: 400,
 //                 as the ncli relay answers it, rather than guess which one was meant
 //   page          anything else, a browser included: the Visual Web Console
-// `GET`/`HEAD /join` and `/join/` are the console page whatever the headers.
+// The join and documentation paths serve the console for GET and HEAD whatever the headers.
 //   mcp           POST, GET and DELETE /mcp and /mcp/s/<token>: MCP Streamable HTTP
 //                 (GET answers 405)
 //   openapi       GET /openapi.json and /mcp/s/<token>/openapi.json: the OpenAPI 3.1
@@ -565,7 +564,7 @@ export function edgeRoute(method: string, path: string, headers: Headers): EdgeR
     if (accept.includes(NIP11_TYPE)) return "unacceptable";
     return "page";
   }
-  if (JOIN_PATHS.includes(path) && (method === "GET" || method === "HEAD")) return "page";
+  if (CONSOLE_PATHS.includes(path) && (method === "GET" || method === "HEAD")) return "page";
   if (method === "PUT" && (path === "/upload" || path === "/media/upload")) return "upload";
   if ((method === "GET" || method === "HEAD") && BLOB_PATH.test(path)) return "blob";
   const magic = MAGIC_PATH.exec(path);

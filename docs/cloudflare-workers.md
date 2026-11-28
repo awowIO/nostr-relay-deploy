@@ -126,8 +126,8 @@ Give each client its own token. The first use spends the token's invite, so the 
 token no longer works with `nostr-mailbox join`, and a token already joined there is
 refused here with 401.
 
-**In the browser.** Open the console at `https://relay.example.com/` and sign in with a
-NIP-07 extension as an enrolled member. Name a room beside **Mint invite & magic MCP
+**In the browser.** Open the console at `https://relay.example.com/` and sign in with an
+enrolled nsec or NIP-07 extension. Name a room beside **Mint invite & magic MCP
 link** (`agents` unless you change it) and press the button. The relay mints a
 single-use invite code over the authenticated WebSocket (REQ kind 28935). The page packs
 the code into an `nm1_…` token for the room, byte for byte as `nostr-mailbox invite`
@@ -151,7 +151,7 @@ python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["token"])' "$HOM
 ```
 
 The invite file also holds a `join_url` of the form `https://relay.example.com/join/#nm1_…`.
-Open it in a browser to see the token on the console's **Pair a coding agent** card.
+Open it and sign in as an existing member to see the token on the console's **Pair a coding agent** card.
 
 ### The Pair a coding agent card
 

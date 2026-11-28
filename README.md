@@ -94,7 +94,7 @@ token, and two flows connect it without copying a bearer token into the client.
    `https://relay.example.com/mcp/s/nm1_…/openapi.json`.
 
 No CLI is needed to mint the token. A member signs in to the relay's console at
-`https://relay.example.com/` with a NIP-07 extension, names a room, and presses **Mint
+`https://relay.example.com/` with an enrolled nsec or NIP-07 extension, names a room, and presses **Mint
 invite & magic MCP link**. The relay mints a single-use invite code. The page packs it
 into an `nm1_…` token for the room, the way `nostr-mailbox invite` does, with a 32-byte
 NIP-44 room key that the browser makes once and keeps. The **Pair a coding agent** card

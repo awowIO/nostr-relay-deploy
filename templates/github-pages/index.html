@@ -290,7 +290,7 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
   // and the nm1_ token itself: base64url of the JSON that 'nostr-mailbox join' reads.
   // It returns null when the fragment holds no invite, and throws when it holds one it
   // cannot read. It never sends, stores or logs the token.
-  function readInviteLink(fragment) {
+  function readInviteLink(fragment, includeBundle) {
     var frag = String(fragment || '').replace(/^#/, '');
     var token = null;
     if (frag.indexOf('nm1_') === 0) {
@@ -323,12 +323,13 @@ codex plugin add nostr-mailbox@nostr-mailbox</pre><button type="button">Copy</bu
     try { relay = new URL(named); } catch (err) { throw new Error('the nm1_ token names no relay URL'); }
     if (relay.protocol !== 'wss:' && relay.protocol !== 'ws:') throw new Error('the nm1_ token names no ws:// or wss:// relay');
     return {
+      ...(includeBundle ? { bundle: bundle } : {}),
       token: token, code: bundle.code, relay: named, host: relay.host.toLowerCase(),
       campaign: typeof bundle.campaign === 'string' ? bundle.campaign : null,
       member: typeof bundle.member === 'string' ? bundle.member : null,
       topic: typeof bundle.topic === 'string' ? bundle.topic : hint.topic,
       role: hint.role,
-      // A topic invite carries the channel's keys, which only nostr-mailbox keeps.
+      // A topic invite also carries group admission credentials.
       channel: typeof bundle.group_code === 'string' || (!!bundle.epochs && typeof bundle.epochs === 'object'),
     };
   }

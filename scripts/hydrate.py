@@ -514,17 +514,18 @@ affinity:
 
 
 _CONSOLE_PART = re.compile(r"^(?:export )?const ([A-Z_]+) = String\.raw`(.*?)`;$", re.DOTALL | re.MULTILINE)
-_CONSOLE_PARTS = ("CONSOLE_STYLE", "BODY", "CONSOLE_SCRIPT")
+_CONSOLE_PARTS = ("CONSOLE_STYLE", "BODY", "CONSOLE_SCRIPT", "DOCUMENTATION")
 # What the console's BODY marks as the Worker's alone (its remote MCP server and OAuth sign-in):
 # a Kubernetes build hides it, since the pinned ncli serves no such endpoint.
 WORKER_ONLY_MARK = 'data-edge="worker"'
 
 
 def console_parts() -> dict[str, str]:
-    """The console's style, body and script, read from console.ts. They are String.raw
+    """The console's style, body, script and documentation. They are String.raw
     literals without interpolation, so the text between the backticks is what the Worker
     serves, byte for byte."""
-    source = CONSOLE_SOURCE.read_text(encoding="utf-8")
+    sources = (CONSOLE_SOURCE, CONSOLE_SOURCE.with_name("console-docs.ts"))
+    source = "\n".join(path.read_text(encoding="utf-8") for path in sources)
     parts = {m.group(1): m.group(2) for m in _CONSOLE_PART.finditer(source)}
     missing = [name for name in _CONSOLE_PARTS if name not in parts]
     if missing:
@@ -541,6 +542,7 @@ def console_html(parts: dict[str, str], *, hosted_mcp: bool) -> str:
     """The page consoleHtml() in console.ts builds. Without the Worker's MCP server
     (`hosted_mcp` false), what BODY marks as the Worker's alone is hidden."""
     body = parts["BODY"] if hosted_mcp else parts["BODY"].replace(WORKER_ONLY_MARK, f"{WORKER_ONLY_MARK} hidden")
+    body = body.replace("<!-- documentation -->", parts["DOCUMENTATION"])
     return ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             '<meta name="color-scheme" content="light dark">\n'
@@ -559,6 +561,7 @@ def console_policy(parts: dict[str, str], relay_host: str) -> str:
         "default-src 'none'",
         f"script-src {_sha256_source(parts['CONSOLE_SCRIPT'])}",
         f"style-src {_sha256_source(parts['CONSOLE_STYLE'])}",
+        "img-src 'self' data:",
         f"connect-src 'self' wss://{relay_host} {MAYWE_ORIGIN}",
         "base-uri 'none'",
         "form-action 'none'",
@@ -570,8 +573,7 @@ def console_policy(parts: dict[str, str], relay_host: str) -> str:
 # WebSocket, a NIP-11 client and a browser apart. With the Web Console beside it, the split
 # edgeRoute() in nostr.ts makes: a WebSocket upgrade and any Accept naming NIP-11's type
 # (ncli answers a list of types 400, as the Worker does) reach the relay; a browser at `/`,
-# `/join` or `/join/` reaches the console. The two rules exclude each other, so their equal
-# priority never decides anything.
+# a join path or a docs path reaches the console. The two rules exclude each other.
 _UPGRADE = "HeaderRegexp(`Upgrade`, `(?i)^websocket$`)"
 _NIP11 = "HeaderRegexp(`Accept`, `(?i)application/nostr\\+json`)"
 _ROOT_ROUTE = """\
@@ -584,7 +586,7 @@ _ROOT_ROUTES_WITH_CONSOLE = f"""\
   kind: Rule
   priority: {{priority}}
   services: [{{{{ name: {{relay}}, port: 5500 }}}}]
-- match: 'Host(`{{host}}`) && (Method(`GET`) || Method(`HEAD`)) && ((Path(`/`) && !(Method(`GET`) && {_UPGRADE}) && !{_NIP11}) || Path(`/join`) || Path(`/join/`))'
+- match: 'Host(`{{host}}`) && (Method(`GET`) || Method(`HEAD`)) && ((Path(`/`) && !(Method(`GET`) && {_UPGRADE}) && !{_NIP11}) || Path(`/join`) || Path(`/join/`) || Path(`/docs`) || Path(`/docs/`))'
   kind: Rule
   priority: {{priority}}
   services: [{{{{ name: {{console}}, port: {{port}} }}}}]"""
@@ -1143,12 +1145,12 @@ _CONSOLE_MARK = b'<span id="relay-name">Relay console</span>'
 
 
 def verify_console(cfg: Config, origin: str | None = None) -> None:
-    """A browser at `/` and at `/join/` gets the Web Console, under a policy that admits its
+    """A browser at the root, join and docs paths gets the Web Console under a policy that admits its
     own script and style: the page a ConfigMap carries and the hashes nginx sends agree."""
     origin = origin or f"https://{cfg['relay']['relay_host']}"
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     failures, pages = [], {}
-    for path in ("/", "/join/"):
+    for path in ("/", "/join/", "/docs", "/docs/"):
         url = origin + path
         request = urllib.request.Request(url, headers={"Accept": "text/html"})
         try:
@@ -1170,11 +1172,12 @@ def verify_console(cfg: Config, origin: str | None = None) -> None:
             if wanted is None or wanted not in policy:
                 failures.append(f"{url}: its Content-Security-Policy does not admit the page's own {tag} "
                                 f"(the browser would block it): {policy!r}")
-    if not failures and pages["/"] != pages["/join/"]:
-        failures.append(f"{origin}/join/ is not the same page as {origin}/")
+    for path, body in pages.items():
+        if body != pages["/"]:
+            failures.append(f"{origin}{path} is not the same page as {origin}/")
     if failures:
         raise VerifyError("the Web Console does not answer as configured:\n  - " + "\n  - ".join(failures))
-    print(f"verify: OK the Web Console at {origin}/ and {origin}/join/")
+    print(f"verify: OK the Web Console at {origin}/, /join/, /docs and /docs/")
 
 
 # ================================================================================ main

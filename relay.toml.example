@@ -34,7 +34,7 @@ avoid_control_plane = true             # prefer nodes without node-role.kubernet
 traefik_namespace = "traefik"          # namespace of the Traefik pods that reach the relay
 traefik_pod_selector = "app.kubernetes.io/name=traefik"  # their labels; "" admits any pod there
 traefik_egress_network_policy = false  # set true if namespace `traefik` enforces default-deny egress
-web_console = false                    # true: serve the Web Console at /, /join and /join/ beside the relay
+web_console = false                    # true: serve the Web Console at / and both /join and /docs paths (with or without a trailing slash)
 kubeconfig = ""                        # optional local path to kubeconfig for `--apply` / `--verify`
 context = ""                           # optional kubeconfig context for `--apply` / `--verify`
 

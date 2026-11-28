@@ -9,6 +9,7 @@
 | PUT | `/upload` or `/media/upload` | Signed Blossom upload |
 | GET or HEAD | `/<sha256>` or `/media/<sha256>` | Signed Blossom download, optionally with a file extension |
 | GET or HEAD | `/join` or `/join/` | Invite console: Cloudflare, and Kubernetes with `web_console = true` |
+| GET or HEAD | `/docs` or `/docs/` | Switchboard documentation on the same two targets |
 | POST, GET or DELETE | `/mcp` | Cloudflare remote MCP server, with an `nm1_…` token or an OAuth access token |
 | GET | `/openapi.json` | Cloudflare OpenAPI 3.1 document of the MCP tools, with a token |
 | POST | `/tools/<tool>` | Cloudflare tool call as plain JSON, with a token |
@@ -79,26 +80,28 @@ nostr-mailbox join --code-file "$HOME/member.invite"
 nostr-mailbox relay check
 ```
 
-The Worker serves its self-contained console at the root and both join paths. It uses
-a NIP-07 browser extension to sign. Members can redeem invites, mint them as whole
-`nm1_…` tokens for a room whose NIP-44 key the browser keeps, manage groups and see
-envelopes addressed to them. Anyone with a token can pair a coding agent on it without
-signing in. The console reads invite fragments in the
-forms `#nm1_…`, `#join=nm1_…` and `#invite=<code>`, then clears the fragment. It fills
-a relay invite for its own host and waits for the member to redeem it. Topic invites
-need the CLI, or the Worker's remote MCP server, to hold the channel keys. Invites
-naming a different relay stay unused.
+On Cloudflare and on Kubernetes with `web_console = true`, the switchboard serves
+the gate at `/` and both join paths. Paste a single-use relay invite or open its link
+and press **Redeem invite**. The page creates a secp256k1 identity in this tab or signs
+through the selected NIP-07 extension. Back up a generated `nsec` to sign in again.
+Existing members can enter their `nsec` or use the extension. The signing key stays
+local. Sign out closes the WebSocket and discards the active identity.
 
-The console opens with two cards: **01 · Already invited** takes a pasted invite
-link, `nm1_…` token or bare code and previews it as a clicked link is, and **02 ·
-Request an invite** puts an email address on the waitlist through MayWe. Neither
-sends a token anywhere. The console sends a token to the relay only when the visitor
-submits the **Pair a coding agent** card, in an `Authorization` header to
-`/openapi.json`; opening an invite link and minting one build the URLs in the page.
+The relay verifies the NIP-42 challenge signature. An authenticated key must also pass
+a member-only subscription before the workspace opens. To enroll a key, the console
+sends a signed kind 28934 with the claim code and repeats the membership check.
+Opening a link clears its invite fragment. For a topic invite, the console also signs
+the redemption proof, submits the NIP-29 join and verifies the roster. Its topic card
+exports the granted epochs as a mailbox keyring. Keep the original invite for recovery. The Try It Now card includes install and
+join commands. MayWe handles invite requests.
 
-On Kubernetes with `web_console = true`, the same console, without its MCP and OAuth
-controls, answers a browser at the root and both join paths, beside the relay. On
-Compose, and on Kubernetes without it, the pinned ncli release serves homepage HTML at
+Members can mint room invites, manage groups and inspect their sealed-envelope metadata.
+The Worker also builds magic MCP URLs in the member workspace. Submitting its pairing
+form sends the token in an authorization header to `/openapi.json`. Kubernetes shows
+commands for the agent's own machine. The public docs open at `/docs/`, `/#acls` or
+`/#architecture`.
+
+On Compose, and on Kubernetes without it, the pinned ncli release serves homepage HTML at
 the root. Its script and stylesheet paths under `/_home/assets/` fall outside the edge
 filters. A browser receives 404 on the join paths. Use the CLI for invite links on these
 targets.

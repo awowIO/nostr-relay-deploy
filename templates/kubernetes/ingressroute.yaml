@@ -13,7 +13,7 @@
 #
 # With `kubernetes.web_console = true`, `/` splits as the Worker's edgeRoute() splits it:
 # a WebSocket upgrade, and any Accept that names application/nostr+json, reach the relay;
-# a browser at `/`, `/join` or `/join/` (where nostr-mailbox's invite links point,
+# a browser at the root, docs or join paths (where nostr-mailbox's invite links point,
 # …/join/#nm1_…) reaches the console (console.yaml), which reads the token from the
 # fragment in the browser. The two `/` rules exclude each other, so their equal priority
 # never decides between them.

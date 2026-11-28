@@ -73,7 +73,7 @@ repository root unless a step names another directory.
    a namespace of its own, keeps its own. The relay's namespace also gets a default-deny
    policy, so a pod added there later starts with no traffic at all.
 
-   Set `web_console = true` to serve the Web Console at `/`, `/join` and `/join/`: the
+   Set `web_console = true` to serve the Web Console at the root, both join paths, and `/docs` or `/docs/`: the
    Cloudflare Worker's console page, rendered from `console.ts` at hydration without the
    Worker-only MCP and OAuth controls. It runs as its own Deployment and Service
    (`nostr-relay-console`, port 8080) on a digest-pinned unprivileged nginx with a
@@ -102,8 +102,8 @@ repository root unless a step names another directory.
 4. Once the pod is ready, verify its StatefulSet revision and NIP-11 response from
    the private network. Verification connects directly to the configured hostname.
    For a port-forward, supply a local HTTP URL using `--verify-url` to check NIP-11.
-   With `web_console = true` it also reads the console's Deployment, and fetches `/`
-   and `/join/` as a browser would: both must be the console page under a policy that
+   With `web_console = true` it also reads the console's Deployment, and fetches the root, join
+   and documentation pages as a browser would. Each must have a policy that
    admits its own script and style. `--verify-url` skips that page check.
 
    ```bash

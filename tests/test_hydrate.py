@@ -694,7 +694,7 @@ def test_kubernetes_serves_the_web_console_beside_an_untouched_relay(console_ws,
         k: v for k, v in worker_policy.items() if k != "connect-src"}
     assert ours["connect-src"] == f"'self' wss://{PRIVATE['relay_host']} https://newsletter.awow.io"
     assert ours["script-src"] == sha256_source(re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1))
-    for path in ("/", "/join", "/join/"):
+    for path in ("/", "/join", "/join/", "/docs", "/docs/"):
         assert f"location = {path} {{ try_files /index.html =404; }}" in nginx
     assert "location / { return 404; }" in nginx
     assert not re.search(r"^\s*include\b", nginx, re.MULTILINE), "nothing the image ships decides what is served"
@@ -892,7 +892,7 @@ def test_the_pinned_console_image_serves_the_page_as_the_worker_does(console_ser
                        (k8s / "console" / "nginx.conf").read_text()).group(1)
     _, worker_headers, _ = worker.http("GET", "/", headers={"Accept": "text/html"})
     for method in ("GET", "HEAD"):
-        for path in ("/", "/join", "/join/"):
+        for path in ("/", "/join", "/join/", "/docs", "/docs/"):
             status, headers, body = _get(origin, method, path, {"Accept": "text/html"})
             assert (status, body) == (200, page if method == "GET" else b""), (method, path)
             assert headers["Content-Security-Policy"] == policy
@@ -980,7 +980,7 @@ def test_cloudflare_hydrates_wrangler_and_copies_the_worker(build):
     assert wrangler["migrations"] == [{"tag": "v1", "new_sqlite_classes": ["RelayDurableObject"]}]
     assert wrangler["r2_buckets"] == [{"binding": "BLOSSOM_BUCKET", "bucket_name": "nostr-campaign-blobs"}]
     assert "ADMIN_TOKEN" not in wrangler["vars"], "the admin token is a secret, never a var"
-    modules = {"worker.ts", "nostr.ts", "console.ts", "nip44.ts", "mailbox.ts", "mcp.ts", "oauth.ts"}
+    modules = {"worker.ts", "nostr.ts", "console.ts", "console-docs.ts", "nip44.ts", "mailbox.ts", "mcp.ts", "oauth.ts"}
     assert {p.name for p in (cf / "src").iterdir()} == modules
     for name in modules:
         assert (cf / "src" / name).read_bytes() == (REPO / "templates" / "cloudflare" / "src" / name).read_bytes()
@@ -1021,8 +1021,14 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
     """No script, stylesheet or image from anywhere; links to the source on GitHub (header and
     footer) and to MayWe only; and the MayWe invite-request form. `q` is the script's quote."""
     assert not [(t, a) for t, a in parsed.tags if "src" in a or t == "link"]
-    links = [(t, a) for t, a in parsed.tags if "href" in a]
-    assert {(t, a["href"]) for t, a in links} == {("a", SOURCE_URL), ("a", MAYWE_URL)}
+    console_page = any(a.get("id") == "workspace" for _, a in parsed.tags)
+    links = [(t, a) for t, a in parsed.tags if "href" in a and not a["href"].startswith("#")]
+    expected = {("a", SOURCE_URL), ("a", MAYWE_URL)}
+    if console_page:
+        expected.add(("a", "https://github.com/awowIO/nostr-relay-deploy"))
+    assert {(t, a["href"]) for t, a in links} == expected
+    anchors = [a["href"] for _, a in parsed.tags if a.get("href", "").startswith("#")]
+    assert anchors == (["#switchboard", "#docs", "#acls", "#architecture"] if console_page else [])
     assert all(a.get("target") == "_blank" and a.get("rel") == "noopener noreferrer" for _, a in links)
     header = re.search(r"<header .*?</header>", page, re.DOTALL).group(0)
     link = re.search(rf'<a class="hdr-link" href="{re.escape(SOURCE_URL)}"[^>]*>(.*?)</a>', header, re.DOTALL)
@@ -1036,7 +1042,9 @@ def _assert_links_and_invite_form(parsed: _Collect, page: str, q: str) -> None:
                      r"pointer-events: none; \}", parsed.style)
     # The two ways in come first, side by side: already invited, and asking for an invite.
     cards = re.findall(r"<section[^>]*>.*?</section>", page[page.index('<div class="grid">'):], re.DOTALL)
-    assert ">01 · Already invited</h2>" in cards[0] and ">02 · Request an invite</h2>" in cards[1]
+    titles = (("Sign In or Redeem Invite", "Request an Invite via MayWe") if console_page
+              else ("Already invited", "Request an invite"))
+    assert f">01 · {titles[0]}</h2>" in cards[0] and f">02 · {titles[1]}</h2>" in cards[1]
     opener = next(a for t, a in parsed.tags if t == "form" and a.get("id") == "open-form")
     assert "action" not in opener
     pasted = next(a for t, a in parsed.tags if t == "input" and a.get("id") == "open-token")
@@ -1138,7 +1146,7 @@ OTHER_HOST = "evil.example.org"
 # runs beside its relay and the pinned ncli has no counterpart of. Probed here without a
 # usable token, they answer as WORKER_ONLY_STATUS says, never the page and never the wire.
 WORKER_ONLY = "worker only"
-JOIN_PATHS = ("/join", "/join/")
+CONSOLE_PATHS = ("/join", "/join/", "/docs", "/docs/")
 # A token-shaped path segment whose token is no JSON, so the magic routes answer 401.
 MAGIC = "/mcp/s/nm1_bm90IGpzb24"
 OAUTH_FORM = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -1180,6 +1188,11 @@ PROBES = [
     ("NIP-11 on another host", "GET", "/", {"Accept": "application/nostr+json"}, OTHER_HOST, False),
     ("the page on another host", "GET", "/", {"Accept": "text/html"}, OTHER_HOST, False),
     ("blob on another host", "GET", f"/{SHA}", {}, OTHER_HOST, False),
+    ("documentation", "GET", "/docs", {"Accept": "text/html"}, None, WORKER_ONLY),
+    ("documentation trailing slash", "HEAD", "/docs/", {}, None, WORKER_ONLY),
+    ("under documentation", "GET", "/docs/no", {}, None, False),
+    ("similar documentation path", "GET", "/docs-extra", {}, None, False),
+    ("documentation POST", "POST", "/docs/", {}, None, False),
     ("invite link page", "GET", "/join", {"Accept": "text/html"}, None, WORKER_ONLY),
     ("invite link page with a slash", "GET", "/join/", {"Accept": "text/html"}, None, WORKER_ONLY),
     ("invite link page HEAD", "HEAD", "/join/", {}, None, WORKER_ONLY),
@@ -1403,7 +1416,7 @@ def test_caddy_traefik_and_the_worker_admit_the_same_routes(build, worker, name,
     assert (caddy, traefik, answer["status"] != 404) == expected, answer
     if admitted and path == "/" and "Upgrade" in headers:
         assert answer["upgrade"] is True
-    if admitted == WORKER_ONLY and path in JOIN_PATHS:
+    if admitted == WORKER_ONLY and path in CONSOLE_PATHS:
         assert (answer["status"], answer["upgrade"]) == (200, False), "/join is the page, never the wire"
     elif admitted == WORKER_ONLY:
         assert answer["upgrade"] is False, "the MCP and OAuth routes are never the wire"
@@ -1418,7 +1431,7 @@ def console_backend(method: str, path: str, headers: dict[str, str], admitted) -
     if admitted is False:
         return None
     if admitted == WORKER_ONLY:
-        return f"{hydrate.CONSOLE_NAME}:{hydrate.CONSOLE_PORT}" if path in JOIN_PATHS else None
+        return f"{hydrate.CONSOLE_NAME}:{hydrate.CONSOLE_PORT}" if path in CONSOLE_PATHS else None
     upgrade = method == "GET" and (_header(headers, "Upgrade") or "").lower() == "websocket"
     nip11 = "application/nostr+json" in (_header(headers, "Accept") or "").lower()
     if path == "/" and not upgrade and not nip11:
@@ -1569,8 +1582,9 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     # Self-contained: no stylesheet, script or image from anywhere, links to GitHub and MayWe only,
     # and no other site named.
     _assert_links_and_invite_form(parsed, page, "'")
-    assert "http://" not in page
-    assert set(re.findall(r"https://[^\s'\"<>]+", page)) == {SOURCE_URL, MAYWE_URL, SUBSCRIBE_URL, DOCS_ORIGIN}
+    assert "http://" not in page.replace('xmlns="http://www.w3.org/2000/svg"', "")
+    script_urls = re.findall(r"https://[^\s'\"<>]+", re.search(r"<script>(.*?)</script>", page, re.DOTALL)[1])
+    assert set(script_urls) == {SOURCE_URL, SUBSCRIBE_URL, DOCS_ORIGIN}
     # The CSP admits this script and this style, by hash, and connects to this relay and MayWe only.
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
     style = re.search(r"<style>(.*?)</style>", page, re.DOTALL).group(1)
@@ -1578,6 +1592,7 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     digest = lambda text: "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
     assert policy["default-src"] == "'none'" and policy["frame-ancestors"] == "'none'"
     assert policy["script-src"] == digest(script) and policy["style-src"] == digest(style)
+    assert policy["img-src"] == "'self' data:"
     assert policy["connect-src"] == f"'self' wss://{RELAY_HOST} https://newsletter.awow.io"
     assert policy["form-action"] == "'none'"
     assert headers["X-Content-Type-Options"] == "nosniff" and headers["Referrer-Policy"] == "no-referrer"
@@ -1590,7 +1605,6 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
                    "publish(9007, [['h', id]]", "kinds: [9021], '#h': [id]", "kinds: [1059, 4410, 4411], '#p'",
                    "'wss://' + location.host", "window.nostr",
                    "history.replaceState(null, '', location.pathname + location.search);",
-                   "if (state.link && usableHere(state.link)) $('join-code').value = state.link.code;",
                    "$('maywe-form').addEventListener('submit', action(requestMayweInvite));"):
         assert needle in script, needle
     assert "innerHTML" not in script, "what the relay sends is text, never markup"
@@ -1602,10 +1616,10 @@ def test_the_worker_serves_the_visual_web_console_at_root(worker, tmp_path):
     assert re.findall(r"max-width\s*:\s*([^;}]+)", css) == ["none"], "no boxed max-width container anywhere"
     assert "@media (prefers-color-scheme: dark)" in css and "color-scheme: light dark" in css
     # The header names this relay and the key signed in, and the Mint button is in the controls bar.
-    for needle in ('id="relay-url"', 'id="persona-npub"', 'id="theme"', 'id="room"', 'id="mint"', 'id="join-code"'):
+    for needle in ('id="relay-url"', 'id="persona-npub"', 'id="theme"', 'id="room"', 'id="mint"', 'id="open-token"'):
         assert needle in page, needle
     assert page.index('id="maywe-card"') < page.index('id="pair-card"'), "the ways in before pairing"
-    assert page.index('id="join-code"') < page.index('id="maywe-card"'), "redeeming is part of 01"
+    assert page.index('id="open-token"') < page.index('id="maywe-card"'), "redeeming is part of 01"
     assert "$('relay-url').textContent = RELAY_URL;" in script
     status, headers, body = worker.http("HEAD", "/", headers={"Accept": "text/html"})
     assert (status, headers["Content-Type"], body) == (200, "text/html; charset=utf-8", b"")
@@ -1617,7 +1631,7 @@ def test_the_worker_serves_the_same_console_where_invite_links_point(worker):
     """nostr-mailbox's `invite` and `topic invite` print a join_url of
     https://<relay host>/join/#nm1_…: /join and /join/ answer the console, as / does."""
     _, root_headers, root_page = worker.http("GET", "/", headers={"Accept": "text/html"})
-    for path in JOIN_PATHS:
+    for path in CONSOLE_PATHS:
         status, headers, body = worker.http("GET", path, headers={"Accept": "text/html"})
         assert (status, body) == (200, root_page), path
         for name in ("Content-Type", "Content-Security-Policy", "Referrer-Policy", "X-Frame-Options"):
@@ -2468,7 +2482,7 @@ def test_only_the_worker_has_a_page_where_invite_links_point(relay):
     """The Worker serves its console at /join and /join/; the pinned ncli answers 404 there,
     which is why the Caddyfile and the IngressRoute keep them shut (WORKER_ONLY in the edge
     table). Should a later ncli serve a page there, this fails: open /join on those edges."""
-    for path in JOIN_PATHS:
+    for path in CONSOLE_PATHS:
         status, headers, _ = relay.http("GET", {"Accept": "text/html"}, path=path)
         if relay.name == "worker":
             assert status == 200 and headers["Content-Type"].startswith("text/html"), path
@@ -3505,11 +3519,14 @@ let fresh = 0;
 const sandbox = {
   document: { getElementById: element, querySelectorAll: () => [], createElement: () => element('#new' + (++fresh)),
               createTextNode: () => ({}), documentElement: { dataset: {} }, title: '' },
-  location: { hash: scenario.hash, host: scenario.host, origin: 'https://' + scenario.host, pathname: '/join/', search: '' },
+  location: { hash: scenario.hash, host: scenario.host, origin: 'https://' + scenario.host, pathname: scenario.path, search: '', reload() { requests.push({ reload: true }); } },
   history: { replaceState(_state, _title, url) { requests.push({ replaceState: url }); } },
-  localStorage: { getItem: () => null, setItem() {}, removeItem() {}, length: 0, key: () => null },
+  localStorage: { items: new Map(), getItem(k) { return this.items.get(k) ?? null; },
+    setItem(k, v) { this.items.set(k, v); requests.push({ stored: k, value: v }); },
+    removeItem(k) { this.items.delete(k); }, get length() { return this.items.size; },
+    key(i) { return Array.from(this.items.keys())[i]; } },
   matchMedia: () => ({ matches: false }),
-  navigator: {}, console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
+  addEventListener() {}, clearTimeout, navigator: {}, console: console, crypto: globalThis.crypto, TextEncoder, TextDecoder, URL, URLSearchParams,
   atob, btoa, setTimeout, Promise, JSON, Uint8Array, Array, Object, Map, Error, String, Math, Date,
   fetch: async (url, init) => {
     init = init || {};
@@ -3524,30 +3541,53 @@ sandbox.window = sandbox;
 vm.createContext(sandbox);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 (async () => {
+  if (scenario.port) {
+    sandbox.WebSocket = class extends WebSocket {
+      constructor(url) { super('ws://127.0.0.1:' + scenario.port); requests.push({ dial: url }); }
+      send(message) { requests.push({ frame: JSON.parse(message) }); super.send(message); }
+      close() { requests.push({ socketClosed: true }); super.close(); }
+    };
+    sandbox.fetch = async (url, init) => {
+      requests.push({ url, headers: init.headers });
+      return fetch('http://127.0.0.1:' + scenario.port + url, init);
+    };
+  }
+  if (scenario.extension) {
+    const nostr = await import(scenario.nostr);
+    const key = nostr.secretKey(scenario.extension);
+    sandbox.nostr = { getPublicKey: () => key.pubkey,
+      signEvent: (e) => nostr.signEvent(key, e.kind, e.tags, e.content, e.created_at) };
+  }
+  for (const id of scenario.hidden) element(id);
   vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), sandbox);
   await settle();
   for (const [verb, id, value] of scenario.steps) {
     if (verb === 'set') element(id).value = value;
-    if (verb === 'submit') for (const fn of element(id).listeners.submit || []) fn({ preventDefault() {} });
+    if (verb === 'submit' || verb === 'click') {
+      for (const fn of element(id).listeners[verb] || []) await fn({ preventDefault() {} });
+    }
     if (verb === 'mark') requests.push({ mark: id });
     await settle();
   }
   const seen = {};
   for (const [id, node] of elements) if (!id.startsWith('#new')) seen[id] = { text: node.textContent, value: node.value, hidden: node.hidden, className: node.className };
-  console.log(JSON.stringify({ requests: requests, elements: seen }));
+  process.stdout.write(JSON.stringify({ requests: requests, elements: seen }) + "\n", () => process.exit(0));
 })().catch((err) => { console.error(err); process.exit(1); });
 """
 
 
 def run_page(tmp_path: Path, page: str, *, hash: str = "", steps: list | None = None,
-             replies: dict | None = None) -> dict:
+             replies: dict | None = None, path: str = "/join/", relay_port: int | None = None,
+             extension: str | None = None) -> dict:
     """Run `page`'s script under PAGE_RUNNER: what it requested, and its elements after."""
     script = re.search(r"<script>(.*?)</script>", page, re.DOTALL).group(1)
     hidden = sorted({a["id"] for _, a in _parsed(page).tags if "hidden" in a and "id" in a})
     (tmp_path / "page.js").write_text(script)
     (tmp_path / "runner.cjs").write_text(PAGE_RUNNER)
     (tmp_path / "scenario.json").write_text(json.dumps({"hash": hash, "host": RELAY_HOST, "hidden": hidden,
-                                                        "steps": steps or [], "replies": replies or {}}))
+                                                        "steps": steps or [], "replies": replies or {}, "path": path,
+                                                        "port": relay_port, "extension": extension,
+                                                        "nostr": str(REPO / "templates/cloudflare/src/nostr.ts")}))
     done = subprocess.run(["node", str(tmp_path / "runner.cjs"), str(tmp_path / "page.js"),
                            str(tmp_path / "scenario.json")], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
@@ -3559,10 +3599,8 @@ def bearers(requests: list[dict]) -> list[dict]:
 
 
 def test_an_invite_link_opens_the_console_and_sends_its_token_nowhere(worker, console_ws, tmp_path):
-    """The token an invite link carries holds a room's key. Opening the link, on the Worker's
-    console and on the Kubernetes build of it, shows the invite and fills its code in, and
-    sends the token to no one: the relay hears of it only when the visitor submits the
-    Pair card's form, and then in a header, to this relay's /openapi.json."""
+    """Reading a link at boot, or submitting a hidden pairing form while locked,
+    must never send its bearer token to the relay or enable member controls."""
     code = hashlib.sha256(b"a code the console reads").hexdigest()
     token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="agents",
                          operator_pubkeys=[NIP19_NPUB], campaign_key="cd" * 32, code=code)
@@ -3573,17 +3611,16 @@ def test_an_invite_link_opens_the_console_and_sends_its_token_nowhere(worker, co
     assert requests[0] == {"replaceState": "/join/"}, "the fragment leaves the address bar first"
     before = requests[:requests.index({"mark": "submit"})]
     assert bearers(before) == [] and [r["url"] for r in before if "url" in r] == ["/"], "only NIP-11 at boot"
-    assert seen["join-code"]["value"] == code and seen["link-card"]["hidden"] is False
-    assert seen["pair-mcp"]["text"] == f"https://{RELAY_HOST}/mcp/s/{token}", "the URLs are built in the page"
-    assert bearers(requests) == [{"url": "/openapi.json", "method": "GET", "body": None,
-                                  "headers": {"Authorization": f"Bearer {token}"}}]
-    assert seen["pair-status"]["text"] == "This relay honours the token."
+    assert seen["open-invite"]["text"] == "Redeem this invite" and seen["link-card"]["hidden"] is False
+    assert seen["workspace"]["hidden"] is True
+    assert not seen.get("pair-mcp", {}).get("text")
+    assert bearers(requests) == [], "even a synthetic submit cannot send a bearer while locked"
 
     k8s = (console_build(console_ws) / "console" / "index.html").read_text()
     opened = run_page(tmp_path, k8s, hash=f"#{token}")
     assert bearers(opened["requests"]) == [] and opened["elements"]["pair-card"]["hidden"] is True
     assert opened["elements"].get("pair-mcp", {"text": ""})["text"] == "", "no MCP URL where no MCP server is"
-    assert opened["elements"]["join-code"]["value"] == code
+    assert opened["elements"]["open-invite"]["text"] == "Redeem this invite"
 
 
 def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp_path):
@@ -3596,12 +3633,12 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
         assert bearers(seen["requests"]) == []
         els = seen["elements"]
         assert els["open-token"]["value"] == "", "the pasted token does not linger in the field"
-        assert (els["link-card"]["hidden"], els["join-code"]["value"]) == (False, code), given
+        assert not els["link-card"]["hidden"], given
         assert els["link-about"]["text"] == "An invite to campaign agents on this relay, for boaz."
-        assert els["link-command"]["text"] == f"nostr-mailbox join {token}"
+        assert els["link-command"]["text"] == f"crosswire join {token}"
     seen = run_page(tmp_path, worker.http("GET", "/")[2].decode(),
                     steps=[["set", "open-token", code], ["submit", "open-form"]])
-    assert seen["elements"]["join-code"]["value"] == code, "a bare relay code fills the Redeem field"
+    assert seen["elements"]["open-invite"]["text"] == "Redeem this invite", "retain the claim for retry"
     pages = (build / "github-pages" / "index.html").read_text()
     seen = run_page(tmp_path, pages, steps=[["set", "open-token", f"https://{RELAY_HOST}/join/#{token}"],
                                             ["submit", "open-form"]])
@@ -3609,6 +3646,110 @@ def test_a_pasted_invite_gets_the_preview_a_clicked_link_gets(worker, build, tmp
     assert (els["invite"]["hidden"], els["invite-join"]["hidden"]) == (False, False)
     assert els["invite-command"]["text"] == f"nostr-mailbox join {token}" and els["open-token"]["value"] == ""
     assert [r["url"] for r in seen["requests"] if "url" in r] == [f"https://{RELAY_HOST}/"], "NIP-11 only"
+
+
+def test_console_admission_uses_the_authenticated_relay(relay, worker, console_ws, tmp_path):
+    """Run the actual UI handlers through AUTH, the gated REQ, claim, re-probe and sign-out
+    against each relay implementation. The DOM and the extension API are the test doubles."""
+    page = (worker.http("GET", "/")[2].decode() if relay.name == "worker"
+            else (console_build(console_ws) / "console/index.html").read_text())
+    code = json.loads(relay.admin("invites", "create", "--ttl", "1h", "--json"))["code"]
+    token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="bus", code=code)
+
+    def run(steps, **kwargs):
+        return run_page(tmp_path, page, steps=steps, relay_port=relay.port, **kwargs)
+
+    invalid = run([["set", "open-token", "unused-claim-code"], ["submit", "open-form"]])
+    assert invalid["elements"]["workspace"]["hidden"]
+    assert "invite" in invalid["elements"]["whoami"]["text"].lower()
+    # The generated identity survives a refused invite and is never persisted.
+    assert invalid["elements"]["backup-key"]["text"].startswith("nsec1")
+
+    admitted = run([["submit", "open-form"]], hash=f"#{token}")
+    els = admitted["elements"]
+    assert not els["workspace"]["hidden"], els["whoami"]
+    assert els["admission"]["hidden"] and not els["signout"]["hidden"]
+    assert els["local-pair"]["hidden"] == (relay.name == "worker")
+    frames = [r["frame"] for r in admitted["requests"] if "frame" in r]
+    proof, claim = [f[1] for f in frames if f[0] in ("AUTH", "EVENT")]
+    assert [proof["kind"], claim["kind"]] == [22242, 28934]
+    assert all(event_is_signed(event) for event in (proof, claim))
+    assert ["claim", code] in claim["tags"] and claim["pubkey"] == proof["pubkey"]
+    assert len([f for f in frames if f[0] == "REQ" and f[2].get("ids")]) == 2
+    nsec = els["backup-key"]["text"]
+    assert nsec.startswith("nsec1") and nsec not in json.dumps(admitted["requests"])
+    assert token not in json.dumps(admitted["requests"])
+
+    restored = run([["set", "nsec", nsec], ["submit", "key-form"]])
+    assert not restored["elements"]["workspace"]["hidden"]
+    assert restored["elements"]["backup"]["hidden"] and not restored["elements"]["nsec"]["value"]
+    assert nsec not in json.dumps(restored["requests"])
+    assert [r["frame"][1]["pubkey"] for r in restored["requests"]
+            if r.get("frame", [None])[0] == "AUTH"] == [proof["pubkey"]]
+
+    guest = fresh_key()
+    stranger = run([["click", "signin"]], extension=guest.secret.hex())
+    assert stranger["elements"]["workspace"]["hidden"]
+    assert "Redeem an invite" in stranger["elements"]["whoami"]["text"]
+    relay.admin("members", "add", guest.pubkey)
+    member = run([["click", "signin"]], extension=guest.secret.hex())
+    assert not member["elements"]["workspace"]["hidden"]
+    locked = run([["set", "nsec", nsec], ["submit", "key-form"], ["click", "signout"]])
+    assert locked["elements"]["workspace"]["hidden"] and locked["elements"]["signout"]["hidden"]
+    assert locked["elements"]["backup-key"]["text"] == "" and {"reload": True} in locked["requests"]
+    assert {"socketClosed": True} in locked["requests"]
+    if relay.name == "worker":
+        paired = run([["click", "signin"], ["set", "room", "agents"], ["click", "mint"],
+                      ["submit", "pair-form"]], extension=guest.secret.hex())
+        minted = paired["elements"]["pair-token"]["value"]
+        assert paired["elements"]["pair-mcp"]["text"] == f"https://{RELAY_HOST}/mcp/s/{minted}"
+        assert bearers(paired["requests"]) == [{"url": "/openapi.json", "headers": {"Authorization": f"Bearer {minted}"}}]
+        assert paired["elements"]["pair-status"]["text"] == "This relay honours the token."
+
+
+def test_console_redeems_a_topic_grant_with_the_same_seat(relay, worker, console_ws, tmp_path):
+    page = (worker.http("GET", "/")[2].decode() if relay.name == "worker"
+            else (console_build(console_ws) / "console/index.html").read_text())
+    [(keeper, wire)] = enrolled(relay, 1)
+    group, group_code = "topic-" + os.urandom(4).hex(), os.urandom(16).hex()
+    assert wire.publish(keeper.event(9007, [["h", group]]))[0]
+    assert wire.publish(keeper.event(9009, [["h", group], ["code", group_code]]))[0]
+    claim = next(t[1] for t in wire.invite()["tags"] if t[0] == "claim")
+    redeem_key, epoch = fresh_key(), os.urandom(32).hex()
+    token = invite_token(schema="cf.transport/1", relay=f"wss://{RELAY_HOST}", campaign="test", code=claim,
+                         keyring=group, topic=group, role="read-only", owner=keeper.pubkey, group_code=group_code,
+                         redeem=redeem_key.secret.hex(), epochs={"1": epoch}, current=1)
+    result = run_page(tmp_path, page, relay_port=relay.port,
+                      steps=[["set", "open-token", token], ["submit", "open-form"]])
+    assert not result["elements"]["workspace"]["hidden"]
+    assert result["elements"]["topic-status"]["text"] == "Joined as read-only."
+    ring = json.loads(result["elements"]["topic-keys"]["text"])
+    assert ring["name"] == group and ring["epochs"] == {"1": epoch}
+    assert all(secret not in json.dumps(result["requests"]) for secret in (token, epoch, redeem_key.secret.hex()))
+    req = next(r["frame"][1] for r in result["requests"]
+               if r.get("frame", [None])[0] == "EVENT" and r["frame"][1]["kind"] == 9021)
+    assert req["pubkey"] == ring["owner"]
+    proof = bytes.fromhex(next(t[1] for t in req["tags"] if t[0] == "proof"))
+    msg = hashlib.sha256(b"nostr-mailbox/topic-redeem/v1" + hashlib.sha256(group_code.encode()).digest()
+                         + bytes.fromhex(req["pubkey"])).digest()
+    assert schnorr_verify(msg, bytes.fromhex(redeem_key.pubkey), proof)
+
+
+@pytest.mark.parametrize(("path", "fragment", "active"), [
+    ("/docs", "", "docs"), ("/docs/", "", "docs"), ("/", "#docs", "docs"),
+    ("/", "#acls", "acls"), ("/docs/", "#architecture", "architecture"),
+    ("/docs/", "#switchboard", "switchboard"),
+])
+def test_console_documentation_deep_links(worker, tmp_path, path, fragment, active):
+    page = worker.http("GET", path)[2].decode()
+    seen = run_page(tmp_path, page, path=path, hash=fragment)
+    assert [tab for tab in ("switchboard", "docs", "acls", "architecture")
+            if not seen["elements"][tab]["hidden"]] == [active]
+    assert not any("replaceState" in request for request in seen["requests"])
+    assert seen["elements"]["workspace"]["hidden"]
+    assert re.findall(r'<svg role="img".*?viewBox="([^"]+)"', page) == ["0 0 1200 310", "0 0 1200 420"]
+    for svg in re.findall(r"<svg .*?</svg>", page, re.DOTALL):
+        assert 'var(--' in svg and not re.search(r'(?:fill|stroke)="#', svg)
 
 
 MAYWE_ANSWERS = [

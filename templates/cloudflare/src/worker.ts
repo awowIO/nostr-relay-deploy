@@ -279,6 +279,7 @@ async function consolePage(cfg: Config, method: string): Promise<Response> {
     "default-src 'none'",
     `script-src 'sha256-${script}'`,
     `style-src 'sha256-${style}'`,
+    "img-src 'self' data:",
     `connect-src 'self' wss://${cfg.relayHost} https://newsletter.awow.io`,
     "base-uri 'none'",
     "form-action 'none'",
